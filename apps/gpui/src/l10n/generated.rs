@@ -92,6 +92,41 @@ pub fn search(locale: Locale) -> String {
     }
 }
 
+pub fn windows_application_search_paths(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Application search locations".to_string(),
+        Locale::Zh => "应用搜索位置".to_string(),
+    }
+}
+
+pub fn windows_application_search_paths_help(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Add folders, shortcuts (.lnk or .url), or programs (.exe). Folders and their launchable items appear in application search.".to_string(),
+        Locale::Zh => "添加文件夹、快捷方式（.lnk 或 .url）或程序（.exe）。搜索可找到文件夹及其中可启动的条目。".to_string(),
+    }
+}
+
+pub fn windows_add_application_folders(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Add folders".to_string(),
+        Locale::Zh => "添加文件夹".to_string(),
+    }
+}
+
+pub fn windows_add_application_shortcuts(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Add shortcuts or programs".to_string(),
+        Locale::Zh => "添加快捷方式或程序".to_string(),
+    }
+}
+
+pub fn windows_application_search_path_error(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Add up to 64 absolute paths to folders, shortcuts or programs.".to_string(),
+        Locale::Zh => "请填写文件夹、快捷方式或程序的绝对路径，最多 64 项。".to_string(),
+    }
+}
+
 pub fn clipboard(locale: Locale) -> String {
     match locale {
         Locale::En => "Clipboard".to_string(),
@@ -129,8 +164,8 @@ pub fn theme(locale: Locale) -> String {
 
 pub fn theme_description(locale: Locale) -> String {
     match locale {
-        Locale::En => "Choose a light or dark appearance, or match macOS".to_string(),
-        Locale::Zh => "使用浅色或深色外观，也可跟随 macOS".to_string(),
+        Locale::En => "Choose a light or dark appearance, or follow the system setting".to_string(),
+        Locale::Zh => "选择浅色、深色或跟随系统外观".to_string(),
     }
 }
 
@@ -285,6 +320,20 @@ pub fn close(locale: Locale) -> String {
     match locale {
         Locale::En => "Close".to_string(),
         Locale::Zh => "关闭".to_string(),
+    }
+}
+
+pub fn minimize_window(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Minimize window".to_string(),
+        Locale::Zh => "最小化窗口".to_string(),
+    }
+}
+
+pub fn toggle_window_size(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Toggle window size".to_string(),
+        Locale::Zh => "切换窗口大小".to_string(),
     }
 }
 
@@ -528,8 +577,8 @@ pub fn context_description(locale: Locale) -> String {
 
 pub fn windows_context_description(locale: Locale) -> String {
     match locale {
-        Locale::En => "Current App can read the name of the foreground app. Configure recent text capture under Clipboard.".to_string(),
-        Locale::Zh => "当前应用可以读取前台应用的名称。近期文本采集可在剪贴板设置中配置。".to_string(),
+        Locale::En => "Current App reads the foreground app, Explorer folder and selection, browser page URL, and focused text selection.".to_string(),
+        Locale::Zh => "当前应用可读取前台应用、资源管理器目录与选中文件、浏览器当前网页和焦点选区文本。".to_string(),
     }
 }
 
@@ -2049,8 +2098,8 @@ pub fn file_search_access_message(locale: Locale) -> String {
 
 pub fn windows_file_search_access_message(locale: Locale) -> String {
     match locale {
-        Locale::En => "Choose folders Anywhere may search. Keep Everything running and indexing these folders. Windows file permissions still apply.".to_string(),
-        Locale::Zh => "选择允许 Anywhere 搜索的文件夹，并保持 Everything 在后台运行、索引这些目录。搜索仍受 Windows 文件权限约束。".to_string(),
+        Locale::En => "Choose folders Anywhere may search. Combined mode uses Everything, Windows Search, and Ripgrep automatically while direct traversal completes. Windows file permissions still apply.".to_string(),
+        Locale::Zh => "选择允许 Anywhere 搜索的文件夹。组合模式会自动协同 Everything、Windows 搜索索引与 Ripgrep，并由直接遍历补全结果，搜索仍受 Windows 文件权限约束。".to_string(),
     }
 }
 
@@ -2700,8 +2749,11 @@ pub fn search_engine(locale: Locale) -> String {
 
 pub fn search_engine_description(locale: Locale) -> String {
     match locale {
-        Locale::En => "System Index, Ripgrep, or Combined".to_string(),
-        Locale::Zh => "系统索引、Ripgrep 或组合模式".to_string(),
+        Locale::En => {
+            "Choose which engine supplies early file matches before direct scan completes"
+                .to_string()
+        }
+        Locale::Zh => "选择在完整遍历完成前提供首批文件候选的引擎".to_string(),
     }
 }
 
@@ -2709,6 +2761,20 @@ pub fn search_engine_system_index(locale: Locale) -> String {
     match locale {
         Locale::En => "System Index".to_string(),
         Locale::Zh => "系统索引".to_string(),
+    }
+}
+
+pub fn search_engine_windows_index(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Windows Search".to_string(),
+        Locale::Zh => "Windows 搜索索引".to_string(),
+    }
+}
+
+pub fn search_engine_everything(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Everything".to_string(),
+        Locale::Zh => "Everything".to_string(),
     }
 }
 
@@ -2723,6 +2789,13 @@ pub fn search_engine_combined(locale: Locale) -> String {
     match locale {
         Locale::En => "Combined".to_string(),
         Locale::Zh => "组合模式".to_string(),
+    }
+}
+
+pub fn search_engine_direct_scan(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Direct Scan".to_string(),
+        Locale::Zh => "直接扫描".to_string(),
     }
 }
 
@@ -3177,4 +3250,4 @@ pub fn search_directory_unavailable(locale: Locale) -> String {
 }
 
 /// Stable message count for generated-resource verification.
-pub const MESSAGE_COUNT: usize = 432;
+pub const MESSAGE_COUNT: usize = 442;

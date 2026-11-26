@@ -31,7 +31,7 @@ use crate::{
     ui::{
         design_tokens::{fonts, metrics},
         styles::AppStyle as _,
-        theme, LAUNCHER_CORNER_RADIUS, LAUNCHER_ROW_HEIGHT, LAUNCHER_WIDTH, SETTINGS_HEIGHT,
+        theme, LAUNCHER_ROW_HEIGHT, LAUNCHER_WIDTH, SETTINGS_HEIGHT,
     },
     web_tool::{
         bootstrap_script, canvas_script, plain_response, reply_script, state_script,
@@ -128,6 +128,7 @@ struct ParentWorkspace {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum SettingsExitIntent {
     Close,
+    Dismiss,
     Wake(InputMode),
     Quit,
 }
@@ -183,6 +184,16 @@ struct KeyModifiers {
     shift: bool,
     alt: bool,
     modified: bool,
+}
+
+impl KeyModifiers {
+    fn primary(self) -> bool {
+        crate::platform::primary_modifier_only(self.command, self.control)
+    }
+
+    fn primary_only(self) -> bool {
+        self.primary() && !self.alt && !self.shift
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -1006,7 +1017,12 @@ impl LauncherView {
             cx.stop_propagation();
             return;
         }
-        if self.handle_preview_key_overlay(&input, window, cx) == input::KeyFlow::Handled {
+        if self.handle_preview_key_overlay(&input, window, cx) == input::KeyFlow::Handled
+            || (input.modifiers.primary_only()
+                && input.key.eq_ignore_ascii_case("y")
+                && !self.root_navigation_open
+                && self.toggle_preview_shortcut(window, cx))
+        {
             window.prevent_default();
             cx.stop_propagation();
             return;
@@ -1432,6 +1448,21 @@ impl LauncherView {
 
     pub fn live_launcher(&self) -> Option<Arc<LiveLauncher>> {
         self.live.clone()
+    }
+
+    pub(super) fn close_settings_to_background(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.prepare_hide(cx);
+        crate::platform::hide_main_window();
+        self.screen = Screen::Launcher;
+        self.notice = None;
+        self.settings_editor.dismiss_on_done = false;
+        self.resize_window_for_screen(window, cx);
+        crate::platform::configure_main_window_after_update_then(PRODUCT_NAME, || {});
+        cx.notify();
     }
 
     fn toggle_screen(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -2133,7 +2164,7 @@ impl LauncherView {
     }
 
     fn settings_modal_active(&self) -> bool {
-        self.screen == Screen::Settings
+        self.is_settings_surface()
             && (self.settings_editor.close_pending
                 || self.clipboard_confirmation.is_some()
                 || self.settings_editor.action_picker_open)
@@ -2662,9 +2693,9 @@ impl Render for LauncherView {
             .key_context("Anywhere")
             .on_action(cx.listener(Self::on_action_open_settings))
             .on_action(cx.listener(Self::on_action_quit_app))
-            .rounded(px(LAUNCHER_CORNER_RADIUS))
+            .rounded(crate::platform::window_content_corner_radius())
             .overflow_hidden()
-            .bg(if crate::platform::uses_opaque_fallback() {
+            .bg(if crate::platform::window_uses_opaque_background(window) {
                 theme::fallback_surface()
             } else {
                 theme::window()
@@ -2700,6 +2731,10 @@ impl Render for LauncherView {
                 }),
             )
             .child(content)
+            .when(
+                self.is_settings_surface() && self.settings_editor.close_pending,
+                |root| root.child(self.render_settings_close_prompt(cx)),
+            )
             .when_some(self.hud_toast.message.clone(), |element, message| {
                 let icon = self.hud_toast.icon.unwrap_or(IconName::Check);
                 let tint = match self.hud_toast.kind {

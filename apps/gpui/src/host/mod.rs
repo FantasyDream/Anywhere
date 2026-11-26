@@ -9,8 +9,10 @@ mod preferences;
 mod runtime;
 mod runtime_support;
 
-use anyhow::{Context, Result};
-#[cfg(any(not(windows), test))]
+#[cfg(all(test, not(windows)))]
+use anyhow::Context;
+use anyhow::Result;
+#[cfg(test)]
 use std::path::Path;
 use std::path::{Component, PathBuf};
 
@@ -44,37 +46,16 @@ impl ProductPaths {
         let data_override = path_override("ANYWHERE_DATA_DIR")?;
         let plugin_override = path_override("ANYWHERE_PLUGIN_DIR")?;
         let executable = std::env::current_exe()?;
-        #[cfg(windows)]
-        {
-            let explicit_data_directory = data_override.is_some();
-            let data_directory = match data_override {
-                Some(path) => path,
-                None => std::env::var_os("LOCALAPPDATA")
-                    .map(PathBuf::from)
-                    .filter(|path| path.is_absolute())
-                    .or_else(|| {
-                        anywhere_platform::paths::home_directory()
-                            .map(|path| path.join(r"AppData\Local"))
-                    })
-                    .context("Windows local application data directory is unavailable")?
-                    .join("Anywhere"),
-            };
-            let bundled_plugin_directory =
-                plugin_override.unwrap_or_else(|| executable.with_file_name("plugins"));
-            Ok(Self {
-                data_directory,
-                bundled_plugin_directory,
-                explicit_data_directory,
-            })
-        }
-        #[cfg(not(windows))]
-        {
-            let home = std::env::var_os("HOME").map(PathBuf::from);
-            Self::resolve(home.as_deref(), &executable, data_override, plugin_override)
-        }
+        let explicit_data_directory = data_override.is_some();
+        let (default_data, default_plugins) = crate::platform::default_product_paths(&executable)?;
+        Ok(Self {
+            data_directory: data_override.unwrap_or(default_data),
+            bundled_plugin_directory: plugin_override.unwrap_or(default_plugins),
+            explicit_data_directory,
+        })
     }
 
-    #[cfg(not(windows))]
+    #[cfg(all(test, not(windows)))]
     fn resolve(
         home: Option<&Path>,
         executable: &Path,

@@ -63,7 +63,7 @@ apps/gpui/src/
 ├── launcher/        Snapshot gate、页面模型、独立工具窗壳（tool_windows.rs）、图标缓存与视图（controllers/、pages/、settings/）
 ├── settings/        设置展示模型
 ├── host/            数据路径、运行时分派、快照投影、原生借用协调、偏好、热键与目录授权
-├── platform/        跨平台门面与 macOS（platform/macos/、material/、preview.rs）系统边界
+├── platform/        共享桌面接口、能力和键位策略，连接 AppKit 与 Win32 适配器
 ├── l10n/            共享本地化的 Rust 投影
 └── ui/              设计 tokens 投影与 theme
 ```
@@ -201,7 +201,7 @@ JS 转换并形成普通候选和对象动作。它与 Launcher Usage、剪贴�
 - 原生启动配置与外观更新：`apps/gpui/src/host/native_window.rs` 通过 AsyncApp 的可失败窗口更新探测借用边界，释放借用后再执行可能同步触发 resize 的 AppKit 操作，最后返回 GPUI 更新页面。嵌套事件循环中借用尚未释放时等待重试；窗口关闭或 owner 释放时取消。普通 GCD 异步入队不能作为 GPUI 借用已释放的保证。
 - 目录：`apps/gpui/src/host/directory_access.rs`，使用安全范围书签。
 - 登录项：`apps/gpui/src/host/login_item.rs` 对照系统状态应用保存值。系统操作失败可在通用设置独立重试，直接使用已保存的启动偏好。显式数据目录下跳过系统操作。
-- 状态栏与窗口：`apps/gpui/src/platform/mod.rs` 与 `apps/gpui/src/platform/macos/`。
+- 窗口、状态栏与输入适配经 `apps/gpui/src/platform/`。页面共用布局和命令表，按能力呈现可用操作。AppKit 与 Win32 适配器负责原生窗口、材质和系统通知。
 - Quick Look：`apps/gpui/src/platform/preview.rs`。
 - Web document：`apps/gpui/src/web_tool.rs` 与 `launcher/view/`。
 

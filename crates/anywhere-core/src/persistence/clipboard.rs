@@ -651,9 +651,11 @@ mod multiformat_tests {
     #[test]
     fn file_paths_are_searchable_but_file_contents_are_not_read() {
         let mut repo = memory();
+        let fixture = tempfile::tempdir().unwrap();
+        let root = fixture.path().join("does not exist");
         let paths = vec![
-            "/does not exist/中文项目/photo.png",
-            "/does not exist/report.pdf",
+            root.join("中文项目/photo.png").to_str().unwrap().to_owned(),
+            root.join("report.pdf").to_str().unwrap().to_owned(),
         ];
         let payload = ClipboardPayload {
             formats: vec![format(FILES, &serde_json::to_vec(&paths).unwrap())],

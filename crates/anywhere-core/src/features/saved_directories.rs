@@ -237,6 +237,7 @@ mod tests {
     use std::{path::PathBuf, sync::Mutex};
     #[test]
     fn quota_failures_preserve_disk_and_cache_and_search_is_memory_only() {
+        let root = tempfile::tempdir().unwrap();
         let storage = ModuleStorageHost::memory()
             .unwrap()
             .bind("saved_directories")
@@ -244,28 +245,32 @@ mod tests {
         let store = SavedDirectoriesService::open(storage.clone()).unwrap();
         for i in 0..LIMIT {
             store
-                .save(&PathBuf::from(format!("/project_{i:03}")))
+                .save(&root.path().join(format!("project_{i:03}")))
                 .unwrap();
         }
         let before = storage.get(KEY).unwrap().unwrap();
-        assert!(store.save(std::path::Path::new("/overflow")).is_err());
+        assert!(store.save(&root.path().join("overflow")).is_err());
         assert_eq!(store.paths().unwrap().len(), LIMIT);
         assert_eq!(storage.get(KEY).unwrap().unwrap(), before);
-        store.save(std::path::Path::new("/project_000")).unwrap(); // Saving twice is idempotent.
-        store.forget(std::path::Path::new("/project_001")).unwrap();
+        store.save(&root.path().join("project_000")).unwrap(); // Saving twice is idempotent.
+        store.forget(&root.path().join("project_001")).unwrap();
         let before = storage.get(KEY).unwrap().unwrap();
         assert!(store
-            .save(&PathBuf::from(format!(
-                "/{}",
-                "x".repeat(crate::core::storage::MAX_VALUE_BYTES)
-            )))
+            .save(
+                &root
+                    .path()
+                    .join("x".repeat(crate::core::storage::MAX_VALUE_BYTES))
+            )
             .is_err());
         assert_eq!(storage.get(KEY).unwrap().unwrap(), before);
         assert_eq!(store.paths().unwrap().len(), LIMIT - 1);
     }
     #[test]
     fn bounded_source_does_not_read_storage_in_the_query_path() {
-        struct ReadOnce(std::sync::atomic::AtomicUsize);
+        struct ReadOnce {
+            reads: std::sync::atomic::AtomicUsize,
+            root: PathBuf,
+        }
         impl ExtensionStorage for ReadOnce {
             fn update(
                 &self,
@@ -275,10 +280,14 @@ mod tests {
                 unreachable!()
             }
             fn get(&self, _: &str) -> Result<Option<Vec<u8>>> {
-                assert_eq!(self.0.fetch_add(1, std::sync::atomic::Ordering::Relaxed), 0);
+                assert_eq!(
+                    self.reads
+                        .fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+                    0
+                );
                 Ok(Some(serde_json::to_vec(&serde_json::json!({
                     "version": 1,
-                    "paths": (0..LIMIT).map(|i| format!("/project_{i:03}")).collect::<Vec<_>>()
+                    "paths": (0..LIMIT).map(|i| self.root.join(format!("project_{i:03}"))).collect::<Vec<_>>()
                 }))?))
             }
             fn put(&self, _: &str, _: &[u8]) -> Result<()> {
@@ -288,9 +297,11 @@ mod tests {
                 unreachable!()
             }
         }
-        let mut services = FeatureServices::new(Ok(Arc::new(ReadOnce(
-            std::sync::atomic::AtomicUsize::new(0),
-        ))));
+        let root = tempfile::tempdir().unwrap();
+        let mut services = FeatureServices::new(Ok(Arc::new(ReadOnce {
+            reads: std::sync::atomic::AtomicUsize::new(0),
+            root: root.path().to_path_buf(),
+        })));
         let bindings = Feature.bind_services(&mut services).unwrap();
         services.saved_directories().refresh().unwrap();
         let source = &bindings.sources.synchronous[0];
@@ -372,9 +383,12 @@ mod tests {
             }))
             .unwrap(),
         );
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("new");
         let write = std::thread::spawn({
             let store = store.clone();
-            move || store.save(std::path::Path::new("/new"))
+            let path = path.clone();
+            move || store.save(&path)
         });
         entered
             .recv_timeout(std::time::Duration::from_secs(2))
@@ -390,6 +404,6 @@ mod tests {
         write.join().unwrap().unwrap();
         read.join().unwrap();
         assert!(previous.unwrap().is_empty());
-        assert_eq!(store.paths().unwrap(), [PathBuf::from("/new")]);
+        assert_eq!(store.paths().unwrap(), [path]);
     }
 }

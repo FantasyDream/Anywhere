@@ -215,7 +215,13 @@ fn each_local_kind_dispatches_to_its_source_app_without_using_default_openers() 
         }
     }
     assert_eq!(
-        *platform.opened.lock().unwrap(),
+        platform
+            .opened
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|(application, target)| (application.clone(), target.canonicalize().unwrap()))
+            .collect::<Vec<_>>(),
         [
             (PathBuf::from("/mock/IDEA.app"), idea),
             (PathBuf::from("/mock/Code.app"), folder),

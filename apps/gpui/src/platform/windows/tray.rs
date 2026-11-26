@@ -1,4 +1,4 @@
-use super::tray_available;
+use super::{icon::OwnedIcon, tray_available};
 use crate::platform::{StatusItemAction, StatusMenuLabels};
 use std::{
     cell::RefCell,
@@ -18,9 +18,9 @@ use windows_sys::{
             WindowsAndMessaging::{
                 AllowSetForegroundWindow, AppendMenuW, CreatePopupMenu, CreateWindowExW,
                 DefWindowProcW, DestroyMenu, DestroyWindow, FindWindowW, LoadIconW, PostMessageW,
-                RegisterClassW, RegisterWindowMessageW, SetForegroundWindow, TrackPopupMenu, HMENU,
-                IDI_APPLICATION, MF_STRING, TPM_RETURNCMD, TPM_RIGHTBUTTON, WM_APP, WM_CONTEXTMENU,
-                WM_NULL, WNDCLASSW,
+                RegisterClassW, RegisterWindowMessageW, SetForegroundWindow, TrackPopupMenu, HICON,
+                HMENU, IDI_APPLICATION, MF_STRING, TPM_RETURNCMD, TPM_RIGHTBUTTON, WM_APP,
+                WM_CONTEXTMENU, WM_NULL, WNDCLASSW,
             },
         },
     },
@@ -47,6 +47,7 @@ struct State {
     taskbar_created: u32,
     actions: mpsc::Sender<StatusItemAction>,
     labels: StatusMenuLabels,
+    icon: Option<OwnedIcon>,
 }
 
 thread_local! {
@@ -96,14 +97,17 @@ impl Tray {
         }
         let tray = Self(hwnd);
         let taskbar_created = unsafe { RegisterWindowMessageW(w!("TaskbarCreated")) };
+        let owned_icon = super::icon::create_tray_icon(hwnd);
+        let hicon = owned_icon.as_ref().map(OwnedIcon::raw);
         STATE.with_borrow_mut(|state| {
             *state = Some(State {
                 taskbar_created,
                 actions,
                 labels: labels.clone(),
+                icon: owned_icon,
             });
         });
-        tray_available(add_icon(hwnd));
+        tray_available(add_icon(hwnd, hicon));
         Some(tray)
     }
 
@@ -137,11 +141,11 @@ fn icon(hwnd: HWND) -> NOTIFYICONDATAW {
     }
 }
 
-fn add_icon(hwnd: HWND) -> bool {
+fn add_icon(hwnd: HWND, custom_icon: Option<HICON>) -> bool {
     let mut data = icon(hwnd);
     data.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP | NIF_SHOWTIP;
     data.uCallbackMessage = NOTIFICATION;
-    data.hIcon = unsafe { LoadIconW(null_mut(), IDI_APPLICATION) };
+    data.hIcon = custom_icon.unwrap_or_else(|| unsafe { LoadIconW(null_mut(), IDI_APPLICATION) });
     for (unit, character) in data
         .szTip
         .iter_mut()
@@ -162,15 +166,19 @@ unsafe extern "system" fn window_proc(
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> LRESULT {
-    let Some((taskbar_created, actions)) = STATE.with_borrow(|state| {
-        state
-            .as_ref()
-            .map(|state| (state.taskbar_created, state.actions.clone()))
+    let Some((taskbar_created, actions, hicon)) = STATE.with_borrow(|state| {
+        state.as_ref().map(|state| {
+            (
+                state.taskbar_created,
+                state.actions.clone(),
+                state.icon.as_ref().map(OwnedIcon::raw),
+            )
+        })
     }) else {
         return unsafe { DefWindowProcW(hwnd, message, wparam, lparam) };
     };
     if message != 0 && message == taskbar_created {
-        tray_available(add_icon(hwnd));
+        tray_available(add_icon(hwnd, hicon));
         return 0;
     }
     if message == RESTORE_EXISTING {

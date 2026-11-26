@@ -160,6 +160,7 @@ impl LauncherView {
         let protocol_policy = policy.clone();
         let entry_url = policy.url();
         let protocol_runtime = runtime;
+        let nav_policy = policy.clone();
         let ipc_policy = policy;
         let active_binding = Arc::new(Mutex::new(ActiveWebBinding {
             handle: document.handle.clone(),
@@ -172,15 +173,14 @@ impl LauncherView {
             Locale::En => "en",
             Locale::Zh => "zh",
         };
-        let builder = wry::WebViewBuilder::new()
+        let builder = crate::platform::configure_webview_builder(wry::WebViewBuilder::new())
             .with_transparent(true)
             .with_incognito(true)
             .with_devtools(cfg!(debug_assertions))
             .with_autoplay(false)
             .with_initialization_script(bootstrap_script(language))
             .with_navigation_handler({
-                let entry_url = entry_url.clone();
-                move |candidate| candidate == entry_url
+                move |candidate| nav_policy.accepts_navigation(&candidate)
             })
             .with_new_window_req_handler(|_, _| wry::NewWindowResponse::Deny)
             .with_download_started_handler(|_, _| false)

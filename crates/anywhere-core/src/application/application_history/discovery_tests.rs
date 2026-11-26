@@ -50,7 +50,9 @@ mod cases {
             "also not parsed",
         );
         for (path, seconds) in [(&older, 10), (&newer, 20)] {
-            fs::File::open(path)
+            fs::File::options()
+                .write(true)
+                .open(path)
                 .unwrap()
                 .set_times(
                     fs::FileTimes::new()
@@ -75,19 +77,21 @@ mod cases {
         let home = tempfile::tempdir().unwrap();
         let shared = write(home.path(), ".vscode-shared/sharedStorage/state.vscdb", "");
         let db = rusqlite::Connection::open(&shared).unwrap();
+        let folder_uri = url::Url::from_file_path(home.path().join("synthetic-project")).unwrap();
         db.execute_batch("CREATE TABLE ItemTable(key TEXT PRIMARY KEY, value BLOB)")
             .unwrap();
         db.execute(
             "INSERT INTO ItemTable VALUES (?1, ?2)",
             rusqlite::params![
                 "history.recentlyOpenedPathsList",
-                serde_json::json!({"entries":[{"folderUri":"file:///synthetic-project"}]})
-                    .to_string(),
+                serde_json::json!({"entries":[{"folderUri":folder_uri.as_str()}]}).to_string(),
             ],
         )
         .unwrap();
         drop(db);
-        fs::File::open(&shared)
+        fs::File::options()
+            .write(true)
+            .open(&shared)
             .unwrap()
             .set_times(
                 fs::FileTimes::new().set_modified(SystemTime::UNIX_EPOCH + Duration::from_secs(10)),

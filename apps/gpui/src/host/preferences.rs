@@ -91,10 +91,8 @@ pub struct ActionShortcutBinding {
 }
 
 const DEFAULT_CURRENT_APP_SHORTCUT: &str = "control+alt+Space";
-#[cfg(not(windows))]
-const DEFAULT_UNIVERSAL_SHORTCUT: &str = "alt+Space";
-#[cfg(windows)]
-const DEFAULT_UNIVERSAL_SHORTCUT: &str = "control+alt+K";
+const DEFAULT_UNIVERSAL_SHORTCUT: &str =
+    crate::platform::capabilities::DEFAULT_UNIVERSAL_SHORTCUT;
 const LEGACY_CURRENT_APP_SHORTCUT: &str = "meta+alt+Space";
 const LEGACY_UNIVERSAL_SHORTCUT: &str = "meta+Space";
 
@@ -107,6 +105,7 @@ pub struct HostPreferences {
     pub ui_language: UiLanguage,
     pub ui_theme: UiTheme,
     pub excluded_apps: Vec<String>,
+    pub application_search_paths: Vec<String>,
     pub capture_finder_selection: bool,
     pub capture_selected_text: bool,
     pub capture_browser_current_page: bool,
@@ -129,12 +128,13 @@ impl Default for HostPreferences {
             ui_language: UiLanguage::System,
             ui_theme: UiTheme::System,
             excluded_apps: Vec::new(),
-            capture_finder_selection: !cfg!(windows),
-            capture_selected_text: !cfg!(windows),
-            capture_browser_current_page: !cfg!(windows),
+            application_search_paths: Vec::new(),
+            capture_finder_selection: crate::platform::capabilities::DESKTOP_CONTEXT_CAPTURE,
+            capture_selected_text: crate::platform::capabilities::DESKTOP_CONTEXT_CAPTURE,
+            capture_browser_current_page: crate::platform::capabilities::DESKTOP_CONTEXT_CAPTURE,
             capture_clipboard: true,
             file_search_enabled: false,
-            file_search_engine: anywhere_platform::FileSearchEngine::SystemIndex,
+            file_search_engine: crate::platform::capabilities::default_file_search_engine(),
             file_search_include_hidden: false,
             file_search_roots: Vec::new(),
             file_search_excluded_names: Vec::new(),
@@ -187,6 +187,20 @@ impl HostPreferences {
 
     pub fn validate(&self) -> Result<()> {
         let locale = self.ui_language.locale();
+        if !crate::platform::capabilities::APPLICATION_SEARCH_FILE_EXTENSIONS.is_empty() {
+            anyhow::ensure!(
+                self.application_search_paths.len() <= 64
+                    && self.application_search_paths.iter().all(|value| {
+                        let path = Path::new(value);
+                        path.is_absolute()
+                            && path.parent().is_some()
+                            && value.len()
+                                <= anywhere_protocol::policy::MAX_SEARCH_PATH_BYTES as usize
+                            && !value.chars().any(char::is_control)
+                    }),
+                l10n::windows_application_search_path_error(locale)
+            );
+        }
         anyhow::ensure!(
             self.file_search_roots.len() <= 8
                 && self.file_search_excluded_names.len()
@@ -539,7 +553,12 @@ mod tests {
         let mut preferences = HostPreferences::default();
         preferences.file_search_roots.push("relative".to_owned());
         assert!(preferences.validate().is_err());
-        preferences.file_search_roots = vec!["/tmp/../scope".to_owned()];
+        let absolute_scope = if cfg!(windows) {
+            r"C:\tmp\..\scope"
+        } else {
+            "/tmp/../scope"
+        };
+        preferences.file_search_roots = vec![absolute_scope.to_owned()];
         assert!(preferences.validate().is_ok());
         preferences.file_search_excluded_names = vec!["../cache".to_owned()];
         assert!(preferences.validate().is_err());

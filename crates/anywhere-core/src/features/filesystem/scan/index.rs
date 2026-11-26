@@ -1,70 +1,46 @@
-//! Persist verified local index matches for the same cursor and execution checks as traversal.
-use super::{
-    query::insert_top, record::write_match_record, ScanPage, ScanStore, BUFFER, PAGE_SIZE,
-};
-use anyhow::{ensure, Result};
-use anywhere_platform::FileSearchIndex;
-use std::{
-    collections::HashSet,
-    fs::OpenOptions,
-    io::{BufWriter, Write},
-    sync::atomic::Ordering,
-};
+//! Verify a provisional filename result batch against the shared query and scope.
+use super::{RankedHit, ScanStore};
+use anyhow::Result;
+use anywhere_platform::{FileSearchHost, FileSearchOptions};
 
 impl ScanStore {
-    pub(in crate::features::filesystem) fn run_index(
+    pub(in crate::features::filesystem) fn provisional_hits(
         &self,
-        index: &dyn FileSearchIndex,
+        platform: &dyn FileSearchHost,
+        text: &str,
+        options: &FileSearchOptions,
+        cancelled: &(dyn Fn() -> bool + Sync),
+    ) -> Result<Vec<RankedHit>> {
+        let roots: Vec<_> = self
+            .scope
+            .configured_roots()?
+            .into_iter()
+            .filter_map(|root| root.canonicalize().ok().filter(|path| path.is_dir()))
+            .collect();
+        if roots.is_empty() {
+            return Ok(Vec::new());
+        }
+        let results = platform.search_provisional(text.trim(), &roots, options, cancelled)?;
+        Ok(self.verify_index_hits(results.hits, cancelled))
+    }
+
+    #[cfg(test)]
+    pub(in crate::features::filesystem) fn provisional_index_hits(
+        &self,
+        index: &dyn anywhere_platform::FileSearchIndex,
         text: &str,
         cancelled: &(dyn Fn() -> bool + Sync),
-        mut publish: impl FnMut(ScanPage) -> Result<()>,
-    ) -> Result<()> {
-        let roots = self.collect_canonical_roots()?;
+    ) -> Result<Vec<RankedHit>> {
+        let roots: Vec<_> = self
+            .scope
+            .configured_roots()?
+            .into_iter()
+            .filter_map(|root| root.canonicalize().ok().filter(|path| path.is_dir()))
+            .collect();
+        if roots.is_empty() {
+            return Ok(Vec::new());
+        }
         let results = index.search_index(text.trim(), &roots, cancelled)?;
-        ensure!(!cancelled(), "search cancelled");
-        let mut records = BufWriter::with_capacity(
-            BUFFER,
-            self.writer(
-                OpenOptions::new()
-                    .write(true)
-                    .truncate(true)
-                    .open(self.matches_path())?,
-            ),
-        );
-        let mut top = Vec::with_capacity(PAGE_SIZE + 1);
-        let mut seen = HashSet::new();
-        let mut boundary = 0;
-        let mut match_count = 0;
-        let scanned = results.hits.len() as u64;
-        for hit in results.hits {
-            ensure!(
-                !cancelled() && !self.cancelled.load(Ordering::Acquire),
-                "search cancelled"
-            );
-            if !seen.insert(hit.path.clone()) {
-                continue;
-            }
-            if let Some(ranked) = self.rank_index_hit(&hit, &roots) {
-                boundary += write_match_record(&mut records, &ranked)?;
-                match_count += 1;
-                insert_top(&mut top, ranked);
-            }
-        }
-        records.flush()?;
-        if results.truncated {
-            self.issue("File index result limit reached. Narrow the search to see more matches.");
-        }
-        {
-            let mut status =
-                crate::core::sync::lock_for_revoke(&self.progress, "file_search_progress");
-            status.boundary = boundary;
-            status.scanned = scanned;
-            status.matches = match_count;
-            status.finished = true;
-        }
-        publish(ScanPage {
-            hits: top,
-            progress: self.page_progress(boundary, match_count > PAGE_SIZE as u64),
-        })
+        Ok(self.verify_index_hits(results.hits, cancelled))
     }
 }

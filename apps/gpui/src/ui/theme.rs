@@ -324,10 +324,11 @@ mod tests {
         assert_eq!(on_dark_primary(), rgb(0xf9fafc).into());
         assert_eq!(on_dark_secondary(), rgb(0xedf0f5).into());
         assert_eq!(on_dark_muted(), rgb(0xdfe4ec).into());
-        assert_eq!(accent(), rgb(0xa7caff).into());
-        assert_eq!(warning(), rgb(0xffc66d).into());
-        assert_eq!(danger(), rgb(0xff8078).into());
-        assert_eq!(success(), rgb(0x73cc91).into());
+        let opaque = palette_for(WindowAppearance::Dark, true, false);
+        assert_eq!(token(opaque.accent), rgb(0xa7caff).into());
+        assert_eq!(token(opaque.warning), rgb(0xffc66d).into());
+        assert_eq!(token(opaque.danger), rgb(0xff8078).into());
+        assert_eq!(token(opaque.success), rgb(0x73cc91).into());
     }
 
     #[test]

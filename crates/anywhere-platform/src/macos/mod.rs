@@ -29,9 +29,21 @@ pub struct MacOsPlatform;
 
 mod file_search;
 
+pub(crate) use file_search::{
+    DEFAULT_ENGINE as DEFAULT_FILE_SEARCH_ENGINE, SUPPORTED_ENGINES as SUPPORTED_FILE_SEARCH_ENGINES,
+};
+
 impl FileSearchHost for MacOsPlatform {
     fn file_search_supported(&self) -> bool {
         true
+    }
+
+    fn supported_file_search_engines(&self) -> &'static [crate::FileSearchEngine] {
+        file_search::SUPPORTED_ENGINES
+    }
+
+    fn default_file_search_engine(&self) -> crate::FileSearchEngine {
+        file_search::DEFAULT_ENGINE
     }
 
     fn search_files(
@@ -94,6 +106,9 @@ impl ApplicationHost for MacOsPlatform {
     }
     fn application_version(&self, bundle_id: &str) -> Option<String> {
         application::application_version(bundle_id)
+    }
+    fn web_platform_id(&self) -> Option<&'static str> {
+        Some("macos")
     }
 }
 

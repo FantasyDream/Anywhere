@@ -152,8 +152,8 @@
   --aw-row-title-compact: 13px;
   --aw-row-subtitle-regular: 12px;
   --aw-row-subtitle-compact: 11px;
-  --aw-font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --aw-font-mono: Menlo, Consolas, monospace;
+  --aw-font-ui: "Noto Sans SC", system-ui, sans-serif;
+  --aw-font-mono: "Fira Mono", monospace;
   --aw-text: var(--aw-primary);
 }
 :root { color-scheme: dark; }

@@ -16,7 +16,7 @@ pub(super) struct KeyInput<'a> {
 fn ignore_repeated_key(
     repeated: bool,
     key: &str,
-    command: bool,
+    primary: bool,
     screen: Screen,
     recording_shortcut: bool,
     shortcut: Option<&str>,
@@ -24,11 +24,11 @@ fn ignore_repeated_key(
 ) -> bool {
     repeated
         && (matches!(key, "enter" | "return")
-            || (command && matches!(screen, Screen::Clipboard | Screen::ClipboardShelf))
-            || (command
+            || (primary && matches!(screen, Screen::Clipboard | Screen::ClipboardShelf))
+            || (primary
                 && key.eq_ignore_ascii_case("y")
                 && matches!(screen, Screen::Launcher | Screen::FileSearch))
-            || (command && key.eq_ignore_ascii_case("k") && screen == Screen::Tasks)
+            || (primary && key.eq_ignore_ascii_case("k") && screen == Screen::Tasks)
             || (key == "space" && matches!(screen, Screen::Clipboard | Screen::ClipboardShelf))
             || (screen == Screen::Settings && (recording_shortcut || key == "escape"))
             || shortcut.is_some_and(|shortcut| {
@@ -94,10 +94,7 @@ impl LauncherView {
     ) -> KeyFlow {
         if self.screen != Screen::Launcher
             || self.root_navigation_open
-            || !input.modifiers.command
-            || input.modifiers.shift
-            || input.modifiers.alt
-            || input.modifiers.control
+            || !input.modifiers.primary_only()
         {
             return KeyFlow::Continue;
         }
@@ -125,7 +122,7 @@ impl LauncherView {
         if ignore_repeated_key(
             input.repeated,
             input.key,
-            input.modifiers.command,
+            input.modifiers.primary(),
             self.screen,
             self.shortcuts.recording.is_some(),
             input.shortcut.as_deref(),
@@ -251,10 +248,9 @@ impl LauncherView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> KeyFlow {
-        if input.modifiers.command
+        if input.modifiers.primary()
             && input.modifiers.shift
             && !input.modifiers.alt
-            && !input.modifiers.control
             && input.key.eq_ignore_ascii_case("o")
             && self.can_open_tool_window()
         {
@@ -282,12 +278,9 @@ impl LauncherView {
         cx: &mut Context<Self>,
     ) -> KeyFlow {
         if let Some(shortcut) = input.shortcut.as_deref() {
-            let save_shortcut = if cfg!(target_os = "macos") {
-                "meta+KeyS"
-            } else {
-                "control+KeyS"
-            };
-            if self.screen == Screen::Settings && shortcut == save_shortcut {
+            if self.screen == Screen::Settings
+                && shortcut == crate::platform::settings_save_shortcut()
+            {
                 return KeyFlow::Continue;
             }
             if let Some(binding) = self
@@ -311,7 +304,7 @@ impl LauncherView {
         cx: &mut Context<Self>,
     ) -> KeyFlow {
         if self.screen == Screen::ClipboardShelf
-            && input.modifiers.command
+            && input.modifiers.primary_only()
             && self.handle_shelf_command_key(input.key, cx) == KeyFlow::Handled
         {
             return KeyFlow::Handled;

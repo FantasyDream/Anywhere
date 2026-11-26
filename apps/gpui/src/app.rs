@@ -1,7 +1,8 @@
+#[cfg(test)]
+use gpui_kit::WindowBackgroundAppearance;
 use gpui_kit::{
     point, px, size, ActivationPolicy, AnyWindowHandle, App as GpuiApp, AppContext as _, Bounds,
-    Context, Entity, Render, Subscription, Window, WindowBackgroundAppearance, WindowBounds,
-    WindowKind, WindowOptions,
+    Context, Entity, Render, Subscription, Window, WindowBounds, WindowKind, WindowOptions,
 };
 use std::sync::{
     atomic::{AtomicU64, Ordering},
@@ -14,6 +15,7 @@ use crate::{
         launcher_window_size, locale_for_language, ClipboardShelfView, LauncherEvent, LauncherView,
         ToolWindowView,
     },
+    platform::product_window_background,
     ui::{
         design_tokens::{fonts, metrics},
         theme,
@@ -30,7 +32,6 @@ struct ProductShell {
     _status_item: Option<crate::platform::StatusItemHost>,
     _launcher_events: Option<Subscription>,
     _window_closed: Option<Subscription>,
-    #[cfg(windows)]
     _window_activation: Option<Subscription>,
 }
 
@@ -262,8 +263,8 @@ pub(crate) fn install_component_theme(cx: &mut GpuiApp) {
 
 pub fn run(cx: &mut GpuiApp) {
     gpui_kit::init(cx);
-    #[cfg(windows)]
-    crate::platform::windows::init(cx);
+    crate::ui::load_fonts(cx);
+    crate::platform::initialize_desktop(cx);
     crate::launcher::bind_keys(cx);
     crate::platform::prepare_window_material();
     install_component_theme(cx);
@@ -275,7 +276,9 @@ pub fn run(cx: &mut GpuiApp) {
         tokio::sync::mpsc::channel::<crate::platform::StatusItemAction>(64);
     let options = main_window_options(cx);
     let opened = gpui_kit::open_window(options, cx, |window, cx| {
-        crate::platform::bind_window_identity(window, PRODUCT_NAME);
+        if crate::platform::bind_window_identity(window, PRODUCT_NAME) {
+            install_component_theme(cx);
+        }
         let launcher = cx.new(|cx| {
             if preview {
                 LauncherView::new(window, cx)
@@ -283,7 +286,7 @@ pub fn run(cx: &mut GpuiApp) {
                 LauncherView::starting(window, cx, crate::l10n::Locale::En)
             }
         });
-        cx.new(|_cx| ProductShell {
+        cx.new(|cx| ProductShell {
             launcher,
             live: None,
             shelf_window: None,
@@ -292,10 +295,7 @@ pub fn run(cx: &mut GpuiApp) {
             _status_item: None,
             _launcher_events: None,
             _window_closed: None,
-            #[cfg(windows)]
-            _window_activation: Some(_cx.observe_window_activation(window, |_, window, _| {
-                crate::platform::windows::report_activation(window.is_window_active());
-            })),
+            _window_activation: crate::platform::observe_launcher_activation(window, cx),
         })
     });
     let (window_handle, shell) = match opened {
@@ -351,10 +351,7 @@ fn install_status_and_shell_events(
     if status_item.is_none() {
         tracing::warn!("status_item_unavailable");
     }
-    #[cfg(windows)]
-    if !crate::platform::windows::has_tray_icon() {
-        crate::platform::show_main_window();
-    }
+    crate::platform::ensure_launcher_can_be_reopened();
     shell.update(cx, |shell, cx| {
         shell._status_item = status_item;
         let weak = cx.weak_entity();
@@ -526,8 +523,7 @@ fn spawn_runtime_startup(
                             shell.live = Some(live.clone());
                             shell.launcher.update(cx, |launcher, cx| {
                                 launcher.attach_runtime(live, hotkeys, hotkey_error, window, cx);
-                                #[cfg(windows)]
-                                if window.is_window_active() {
+                                if crate::platform::activate_launcher_on_runtime_ready(window) {
                                     launcher.activate_from_menu(
                                         anywhere_protocol::InputMode::Search,
                                         window,
@@ -636,9 +632,9 @@ fn spawn_status_action_loop(
                     let opened = status_window
                         .update(cx, |_, window, cx| {
                             status_shell.update(cx, |shell, cx| {
-                                shell
-                                    .launcher
-                                    .update(cx, |launcher, cx| launcher.open_settings(window, cx))
+                                shell.launcher.update(cx, |launcher, cx| {
+                                    launcher.open_settings_from_menu(window, cx)
+                                })
                             })
                         })
                         .unwrap_or(false);
@@ -882,34 +878,20 @@ fn install_global_hotkeys(
 
 fn main_window_options(cx: &mut GpuiApp) -> WindowOptions {
     let window_size = launcher_window_size();
-    #[cfg(windows)]
-    let show = !crate::platform::windows::background_launch()
-        || std::env::var_os("ANYWHERE_PREVIEW").is_some();
-    #[cfg(not(windows))]
-    let show = false;
-    WindowOptions {
+    let mut options = WindowOptions {
         window_bounds: Some(launcher_window_bounds(window_size, cx)),
         titlebar: Some(gpui_kit::TitlebarOptions {
             title: Some(PRODUCT_NAME.into()),
-            appears_transparent: !cfg!(windows),
+            appears_transparent: true,
             traffic_light_position: None,
         }),
-        focus: show,
-        show,
-        // PopUp creates the native macOS NSPanel with the nonactivating style
-        // from the outset. The launcher overrides its level to floating in the
-        // platform bridge after launch.
-        kind: if cfg!(windows) {
-            WindowKind::Normal
-        } else {
-            WindowKind::PopUp
-        },
         is_resizable: false,
-        is_minimizable: cfg!(windows),
         window_background: product_window_background(),
         app_id: Some(BUNDLE_ID.to_owned()),
         ..Default::default()
-    }
+    };
+    crate::platform::configure_launcher_window_options(&mut options);
+    options
 }
 
 fn launcher_window_bounds(
@@ -921,15 +903,14 @@ fn launcher_window_bounds(
         return WindowBounds::centered(window_size, cx);
     };
     let visible = display.visible_bounds();
-    // gpui-fast-macos 0.1.14 treats WindowBounds Y as the window's bottom
-    // edge when creating the native frame. Keep a constant 20% gap below the
-    // usable screen top so later resizes do not move that top edge.
     let max_x = visible.origin.x + (visible.size.width - window_size.width).max(px(0.));
+    let top_gap = visible.size.height * crate::platform::LAUNCHER_TOP_INSET_RATIO as f32;
+    let y =
+        crate::platform::window_origin_from_top(visible.size.height, window_size.height, top_gap);
     let origin = point(
         (visible.origin.x + (visible.size.width - window_size.width) * 0.5)
             .clamp(visible.origin.x, max_x),
-        (visible.origin.y + visible.size.height - visible.size.height * 0.2 - window_size.height)
-            .max(visible.origin.y),
+        visible.origin.y + y,
     );
     WindowBounds::Windowed(Bounds::new(origin, window_size))
 }
@@ -956,14 +937,6 @@ fn app_activation_policy() -> ActivationPolicy {
     ActivationPolicy::Accessory
 }
 
-fn product_window_background() -> WindowBackgroundAppearance {
-    if cfg!(windows) {
-        WindowBackgroundAppearance::Opaque
-    } else {
-        WindowBackgroundAppearance::Transparent
-    }
-}
-
 fn shelf_window_options(cx: &mut GpuiApp) -> WindowOptions {
     let requested = size(px(480.), px(520.));
     WindowOptions {
@@ -973,8 +946,8 @@ fn shelf_window_options(cx: &mut GpuiApp) -> WindowOptions {
         )),
         titlebar: Some(gpui_kit::TitlebarOptions {
             title: Some(CLIPBOARD_SHELF_TITLE.into()),
-            appears_transparent: !cfg!(windows),
-            traffic_light_position: Some(gpui_kit::point(px(14.), px(16.))),
+            appears_transparent: true,
+            traffic_light_position: crate::platform::auxiliary_window_traffic_light_position(),
         }),
         focus: true,
         show: true,
@@ -1012,8 +985,8 @@ fn tasks_window_options(cx: &mut GpuiApp) -> WindowOptions {
         )),
         titlebar: Some(gpui_kit::TitlebarOptions {
             title: Some(TASKS_WINDOW_TITLE.into()),
-            appears_transparent: !cfg!(windows),
-            traffic_light_position: Some(gpui_kit::point(px(14.), px(16.))),
+            appears_transparent: true,
+            traffic_light_position: crate::platform::auxiliary_window_traffic_light_position(),
         }),
         focus: true,
         show: true,
@@ -1061,18 +1034,18 @@ mod tests {
 
     #[gpui_kit::test]
     #[cfg(windows)]
-    fn windows_launcher_starts_visible_with_taskbar_restore(cx: &mut TestAppContext) {
+    fn windows_launcher_starts_as_frameless_popup_without_taskbar_entry(cx: &mut TestAppContext) {
         cx.update(gpui_kit::init);
         let options = cx.update(main_window_options);
-        assert!(options.show && options.focus && options.is_minimizable);
-        assert!(matches!(options.kind, WindowKind::Normal));
+        assert!(options.show && options.focus && !options.is_minimizable);
+        assert!(matches!(options.kind, WindowKind::PopUp));
         assert!(matches!(
             options.window_background,
-            WindowBackgroundAppearance::Opaque
+            WindowBackgroundAppearance::Transparent
         ));
         assert!(options
             .titlebar
-            .is_some_and(|titlebar| !titlebar.appears_transparent));
+            .is_some_and(|titlebar| titlebar.appears_transparent));
     }
 
     #[test]
@@ -1210,8 +1183,9 @@ mod tests {
         assert!(options
             .titlebar
             .as_ref()
-            .is_some_and(|titlebar| titlebar.appears_transparent != cfg!(windows)
-                && titlebar.traffic_light_position.is_some()
+            .is_some_and(|titlebar| titlebar.appears_transparent
+                && titlebar.traffic_light_position
+                    == crate::platform::auxiliary_window_traffic_light_position()
                 && titlebar.title.as_deref() == Some("JSON Workspace")));
         assert_eq!(
             options.window_min_size,
@@ -1299,7 +1273,7 @@ mod tests {
                 .titlebar
                 .as_ref()
                 .and_then(|titlebar| titlebar.traffic_light_position),
-            Some(gpui_kit::point(px(14.), px(16.)))
+            crate::platform::auxiliary_window_traffic_light_position()
         );
     }
 
@@ -1326,7 +1300,6 @@ mod tests {
                             _status_item: None,
                             _launcher_events: None,
                             _window_closed: None,
-                            #[cfg(windows)]
                             _window_activation: None,
                         })
                     },

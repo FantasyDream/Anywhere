@@ -515,14 +515,8 @@ pub mod metrics {
 }
 
 pub mod fonts {
-    #[cfg(windows)]
-    pub const FONT_UI: &str = "Segoe UI";
-    #[cfg(not(windows))]
-    pub const FONT_UI: &str = ".SystemUIFont";
-    #[cfg(windows)]
-    pub const FONT_MONO: &str = "Consolas";
-    #[cfg(not(windows))]
-    pub const FONT_MONO: &str = "Menlo";
+    pub const FONT_UI: &str = "Noto Sans SC";
+    pub const FONT_MONO: &str = "Fira Mono";
 }
 
 pub const TEXT: u32 = colors::OPAQUE_DARK.primary;

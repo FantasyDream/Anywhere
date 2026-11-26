@@ -68,8 +68,24 @@ pub(super) fn tool_directories() -> Vec<PathBuf> {
     directories
         .extend(["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"].map(PathBuf::from));
     #[cfg(windows)]
-    if let Some(home) = std::env::var_os("USERPROFILE") {
-        directories.push(PathBuf::from(home).join(".cargo/bin"));
+    {
+        if let Some(home) = std::env::var_os("USERPROFILE") {
+            let home = PathBuf::from(home);
+            directories.push(home.join(".cargo").join("bin"));
+            directories.push(home.join("scoop").join("shims"));
+            directories.push(home.join(".volta").join("bin"));
+        }
+        if let Some(local) = std::env::var_os("LOCALAPPDATA") {
+            let local = PathBuf::from(local);
+            directories.push(local.join("Microsoft").join("WinGet").join("Links"));
+        }
+        for root_key in ["ProgramFiles", "ProgramFiles(x86)"] {
+            if let Some(root) = std::env::var_os(root_key) {
+                let root = PathBuf::from(root);
+                directories.push(root.join("Git").join("cmd"));
+                directories.push(root.join("nodejs"));
+            }
+        }
     }
     directories
         .into_iter()
@@ -157,10 +173,14 @@ pub fn wrapped_tool(
     wrapper: &str,
     fallback: &str,
 ) -> Result<(PathBuf, Vec<String>)> {
+    #[cfg(windows)]
+    let candidates = [format!("{wrapper}.cmd"), format!("{wrapper}.bat")];
+    #[cfg(not(windows))]
+    let candidates = [wrapper.to_owned()];
     if let Some(path) = directory
         .ancestors()
         .take(32)
-        .map(|root| root.join(wrapper))
+        .flat_map(|root| candidates.iter().map(move |name| root.join(name)))
         .find(|path| path.is_file())
     {
         #[cfg(unix)]
@@ -175,7 +195,19 @@ pub fn wrapped_tool(
                 vec![path.to_string_lossy().into_owned()],
             ));
         }
-        #[cfg(not(unix))]
+        #[cfg(windows)]
+        {
+            let cmd = find_executable("cmd").context("Windows cmd.exe is unavailable")?;
+            return Ok((
+                cmd,
+                vec![
+                    "/D".into(),
+                    "/C".into(),
+                    dunce::simplified(&path).to_string_lossy().into_owned(),
+                ],
+            ));
+        }
+        #[cfg(not(any(unix, windows)))]
         anyhow::bail!(
             "project wrapper {} is currently supported on Unix only",
             path.display()

@@ -15,6 +15,7 @@ pub use traits::{
     ApplicationCatalog, ApplicationHost, ClipboardHost, ContextReader, FileSearchHost,
     FileSearchIndex, GitHost, MenuHost, Platform, ResourceOpener,
 };
+pub use file_search::{FileSearchBackend, FileSearchQuery};
 #[cfg(any(target_os = "macos", test))]
 pub(crate) mod editor_context;
 #[cfg(any(windows, test))]
@@ -252,8 +253,44 @@ pub enum FileSearchEngine {
     #[default]
     #[serde(alias = "systemIndex")]
     SystemIndex,
+    Everything,
     Ripgrep,
+    #[serde(alias = "auto")]
     Combined,
+    #[serde(alias = "direct")]
+    DirectScan,
+}
+
+/// Supported file search engines for the current host OS in recommended display order.
+pub fn supported_file_search_engines() -> &'static [FileSearchEngine] {
+    #[cfg(target_os = "macos")]
+    {
+        macos::SUPPORTED_FILE_SEARCH_ENGINES
+    }
+    #[cfg(windows)]
+    {
+        windows::SUPPORTED_FILE_SEARCH_ENGINES
+    }
+    #[cfg(not(any(target_os = "macos", windows)))]
+    {
+        &[FileSearchEngine::Ripgrep, FileSearchEngine::DirectScan]
+    }
+}
+
+/// Default file search engine for the current host OS.
+pub fn default_file_search_engine() -> FileSearchEngine {
+    #[cfg(target_os = "macos")]
+    {
+        macos::DEFAULT_FILE_SEARCH_ENGINE
+    }
+    #[cfg(windows)]
+    {
+        windows::DEFAULT_FILE_SEARCH_ENGINE
+    }
+    #[cfg(not(any(target_os = "macos", windows)))]
+    {
+        FileSearchEngine::DirectScan
+    }
 }
 
 #[cfg(target_os = "macos")]

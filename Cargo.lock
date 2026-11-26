@@ -267,6 +267,9 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
+ "windows 0.62.2",
+ "windows-core 0.62.2",
+ "windows-numerics 0.3.1",
  "windows-registry 0.6.1",
  "windows-sys 0.61.2",
 ]
@@ -287,6 +290,7 @@ dependencies = [
  "tracing",
  "url",
  "which",
+ "windows 0.62.2",
  "windows-sys 0.61.2",
 ]
 

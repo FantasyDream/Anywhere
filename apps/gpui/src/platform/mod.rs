@@ -1,9 +1,102 @@
+pub(crate) mod capabilities;
+mod keyboard;
 mod material;
 mod preview;
 #[cfg(windows)]
-#[doc(hidden)]
-pub mod windows;
+mod windows;
 
+pub struct ApplicationInstance {
+    #[cfg(windows)]
+    _guard: windows::InstanceGuard,
+}
+
+pub fn acquire_application_instance() -> Option<ApplicationInstance> {
+    Some(ApplicationInstance {
+        #[cfg(windows)]
+        _guard: windows::acquire_instance()?,
+    })
+}
+
+pub(crate) fn initialize_desktop(app: &gpui_kit::App) {
+    #[cfg(windows)]
+    windows::init(app);
+    #[cfg(not(windows))]
+    let _ = app;
+}
+
+pub(crate) fn observe_launcher_activation<View: 'static>(
+    window: &mut gpui_kit::Window,
+    cx: &mut gpui_kit::Context<View>,
+) -> Option<gpui_kit::Subscription> {
+    #[cfg(windows)]
+    {
+        Some(cx.observe_window_activation(window, |_, window, _| {
+            windows::report_activation(window.is_window_active());
+        }))
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (window, cx);
+        None
+    }
+}
+
+pub(crate) fn ensure_launcher_can_be_reopened() {
+    #[cfg(windows)]
+    if !windows::has_tray_icon() {
+        show_main_window();
+    }
+}
+
+pub(crate) fn activate_launcher_on_runtime_ready(window: &gpui_kit::Window) -> bool {
+    cfg!(windows) && window.is_window_active()
+}
+
+pub(crate) fn configure_launcher_window_options(options: &mut gpui_kit::WindowOptions) {
+    #[cfg(windows)]
+    {
+        options.show =
+            !windows::background_launch() || std::env::var_os("ANYWHERE_PREVIEW").is_some();
+        options.focus = options.show;
+        options.kind = gpui_kit::WindowKind::PopUp;
+        options.is_minimizable = false;
+    }
+    #[cfg(not(windows))]
+    {
+        options.show = false;
+        options.focus = false;
+        options.kind = gpui_kit::WindowKind::PopUp;
+        options.is_minimizable = false;
+    }
+}
+
+pub(crate) fn product_window_background() -> gpui_kit::WindowBackgroundAppearance {
+    gpui_kit::WindowBackgroundAppearance::Transparent
+}
+
+pub(crate) fn window_content_corner_radius() -> gpui_kit::Pixels {
+    gpui_kit::px(crate::ui::LAUNCHER_CORNER_RADIUS)
+}
+
+pub(crate) fn window_origin_from_top(
+    visible_height: gpui_kit::Pixels,
+    window_height: gpui_kit::Pixels,
+    top_gap: gpui_kit::Pixels,
+) -> gpui_kit::Pixels {
+    let available = (visible_height - window_height).max(gpui_kit::Pixels::ZERO);
+    if cfg!(windows) {
+        top_gap.min(available)
+    } else {
+        (available - top_gap).max(gpui_kit::Pixels::ZERO)
+    }
+}
+
+pub(crate) use capabilities::{
+    auxiliary_window_traffic_light_position, WindowControlsStyle, WINDOW_CONTROLS,
+};
+pub(crate) use keyboard::{
+    primary_key_binding, primary_modifier_only, primary_shortcut_label, settings_save_shortcut,
+};
 pub(crate) use material::set_application_appearance;
 pub use material::{
     current_appearance as current_window_appearance, current_mode as current_window_material,
@@ -57,10 +150,20 @@ pub(crate) fn set_key_event_is_repeat_for_test(repeated: bool) {
     macos::set_key_event_is_repeat_for_test(repeated);
 }
 
-#[cfg(all(test, not(target_os = "macos")))]
+#[cfg(all(test, windows))]
+pub(crate) fn set_key_event_is_repeat_for_test(repeated: bool) {
+    windows::set_key_event_is_repeat_for_test(repeated);
+}
+
+#[cfg(windows)]
+pub(crate) fn current_key_event_is_repeat() -> bool {
+    windows::current_key_event_is_repeat()
+}
+
+#[cfg(all(test, not(any(target_os = "macos", windows))))]
 pub(crate) fn set_key_event_is_repeat_for_test(_repeated: bool) {}
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", windows)))]
 pub(crate) fn current_key_event_is_repeat() -> bool {
     false
 }
@@ -148,6 +251,71 @@ pub fn require_supported_host() {
     }
 }
 
+pub(crate) fn apply_login_item(
+    desired: bool,
+) -> anyhow::Result<crate::host::LoginItemState> {
+    #[cfg(target_os = "macos")]
+    {
+        macos::login_item::apply(desired)
+    }
+    #[cfg(windows)]
+    {
+        windows::login_item::apply(desired)
+    }
+    #[cfg(not(any(target_os = "macos", windows)))]
+    {
+        let _ = desired;
+        anyhow::bail!("Open at login is unavailable on this platform")
+    }
+}
+
+pub(crate) fn default_product_paths(
+    executable: &std::path::Path,
+) -> anyhow::Result<(std::path::PathBuf, std::path::PathBuf)> {
+    #[cfg(target_os = "macos")]
+    {
+        macos::default_product_paths(executable)
+    }
+    #[cfg(windows)]
+    {
+        windows::default_product_paths(executable)
+    }
+    #[cfg(not(any(target_os = "macos", windows)))]
+    {
+        use anyhow::Context as _;
+        let home = std::env::var_os("HOME")
+            .map(std::path::PathBuf::from)
+            .context("HOME is unavailable")?;
+        let data_directory = home.join(".local").join("share").join("Anywhere");
+        let bundled_plugin_directory = executable.with_file_name("plugins");
+        Ok((data_directory, bundled_plugin_directory))
+    }
+}
+
+pub(crate) fn configure_webview_builder<'a>(
+    builder: wry::WebViewBuilder<'a>,
+) -> wry::WebViewBuilder<'a> {
+    #[cfg(windows)]
+    {
+        windows::configure_webview_builder(builder)
+    }
+    #[cfg(not(windows))]
+    {
+        builder
+    }
+}
+
+pub(crate) fn web_document_origin(canonical_origin: &str) -> String {
+    #[cfg(windows)]
+    {
+        windows::web_document_origin(canonical_origin)
+    }
+    #[cfg(not(windows))]
+    {
+        canonical_origin.to_owned()
+    }
+}
+
 pub(crate) fn prepare_window_material() {
     material::prepare_window_material();
 }
@@ -220,7 +388,7 @@ pub fn configure_main_window(title: &str) -> bool {
     }
     #[cfg(windows)]
     {
-        windows::window_exists(title)
+        windows::configure_main_window(title)
     }
     #[cfg(not(any(target_os = "macos", windows)))]
     {
@@ -250,7 +418,12 @@ pub fn configure_main_window_after_update_then(
             completion();
         });
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(windows)]
+    {
+        let _ = windows::configure_main_window(title);
+        completion();
+    }
+    #[cfg(not(any(target_os = "macos", windows)))]
     {
         let _ = title;
         completion();
@@ -264,7 +437,7 @@ pub fn configure_settings_window(title: &str) -> bool {
     }
     #[cfg(windows)]
     {
-        windows::window_exists(title)
+        windows::configure_settings_window(title)
     }
     #[cfg(not(any(target_os = "macos", windows)))]
     {
@@ -284,7 +457,11 @@ pub fn configure_settings_window_after_update(title: &str) {
             }
         });
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(windows)]
+    {
+        let _ = windows::configure_settings_window(title);
+    }
+    #[cfg(not(any(target_os = "macos", windows)))]
     {
         let _ = title;
     }
@@ -366,16 +543,17 @@ pub fn activate_window_after_update(title: &str) -> bool {
 }
 
 /// Assign identity from the actual native view once, before deferred configuration.
-pub fn bind_window_identity(window: &gpui_kit::Window, title: &str) {
+/// Returns whether binding changed the launcher material used by the shared theme.
+pub fn bind_window_identity(window: &gpui_kit::Window, title: &str) -> bool {
     #[cfg(target_os = "macos")]
     {
         use objc2_app_kit::NSUserInterfaceItemIdentification as _;
         use raw_window_handle::RawWindowHandle;
         let Ok(handle) = raw_window_handle::HasWindowHandle::window_handle(window) else {
-            return;
+            return false;
         };
         let RawWindowHandle::AppKit(handle) = handle.as_raw() else {
-            return;
+            return false;
         };
         // SAFETY: GPUI owns this live AppKit view for the borrowed window.
         let view = unsafe { &*handle.ns_view.as_ptr().cast::<objc2_app_kit::NSView>() };
@@ -384,9 +562,16 @@ pub fn bind_window_identity(window: &gpui_kit::Window, title: &str) {
         }
     }
     #[cfg(windows)]
-    windows::bind_window(window, title);
-    #[cfg(not(any(target_os = "macos", windows)))]
+    {
+        windows::bind_window(window, title);
+        if title == crate::PRODUCT_NAME {
+            let previous = current_window_material();
+            material::prepare_window_material();
+            return previous != current_window_material();
+        }
+    }
     let _ = (window, title);
+    false
 }
 
 #[cfg(target_os = "macos")]
@@ -425,7 +610,9 @@ pub fn configure_tool_window(window: &gpui_kit::Window) {
             });
         }
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(windows)]
+    windows::configure_tool_window(window);
+    #[cfg(not(any(target_os = "macos", windows)))]
     let _ = window;
 }
 
@@ -459,6 +646,8 @@ pub(in crate::platform) fn is_auxiliary_product_window(window: &objc2_app_kit::N
 pub fn remember_clipboard_shelf_position() {
     #[cfg(target_os = "macos")]
     macos::remember_clipboard_shelf_position();
+    #[cfg(windows)]
+    windows::remember_shelf_position();
 }
 
 pub fn window_exists(title: &str) -> bool {
@@ -485,13 +674,42 @@ pub fn refresh_window_material(title: &str) -> bool {
     #[cfg(windows)]
     {
         material::prepare_window_material();
-        windows::window_exists(title)
+        windows::refresh_window_appearance(title)
     }
     #[cfg(not(any(target_os = "macos", windows)))]
     {
         let _ = title;
         false
     }
+}
+
+pub(crate) fn window_uses_opaque_background(window: &gpui_kit::Window) -> bool {
+    #[cfg(windows)]
+    if !windows::has_window_backdrop(window) {
+        return true;
+    }
+    #[cfg(not(windows))]
+    let _ = window;
+
+    uses_opaque_fallback()
+}
+
+pub(crate) fn is_window_maximized(window: &gpui_kit::Window) -> bool {
+    #[cfg(windows)]
+    {
+        windows::is_window_maximized(window)
+    }
+    #[cfg(not(windows))]
+    {
+        window.is_maximized()
+    }
+}
+
+pub(crate) fn toggle_window_size(window: &gpui_kit::Window) {
+    #[cfg(windows)]
+    windows::toggle_window_size(window);
+    #[cfg(not(windows))]
+    window.zoom_window();
 }
 
 pub fn refresh_tool_window_materials() -> bool {
@@ -819,9 +1037,11 @@ fn status_key_label(code: global_hotkey::hotkey::Code) -> String {
     }
 }
 
+pub(crate) const LAUNCHER_TOP_INSET_RATIO: f64 = 0.2;
+
 #[cfg(any(target_os = "macos", test))]
 fn launcher_anchor_top(visible_bottom: f64, visible_height: f64) -> f64 {
-    visible_bottom + visible_height * 0.8
+    visible_bottom + visible_height * (1.0 - LAUNCHER_TOP_INSET_RATIO)
 }
 
 #[cfg(any(target_os = "macos", test))]
@@ -829,7 +1049,7 @@ fn launcher_origin_y(visible_bottom: f64, window_height: f64, anchor_top: f64) -
     (anchor_top - window_height).max(visible_bottom)
 }
 
-#[cfg(any(target_os = "macos", test))]
+#[cfg(any(target_os = "macos", windows, test))]
 fn bottom_trailing_origin(
     visible_x: f64,
     visible_y: f64,
@@ -850,7 +1070,11 @@ pub fn position_clipboard_shelf_window() -> bool {
     {
         macos::position_clipboard_shelf_window()
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(windows)]
+    {
+        windows::configure_shelf(crate::CLIPBOARD_SHELF_TITLE)
+    }
+    #[cfg(not(any(target_os = "macos", windows)))]
     {
         false
     }
@@ -960,10 +1184,21 @@ mod tests {
         let english = StatusMenuLabels::new(crate::l10n::Locale::En, &preferences);
         let chinese = StatusMenuLabels::new(crate::l10n::Locale::Zh, &preferences);
 
-        assert_eq!(english.current_app, "Current App  ⌃⌥Space");
-        assert_eq!(english.universal, "Universal Search  ⌥Space");
+        let (current_shortcut, universal_shortcut) = if cfg!(windows) {
+            ("Ctrl+Alt+Space", "Ctrl+Alt+K")
+        } else {
+            ("⌃⌥Space", "⌥Space")
+        };
+        assert_eq!(
+            english.current_app,
+            format!("Current App  {current_shortcut}")
+        );
+        assert_eq!(
+            english.universal,
+            format!("Universal Search  {universal_shortcut}")
+        );
         assert_eq!(english.running_tasks, "Running Tasks…");
-        assert_eq!(chinese.current_app, "当前应用  ⌃⌥Space");
+        assert_eq!(chinese.current_app, format!("当前应用  {current_shortcut}"));
         assert_eq!(chinese.running_tasks, "运行中的任务…");
         assert_eq!(chinese.settings, "设置…");
     }

@@ -9,8 +9,7 @@ fn main() {
         .with_writer(std::io::stderr)
         .try_init();
     anywhere_gpui::platform::require_supported_host();
-    #[cfg(windows)]
-    let Some(_instance) = anywhere_gpui::platform::windows::acquire_instance() else {
+    let Some(_instance) = anywhere_gpui::platform::acquire_application_instance() else {
         return;
     };
     gpui_kit::application()

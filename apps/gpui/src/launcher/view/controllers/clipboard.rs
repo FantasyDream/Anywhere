@@ -547,7 +547,7 @@ impl LauncherView {
             return KeyFlow::Handled;
         }
         if self.clipboard.actions_open {
-            if input.modifiers.command && input.key.eq_ignore_ascii_case("k") {
+            if input.modifiers.primary_only() && input.key.eq_ignore_ascii_case("k") {
                 self.close_clipboard_actions(cx);
                 return KeyFlow::Handled;
             }

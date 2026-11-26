@@ -1,4 +1,7 @@
-use crate::{everything_wire, FileIndexResults, FileSearchHit};
+use crate::{
+    everything_wire, FileIndexResults, FileSearchBackend, FileSearchEngine, FileSearchHit,
+    FileSearchQuery,
+};
 use anyhow::{bail, ensure, Context, Result};
 use std::{
     borrow::Cow,
@@ -35,6 +38,31 @@ const TIMEOUT: Duration = Duration::from_millis(1500);
 const CLASS: windows_sys::core::PCWSTR = w!("Anywhere.EverythingReply");
 static NEXT_REPLY: AtomicU32 = AtomicU32::new(1);
 static CLASS_REGISTERED: OnceLock<bool> = OnceLock::new();
+
+pub(super) struct EverythingBackend;
+
+impl FileSearchBackend for EverythingBackend {
+    fn engine(&self) -> FileSearchEngine {
+        FileSearchEngine::Everything
+    }
+
+    fn is_available(&self) -> bool {
+        is_running()
+    }
+
+    fn search(
+        &self,
+        query: &FileSearchQuery<'_>,
+        cancelled: &(dyn Fn() -> bool + Sync),
+    ) -> Result<FileIndexResults> {
+        search(query.text, query.roots, cancelled)
+    }
+}
+
+pub(super) fn is_running() -> bool {
+    let server = unsafe { FindWindowW(w!("EVERYTHING_TASKBAR_NOTIFICATION"), null()) };
+    !server.is_null()
+}
 
 struct PendingReply {
     id: u32,

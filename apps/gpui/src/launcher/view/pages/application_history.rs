@@ -205,7 +205,7 @@ impl LauncherView {
             components::footer_action_button(
                 "app-history-footer-refresh",
                 l10n::refresh(self.locale),
-                "⌘R",
+                crate::platform::primary_shortcut_label("R"),
                 false,
             )
             .on_click(cx.listener(|this, _, _, cx| this.refresh_app_history_from_page_menu(cx)))
@@ -215,7 +215,7 @@ impl LauncherView {
             components::footer_action_button(
                 "app-history-footer-actions",
                 l10n::actions(self.locale),
-                "⌘K",
+                crate::platform::primary_shortcut_label("K"),
                 false,
             )
             .on_click(cx.listener(|this, _, _, cx| {

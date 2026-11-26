@@ -1,5 +1,4 @@
 use super::*;
-use gpui_kit::KeyBinding;
 
 gpui_kit::actions!(
     anywhere,
@@ -33,85 +32,46 @@ pub(crate) fn bind_keys(cx: &mut gpui_kit::App) {
     }
     cx.set_global(LauncherKeyBindingsInstalled);
 
-    #[cfg(target_os = "macos")]
-    cx.bind_keys([
-        KeyBinding::new("cmd-,", OpenSettings, Some("Anywhere")),
-        KeyBinding::new("cmd-q", QuitApp, Some("Anywhere")),
-        KeyBinding::new("cmd-y", TogglePreview, Some("Launcher")),
-        KeyBinding::new("cmd-y", TogglePreview, Some("FileSearch")),
-        KeyBinding::new("cmd-y", TogglePreview, Some("Clipboard")),
-        KeyBinding::new("cmd-y", TogglePreview, Some("ClipboardShelf")),
-        KeyBinding::new("cmd-l", ClosePreviewToEditor, Some("Launcher")),
-        KeyBinding::new("cmd-l", ClosePreviewToEditor, Some("FileSearch")),
-        KeyBinding::new("cmd-l", ClosePreviewToEditor, Some("Clipboard")),
-        KeyBinding::new("cmd-l", ClosePreviewToEditor, Some("ClipboardShelf")),
-        KeyBinding::new("cmd-k", ToggleObjectActions, Some("Launcher")),
-        KeyBinding::new("cmd-k", ToggleObjectActions, Some("FileSearch")),
-        KeyBinding::new("cmd-k", ToggleObjectActions, Some("Clipboard")),
-        KeyBinding::new("cmd-k", ToggleObjectActions, Some("ClipboardShelf")),
-        KeyBinding::new("cmd-k", ToggleObjectActions, Some("ApplicationHistory")),
-        KeyBinding::new("cmd-k", ToggleObjectActions, Some("Tasks")),
-        KeyBinding::new("cmd-r", RefreshPage, Some("Tasks")),
-        KeyBinding::new("cmd-r", RefreshPage, Some("Clipboard")),
-        KeyBinding::new("cmd-r", RefreshPage, Some("ClipboardShelf")),
-        KeyBinding::new("cmd-r", RefreshPage, Some("ApplicationHistory")),
-        KeyBinding::new("cmd-f", FocusSearch, Some("Tasks")),
-        KeyBinding::new("cmd-f", FocusSearch, Some("Clipboard")),
-        KeyBinding::new("cmd-f", FocusSearch, Some("ClipboardShelf")),
-        KeyBinding::new("cmd-f", FocusSearch, Some("ApplicationHistory")),
-        KeyBinding::new("cmd-s", SaveSettings, Some("Settings")),
-        KeyBinding::new("cmd-enter", ToggleRootNavigation, Some("Launcher")),
-        KeyBinding::new("cmd-enter", CopyAndReturn, Some("ClipboardShelf")),
-        KeyBinding::new(
-            "cmd-shift-backspace",
-            DeleteShelfItem,
-            Some("ClipboardShelf"),
-        ),
-        KeyBinding::new("cmd-l", RestoreLauncher, Some("Tasks")),
-        KeyBinding::new("cmd-.", StopSelectedTask, Some("Tasks")),
-        KeyBinding::new("cmd-alt-down", SelectNextTaskFromDetail, Some("Tasks")),
-        KeyBinding::new("cmd-alt-up", SelectPreviousTaskFromDetail, Some("Tasks")),
-    ]);
-
-    #[cfg(not(target_os = "macos"))]
-    cx.bind_keys([
-        KeyBinding::new("ctrl-,", OpenSettings, Some("Anywhere")),
-        KeyBinding::new("ctrl-q", QuitApp, Some("Anywhere")),
-        KeyBinding::new("ctrl-y", TogglePreview, Some("Launcher")),
-        KeyBinding::new("ctrl-y", TogglePreview, Some("FileSearch")),
-        KeyBinding::new("ctrl-y", TogglePreview, Some("Clipboard")),
-        KeyBinding::new("ctrl-y", TogglePreview, Some("ClipboardShelf")),
-        KeyBinding::new("ctrl-l", ClosePreviewToEditor, Some("Launcher")),
-        KeyBinding::new("ctrl-l", ClosePreviewToEditor, Some("FileSearch")),
-        KeyBinding::new("ctrl-l", ClosePreviewToEditor, Some("Clipboard")),
-        KeyBinding::new("ctrl-l", ClosePreviewToEditor, Some("ClipboardShelf")),
-        KeyBinding::new("ctrl-k", ToggleObjectActions, Some("Launcher")),
-        KeyBinding::new("ctrl-k", ToggleObjectActions, Some("FileSearch")),
-        KeyBinding::new("ctrl-k", ToggleObjectActions, Some("Clipboard")),
-        KeyBinding::new("ctrl-k", ToggleObjectActions, Some("ClipboardShelf")),
-        KeyBinding::new("ctrl-k", ToggleObjectActions, Some("ApplicationHistory")),
-        KeyBinding::new("ctrl-k", ToggleObjectActions, Some("Tasks")),
-        KeyBinding::new("ctrl-r", RefreshPage, Some("Tasks")),
-        KeyBinding::new("ctrl-r", RefreshPage, Some("Clipboard")),
-        KeyBinding::new("ctrl-r", RefreshPage, Some("ClipboardShelf")),
-        KeyBinding::new("ctrl-r", RefreshPage, Some("ApplicationHistory")),
-        KeyBinding::new("ctrl-f", FocusSearch, Some("Tasks")),
-        KeyBinding::new("ctrl-f", FocusSearch, Some("Clipboard")),
-        KeyBinding::new("ctrl-f", FocusSearch, Some("ClipboardShelf")),
-        KeyBinding::new("ctrl-f", FocusSearch, Some("ApplicationHistory")),
-        KeyBinding::new("ctrl-s", SaveSettings, Some("Settings")),
-        KeyBinding::new("ctrl-enter", ToggleRootNavigation, Some("Launcher")),
-        KeyBinding::new("ctrl-enter", CopyAndReturn, Some("ClipboardShelf")),
-        KeyBinding::new(
-            "ctrl-shift-backspace",
-            DeleteShelfItem,
-            Some("ClipboardShelf"),
-        ),
-        KeyBinding::new("ctrl-l", RestoreLauncher, Some("Tasks")),
-        KeyBinding::new("ctrl-.", StopSelectedTask, Some("Tasks")),
-        KeyBinding::new("ctrl-alt-down", SelectNextTaskFromDetail, Some("Tasks")),
-        KeyBinding::new("ctrl-alt-up", SelectPreviousTaskFromDetail, Some("Tasks")),
-    ]);
+    macro_rules! binding {
+        ($key:literal, $action:expr, $context:literal) => {
+            crate::platform::primary_key_binding(concat!("secondary-", $key), $action, $context, cx)
+        };
+    }
+    let bindings = [
+        binding!(",", OpenSettings, "Anywhere"),
+        binding!("q", QuitApp, "Anywhere"),
+        binding!("y", TogglePreview, "Launcher"),
+        binding!("y", TogglePreview, "FileSearch"),
+        binding!("y", TogglePreview, "Clipboard"),
+        binding!("y", TogglePreview, "ClipboardShelf"),
+        binding!("l", ClosePreviewToEditor, "Launcher"),
+        binding!("l", ClosePreviewToEditor, "FileSearch"),
+        binding!("l", ClosePreviewToEditor, "Clipboard"),
+        binding!("l", ClosePreviewToEditor, "ClipboardShelf"),
+        binding!("k", ToggleObjectActions, "Launcher"),
+        binding!("k", ToggleObjectActions, "FileSearch"),
+        binding!("k", ToggleObjectActions, "Clipboard"),
+        binding!("k", ToggleObjectActions, "ClipboardShelf"),
+        binding!("k", ToggleObjectActions, "ApplicationHistory"),
+        binding!("k", ToggleObjectActions, "Tasks"),
+        binding!("r", RefreshPage, "Tasks"),
+        binding!("r", RefreshPage, "Clipboard"),
+        binding!("r", RefreshPage, "ClipboardShelf"),
+        binding!("r", RefreshPage, "ApplicationHistory"),
+        binding!("f", FocusSearch, "Tasks"),
+        binding!("f", FocusSearch, "Clipboard"),
+        binding!("f", FocusSearch, "ClipboardShelf"),
+        binding!("f", FocusSearch, "ApplicationHistory"),
+        binding!("s", SaveSettings, "Settings"),
+        binding!("enter", ToggleRootNavigation, "Launcher"),
+        binding!("enter", CopyAndReturn, "ClipboardShelf"),
+        binding!("shift-backspace", DeleteShelfItem, "ClipboardShelf"),
+        binding!("l", RestoreLauncher, "Tasks"),
+        binding!(".", StopSelectedTask, "Tasks"),
+        binding!("alt-down", SelectNextTaskFromDetail, "Tasks"),
+        binding!("alt-up", SelectPreviousTaskFromDetail, "Tasks"),
+    ];
+    cx.bind_keys(bindings);
 }
 
 impl LauncherView {

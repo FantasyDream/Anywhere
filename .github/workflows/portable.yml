@@ -72,10 +72,8 @@ jobs:
           python-version: '3.12'
       - name: Check Windows GPUI and platform targets
         run: cargo clippy -p anywhere-gpui -p anywhere-platform --all-targets --locked -- -D warnings
-      - name: Run Windows launcher configuration regressions
-        run: cargo test -p anywhere-gpui --lib --locked windows_launcher
-      - name: Run Everything IPC and path regressions
-        run: cargo test -p anywhere-platform --lib --locked everything
+      - name: Run shared Core, GPUI and Windows platform regressions
+        run: cargo test -p anywhere-core -p anywhere-gpui -p anywhere-platform --lib --locked -- --test-threads=1
       - name: Build Windows executable
         run: cargo build -p anywhere-gpui --release --target x86_64-pc-windows-msvc --locked
       - name: Package and checksum Windows executable

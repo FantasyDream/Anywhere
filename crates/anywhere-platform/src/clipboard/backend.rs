@@ -129,7 +129,7 @@ pub fn read(generation: i64) -> Result<Option<ClipboardPayload>> {
 fn guard_files() -> Result<()> {
     // SAFETY: checks item count before the library allocates paths.
     ensure!(
-        unsafe { crate::macos::native::launcher_clipboard_item_count() } <= 4096,
+        unsafe { crate::macos::native::launcher_clipboard_item_count() } <= MAX_FILE_LIST_ITEMS,
         ContextReadError::TooManyItems
     );
     Ok(())

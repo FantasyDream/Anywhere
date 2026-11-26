@@ -179,12 +179,17 @@ fn sensitive_markers_and_size_preflight_prevent_content_reads() {
 }
 #[test]
 fn file_capture_keeps_all_paths_and_drops_finder_cut_metadata() {
+    let directory = tempfile::tempdir().unwrap();
     let board = Board {
         formats: vec![
             ("public.file-url".into(), vec![]),
             ("com.apple.finder.cut".into(), vec![1]),
         ],
-        files: Some(vec!["/tmp/a file".into(), "/tmp/中文".into()]),
+        files: Some(
+            ["a file", "中文"]
+                .map(|name| directory.path().join(name).to_str().unwrap().to_owned())
+                .to_vec(),
+        ),
         ..Default::default()
     };
     let payload = collect(&board, |_, _| unreachable!(), || Ok(()))
@@ -206,13 +211,16 @@ fn unavailable_data_and_promises_do_not_become_fake_history_entries() {
         .unwrap()
         .is_none());
     assert_eq!(board.reads.load(Ordering::Relaxed), 0);
+    let directory = tempfile::tempdir().unwrap();
+    let missing = directory.path().join("missing");
     let files = ClipboardPayload {
         formats: vec![ClipboardFormat {
             name: FILES.into(),
-            data: serde_json::to_vec(&vec!["/this-is-an-anywhere-test-missing-file/xyz"]).unwrap(),
+            data: serde_json::to_vec(&[missing.to_str().unwrap()]).unwrap(),
         }],
     };
     // All paths are checked before creating a native clipboard context or clearing it.
+    assert!(files.validate().is_ok());
     assert!(write(&files).is_err());
 }
 

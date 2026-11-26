@@ -1,5 +1,5 @@
 //! One bounded Spotlight filename query. No shell, private index or content read.
-use crate::FileSearchHit;
+use crate::{FileIndexResults, FileSearchBackend, FileSearchEngine, FileSearchHit, FileSearchQuery};
 use anyhow::{bail, Context, Result};
 use std::{
     collections::BTreeSet,
@@ -20,6 +20,42 @@ const MAX_BYTES: usize = 256 * 1024;
 const MAX_PATH_BYTES: usize = 16 * 1024;
 const TIMEOUT: Duration = Duration::from_secs(2);
 
+pub(crate) const SUPPORTED_ENGINES: &[FileSearchEngine] = &[
+    FileSearchEngine::SystemIndex,
+    FileSearchEngine::Ripgrep,
+    FileSearchEngine::Combined,
+    FileSearchEngine::DirectScan,
+];
+
+pub(crate) const DEFAULT_ENGINE: FileSearchEngine = FileSearchEngine::SystemIndex;
+
+pub(super) struct SpotlightBackend;
+
+impl FileSearchBackend for SpotlightBackend {
+    fn engine(&self) -> FileSearchEngine {
+        FileSearchEngine::SystemIndex
+    }
+
+    fn is_available(&self) -> bool {
+        Path::new("/usr/bin/mdfind").is_file()
+    }
+
+    fn search(
+        &self,
+        query: &FileSearchQuery<'_>,
+        cancelled: &(dyn Fn() -> bool + Sync),
+    ) -> Result<FileIndexResults> {
+        let mut options = query.options.clone();
+        if !query.roots.is_empty() {
+            options.roots = query.roots.to_vec();
+        }
+        let hits = index_search(query.text, query.limit, &options, cancelled, query.timeout)?;
+        Ok(FileIndexResults {
+            truncated: hits.len() >= query.limit,
+            hits,
+        })
+    }
+}
 pub(super) fn search(
     query: &str,
     limit: usize,
@@ -49,7 +85,10 @@ pub(super) fn search_with_options(
 ) -> Result<Vec<FileSearchHit>> {
     use crate::FileSearchEngine;
     match options.engine {
-        FileSearchEngine::SystemIndex => index_search(query, limit, options, cancelled, TIMEOUT),
+        FileSearchEngine::DirectScan => Ok(Vec::new()),
+        FileSearchEngine::SystemIndex | FileSearchEngine::Everything => {
+            index_search(query, limit, options, cancelled, TIMEOUT)
+        }
         FileSearchEngine::Ripgrep => {
             crate::file_search::ripgrep(query, limit, options, cancelled, TIMEOUT)
         }

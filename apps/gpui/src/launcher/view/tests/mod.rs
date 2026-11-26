@@ -33,10 +33,24 @@ fn open_view(cx: &mut TestAppContext) -> (AnyWindowHandle, Entity<LauncherView>)
     (window, view)
 }
 
+fn primary_shortcut(key: &str) -> String {
+    let modifier = if cfg!(target_os = "macos") {
+        "cmd"
+    } else {
+        "ctrl"
+    };
+    format!("{modifier}-{key}")
+}
+
 fn dispatch_shortcut(cx: &mut TestAppContext, window: AnyWindowHandle, shortcut: &'static str) {
+    let platform_shortcut = shortcut
+        .strip_prefix("cmd-")
+        .map_or_else(|| shortcut.to_owned(), primary_shortcut);
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        let keystroke = gpui_kit::Keystroke::parse(shortcut).expect("valid shortcut");
+        let keystroke =
+            gpui_kit::Keystroke::parse_with_os(&platform_shortcut, cx.platform_info().os)
+                .expect("valid shortcut");
         window.dispatch_keystroke(keystroke, cx);
     })
     .unwrap();
@@ -979,11 +993,11 @@ fn held_command_k_does_not_toggle_shelf_actions_twice(cx: &mut TestAppContext) {
         .unwrap();
 
     cx.update_window(window, |_, window, cx| {
-        window.key_down("cmd-k", false, cx);
+        window.key_down(&primary_shortcut("k"), false, cx);
         assert!(view.read(cx).clipboard.actions_open);
 
         crate::platform::set_key_event_is_repeat_for_test(true);
-        window.key_down("cmd-k", true, cx);
+        window.key_down(&primary_shortcut("k"), true, cx);
         crate::platform::set_key_event_is_repeat_for_test(false);
         assert!(view.read(cx).clipboard.actions_open);
     })
@@ -1373,16 +1387,23 @@ fn settings_expose_privacy_recovery_actions(cx: &mut TestAppContext) {
     });
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        assert!(window
-            .try_find("context-open-settings-FinderSelection")
-            .is_some());
+        assert_eq!(
+            window
+                .try_find("context-open-settings-FinderSelection")
+                .is_some(),
+            !cfg!(windows)
+        );
 
         view.update(cx, |view, cx| {
             view.settings_editor.model.selected = SettingsCategory::Search;
             cx.notify();
         });
         window.render_frame(cx);
-        assert!(window.try_find("open-full-disk-access").is_some());
+        assert_eq!(
+            window.try_find("open-full-disk-access").is_some(),
+            !cfg!(windows)
+        );
+        assert!(window.try_find("authorize-search-directories").is_some());
     })
     .unwrap();
 }
@@ -1430,7 +1451,7 @@ fn standalone_tasks_and_settings_keep_fixed_headers_separate(cx: &mut TestAppCon
         .expect("tasks toolbar bounds");
     assert!(
         tasks_header.origin.y >= px(metrics::TITLE_BAR_INSET),
-        "the Tasks header must stay below native traffic lights"
+        "the Tasks header must stay below shared window controls"
     );
 
     visual.update(|window, cx| {
@@ -2296,7 +2317,7 @@ fn settings_shortcut_closes_mode_chooser_and_ignores_queued_launcher_resize(
     cx.update_window(handle, |_, window, cx| {
         window.render_frame(cx);
         window.click("launcher-mode-toggle", cx);
-        window.press("cmd-,", cx);
+        window.press(&primary_shortcut(","), cx);
     })
     .unwrap();
     cx.run_until_parked();
@@ -3402,7 +3423,21 @@ fn settings_edits_are_dirty_until_saved_or_discarded(cx: &mut TestAppContext) {
     cx.update_window(window, |_, window, cx| {
         window.click("open-at-login", cx);
         window.render_frame(cx);
-        window.click("done-settings", cx);
+        assert!(window.try_find("product-window-resize").is_none());
+        if crate::platform::WINDOW_CONTROLS
+            == crate::platform::WindowControlsStyle::TrailingCaptionButtons
+        {
+            let minimize = window.find("product-window-minimize").bounds();
+            let close = window.find("product-window-close").bounds();
+            assert!(minimize.right() <= close.left());
+            assert!(close.left() > window.viewport_size().width / 2.0);
+            window.click("product-window-close", cx);
+        } else {
+            assert!(window.try_find("product-window-close").is_none());
+            view.update(cx, |view, cx| {
+                assert!(!view.request_main_window_close(window, cx));
+            });
+        }
     })
     .unwrap();
     cx.run_until_parked();
@@ -3420,6 +3455,10 @@ fn settings_edits_are_dirty_until_saved_or_discarded(cx: &mut TestAppContext) {
     cx.update(|cx| {
         let view = view.read(cx);
         assert_eq!(view.screen, Screen::Launcher);
+        assert!(
+            !view.presence.presented,
+            "closing Settings with the window close button must hide to background instead of presenting Launcher"
+        );
         assert!(view.preferences.launch_at_login);
         assert!(view.settings_editor.draft.launch_at_login);
     });
@@ -3549,7 +3588,7 @@ fn command_y_toggles_file_preview_once_and_ignores_repeat(cx: &mut TestAppContex
         });
     });
     cx.update_window(window, |_, window, cx| {
-        window.key_down("cmd-y", false, cx);
+        window.key_down(&primary_shortcut("y"), false, cx);
     })
     .unwrap();
     cx.update(|cx| {
@@ -3560,7 +3599,7 @@ fn command_y_toggles_file_preview_once_and_ignores_repeat(cx: &mut TestAppContex
         });
     });
     cx.update_window(window, |_, window, cx| {
-        window.key_down("cmd-y", true, cx);
+        window.key_down(&primary_shortcut("y"), true, cx);
     })
     .unwrap();
     cx.update(|cx| {
@@ -3605,7 +3644,7 @@ fn command_y_closes_a_clipboard_preview_and_command_l_restores_search(cx: &mut T
     })
     .unwrap();
     cx.update_window(window, |_, window, cx| {
-        window.key_down("cmd-y", false, cx);
+        window.key_down(&primary_shortcut("y"), false, cx);
     })
     .unwrap();
     cx.update(|cx| {
@@ -3619,7 +3658,7 @@ fn command_y_closes_a_clipboard_preview_and_command_l_restores_search(cx: &mut T
         });
     });
     cx.update_window(window, |_, window, cx| {
-        window.key_down("cmd-l", false, cx);
+        window.key_down(&primary_shortcut("l"), false, cx);
     })
     .unwrap();
     cx.update(|cx| {
@@ -3946,10 +3985,25 @@ fn settings_use_localized_engine_names_and_full_width_path_fields(cx: &mut TestA
     });
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        assert_eq!(
-            window.find("cycle-file-engine").label(),
-            Some(l10n::search_engine_system_index(Locale::Zh).as_str())
-        );
+        if cfg!(windows) {
+            assert_eq!(
+                window.find("cycle-file-engine").label(),
+                Some(l10n::search_engine_windows_index(Locale::Zh).as_str())
+            );
+            assert_eq!(
+                window.find("application-search-add-folders").label(),
+                Some(l10n::windows_add_application_folders(Locale::Zh).as_str())
+            );
+            assert_eq!(
+                window.find("application-search-add-shortcuts").label(),
+                Some(l10n::windows_add_application_shortcuts(Locale::Zh).as_str())
+            );
+        } else {
+            assert_eq!(
+                window.find("cycle-file-engine").label(),
+                Some(l10n::search_engine_system_index(Locale::Zh).as_str())
+            );
+        }
 
         view.update(cx, |view, cx| {
             view.settings_editor.model.selected = SettingsCategory::ApplicationHistory;
@@ -4882,6 +4936,65 @@ fn preview_completion_restores_the_editor_for_the_current_screen(cx: &mut TestAp
 }
 
 #[gpui_kit::test]
+fn web_settings_subpage_uses_the_shared_dirty_close_prompt(cx: &mut TestAppContext) {
+    let (window, view) = open_view(cx);
+    cx.update(|cx| {
+        view.update(cx, |view, cx| {
+            view.screen = Screen::WebPackages;
+            view.settings_editor.draft.launch_at_login = !view.preferences.launch_at_login;
+            cx.notify();
+        });
+    });
+    sync_test_viewport_to_desired(cx, window, &view);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("product-window-resize").is_none());
+        if crate::platform::WINDOW_CONTROLS
+            == crate::platform::WindowControlsStyle::TrailingCaptionButtons
+        {
+            assert!(window.try_find("product-window-minimize").is_some());
+            window.click("product-window-close", cx);
+        } else {
+            assert!(window.try_find("product-window-minimize").is_none());
+            assert!(window.try_find("product-window-close").is_none());
+            view.update(cx, |view, cx| {
+                assert!(!view.request_main_window_close(window, cx));
+            });
+        }
+        window.render_frame(cx);
+        assert!(window.try_find("settings-close-prompt").is_some());
+    })
+    .unwrap();
+    dispatch_shortcut(cx, window, "escape");
+    cx.update(|cx| {
+        let view = view.read(cx);
+        assert_eq!(view.screen, Screen::WebPackages);
+        assert!(!view.settings_editor.close_pending);
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        if crate::platform::WINDOW_CONTROLS
+            == crate::platform::WindowControlsStyle::TrailingCaptionButtons
+        {
+            window.click("product-window-close", cx);
+        } else {
+            view.update(cx, |view, cx| {
+                assert!(!view.request_main_window_close(window, cx));
+            });
+        }
+        window.render_frame(cx);
+        window.click("save-settings-confirm", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update(|cx| {
+        let view = view.read(cx);
+        assert_eq!(view.screen, Screen::Launcher);
+        assert!(!view.presence.presented);
+    });
+}
+
+#[gpui_kit::test]
 fn settings_close_prompt_blocks_pointer_and_traps_focus(cx: &mut TestAppContext) {
     let (window, view) = open_view(cx);
     cx.update(|cx| {
@@ -5238,7 +5351,7 @@ fn scope_bar_overflow_starts_at_the_leading_edge_and_reveals_a_late_selection(
 }
 
 #[gpui_kit::test]
-fn shelf_header_respects_traffic_lights_and_escape_shares_keyboard_route(cx: &mut TestAppContext) {
+fn shelf_header_respects_window_controls_and_escape_shares_keyboard_route(cx: &mut TestAppContext) {
     let (window, view) = open_view(cx);
     cx.update(|cx| {
         view.update(cx, |view, cx| {
@@ -5253,6 +5366,20 @@ fn shelf_header_respects_traffic_lights_and_escape_shares_keyboard_route(cx: &mu
     visual.update(|window, cx| {
         window.render_frame(cx);
         assert!(window.try_find("shelf-state-icon").is_some());
+        if crate::platform::WINDOW_CONTROLS
+            == crate::platform::WindowControlsStyle::TrailingCaptionButtons
+        {
+            let minimize = window.find("product-window-minimize").bounds();
+            let resize = window.find("product-window-resize").bounds();
+            let close = window.find("product-window-close").bounds();
+            assert!(minimize.right() <= resize.left());
+            assert!(resize.right() <= close.left());
+            assert!(close.left() > window.viewport_size().width / 2.0);
+        } else {
+            assert!(window.try_find("product-window-close").is_none());
+            assert!(window.try_find("product-window-minimize").is_none());
+            assert!(window.try_find("product-window-resize").is_none());
+        }
     });
     let icon = visual.update(|window, _| window.find("shelf-state-icon").bounds());
     assert!(icon.top() >= px(metrics::TITLE_BAR_INSET));
@@ -5594,7 +5721,12 @@ fn key_dispatch_precedence_preserves_recording_overlays_shortcuts_and_preview(
             view.preferences.action_shortcuts = vec![ActionShortcutBinding {
                 action_id: "user.custom".to_owned(),
                 title: "Custom".to_owned(),
-                shortcut: "meta+KeyF".to_owned(),
+                shortcut: if cfg!(target_os = "macos") {
+                    "meta+KeyF"
+                } else {
+                    "control+KeyF"
+                }
+                .to_owned(),
                 global: false,
                 routes: Vec::new(),
             }];

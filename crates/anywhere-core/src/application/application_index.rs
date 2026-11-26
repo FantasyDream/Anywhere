@@ -4,6 +4,7 @@ use anyhow::{anyhow, Result};
 use anywhere_platform::ApplicationCatalog as ApplicationCatalogHost;
 use std::{
     collections::BTreeSet,
+    path::PathBuf,
     sync::{
         atomic::{AtomicU64, Ordering},
         Arc, Mutex,
@@ -31,6 +32,7 @@ enum ScanQueue {
 struct ScanRequest {
     generation: u64,
     platform: Arc<dyn ApplicationCatalogHost>,
+    paths: Arc<[PathBuf]>,
 }
 
 struct PublishedIndex {
@@ -38,6 +40,20 @@ struct PublishedIndex {
     full: Arc<ApplicationCatalog>,
     visible: Arc<ApplicationCatalog>,
     excluded: BTreeSet<String>,
+    paths: Arc<[PathBuf]>,
+}
+
+impl Default for PublishedIndex {
+    fn default() -> Self {
+        let full = Arc::new(ApplicationCatalog::empty());
+        Self {
+            completed_scan: 0,
+            visible: full.clone(),
+            full,
+            excluded: BTreeSet::new(),
+            paths: Arc::from([]),
+        }
+    }
 }
 
 /// Immutable search input; a filter change invalidates it without a new scan.
@@ -48,14 +64,8 @@ pub(super) struct IndexSnapshot {
 
 impl Default for ApplicationIndex {
     fn default() -> Self {
-        let full = Arc::new(ApplicationCatalog::empty());
         Self {
-            published: Mutex::new(PublishedIndex {
-                completed_scan: 0,
-                visible: full.clone(),
-                full,
-                excluded: BTreeSet::new(),
-            }),
+            published: Mutex::new(PublishedIndex::default()),
             scans: Mutex::new(ScanQueue::Idle),
             issued: AtomicU64::new(0),
             updates: watch::channel(0).0,
@@ -104,6 +114,19 @@ impl ApplicationIndex {
         self.publish(generation, ScanStatus::Complete(report));
     }
 
+    pub fn set_paths(&self, paths: Vec<PathBuf>) -> bool {
+        let mut state = crate::core::sync::lock_cache(&self.published, "application_catalog");
+        if *state.paths == paths {
+            return false;
+        }
+        if state.paths.iter().any(|previous| !paths.contains(previous)) {
+            state.full = Arc::new(ApplicationCatalog::empty());
+            state.visible = state.full.clone();
+        }
+        state.paths = paths.into();
+        true
+    }
+
     pub fn excluded(&self) -> Vec<String> {
         self.published
             .lock()
@@ -133,6 +156,9 @@ impl ApplicationIndex {
         let request = ScanRequest {
             generation,
             platform,
+            paths: crate::core::sync::lock_cache(&self.published, "application_catalog")
+                .paths
+                .clone(),
         };
         if let ScanQueue::Running { pending } = &mut *queue {
             *pending = Some(request);
@@ -148,8 +174,8 @@ impl ApplicationIndex {
 
     async fn run_scans(self: Arc<Self>, mut request: ScanRequest) {
         loop {
-            let scanned = index::scan_async(request.platform).await;
-            self.publish(request.generation, scanned);
+            let scanned = index::scan_async(request.platform, request.paths.clone()).await;
+            self.publish_for_paths(request.generation, scanned, Some(&request.paths));
 
             let mut queue = crate::core::sync::lock_cache(&self.scans, "application_scan_queue");
             let ScanQueue::Running { pending } = &mut *queue else {
@@ -169,12 +195,23 @@ impl ApplicationIndex {
     }
 
     fn publish(&self, generation: u64, scanned: ScanStatus) {
+        self.publish_for_paths(generation, scanned, None);
+    }
+
+    fn publish_for_paths(
+        &self,
+        generation: u64,
+        scanned: ScanStatus,
+        paths: Option<&Arc<[PathBuf]>>,
+    ) {
         let Ok(mut state) = crate::core::sync::lock_or_deny(&self.published, "application_catalog")
         else {
             return;
         };
         // An older completed scan cannot overwrite a newer success or failure.
-        if generation < state.completed_scan {
+        if generation < state.completed_scan
+            || paths.is_some_and(|paths| !Arc::ptr_eq(paths, &state.paths))
+        {
             return;
         }
         state.completed_scan = generation;

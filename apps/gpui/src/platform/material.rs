@@ -1,25 +1,20 @@
 //! Platform-neutral window backdrop policy and platform material adapters.
 //!
-//! Product pages render on a fully transparent GPUI canvas. The platform
-//! adapter owns the backdrop surface, window clipping and accessibility
-//! fallback. Windows can later plug a Mica/Acrylic adapter into the same policy
-//! without changing Launcher, Settings, Tasks or Web surfaces.
+//! Platform adapters own native backdrops and window clipping. The material
+//! policy supplies the application's appearance and accessibility settings.
 
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 
 #[cfg(target_os = "macos")]
 mod macos;
-
 #[cfg(windows)]
-thread_local! {
-    static APPEARANCE_OVERRIDE: std::cell::Cell<Option<WindowAppearance>> = const { std::cell::Cell::new(None) };
-}
+mod windows;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum WindowMaterialMode {
     /// macOS 26+ Liquid Glass.
     LiquidGlass,
-    /// System blur on older macOS releases.
+    /// Native blur on Windows and older macOS releases.
     Blurred,
     /// Accessibility or unsupported-host fallback.
     Opaque,
@@ -73,7 +68,6 @@ impl WindowAppearance {
     }
 }
 
-#[cfg(any(target_os = "macos", test))]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct WindowMaterialEnvironment {
     pub liquid_glass_available: bool,
@@ -117,7 +111,6 @@ pub fn uses_reduce_motion() -> bool {
     REDUCE_MOTION.load(Ordering::Acquire)
 }
 
-#[cfg(any(target_os = "macos", test))]
 fn material_mode(environment: WindowMaterialEnvironment) -> WindowMaterialMode {
     if environment.reduce_transparency {
         WindowMaterialMode::Opaque
@@ -128,7 +121,6 @@ fn material_mode(environment: WindowMaterialEnvironment) -> WindowMaterialMode {
     }
 }
 
-#[cfg(any(target_os = "macos", test))]
 pub(crate) fn plan_window_material(
     environment: WindowMaterialEnvironment,
     corner_radius: f64,
@@ -154,35 +146,20 @@ pub(crate) fn prepare_window_material() {
     {
         macos::prepare_window_material();
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(windows)]
+    {
+        windows::prepare_window_material();
+    }
+    #[cfg(not(any(target_os = "macos", windows)))]
     {
         remember_material_plan(WindowMaterialPlan {
             mode: WindowMaterialMode::Opaque,
-            appearance: fallback_appearance(),
-            corner_radius: 0.0,
+            appearance: WindowAppearance::Light,
+            corner_radius: f64::from(crate::ui::LAUNCHER_CORNER_RADIUS),
             increase_contrast: false,
             reduce_motion: false,
         });
     }
-}
-
-#[cfg(not(target_os = "macos"))]
-fn fallback_appearance() -> WindowAppearance {
-    #[cfg(windows)]
-    {
-        if let Some(appearance) = APPEARANCE_OVERRIDE.get() {
-            return appearance;
-        }
-        if matches!(
-            windows_registry::CURRENT_USER
-                .open(r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize")
-                .and_then(|key| key.get_u32("AppsUseLightTheme")),
-            Ok(0)
-        ) {
-            return WindowAppearance::Dark;
-        }
-    }
-    WindowAppearance::Light
 }
 
 pub(crate) fn set_application_appearance(appearance: Option<WindowAppearance>) -> bool {
@@ -192,10 +169,7 @@ pub(crate) fn set_application_appearance(appearance: Option<WindowAppearance>) -
     }
     #[cfg(windows)]
     {
-        APPEARANCE_OVERRIDE.set(appearance);
-        let previous = current_appearance();
-        prepare_window_material();
-        previous != current_appearance()
+        windows::set_application_appearance(appearance)
     }
     #[cfg(not(any(target_os = "macos", windows)))]
     {

@@ -30,7 +30,7 @@ V0.14 已接入[应用历史与动作排序](docs/mvp-gpui.md)：通用文件读
 
 - **应用与动作搜索**：启动或切回应用，搜索当前应用的可用菜单，通过 Scope 筛选领域动作。
 - **Context 动作**：读取 Finder 选中项 / 目录、选中文本、浏览器当前 URL 和近期剪贴板；支持路径、URL 与项目类型识别。
-- **文件搜索**：macOS 支持 Spotlight、Ripgrep、完整遍历和 Quick Look，Windows 通过 Everything 查询。两端都支持目录范围、类型过滤和分页。
+- **文件搜索**：两端共用完整遍历、名称匹配、目录范围、类型过滤和分页。macOS 使用 Spotlight 或 Ripgrep 提供快批，并支持 Quick Look。Windows 可通过 Everything 加速首批结果。
 - **剪贴板历史**：本机保存和检索文本、图片、文件列表及可读取格式；另有独立置顶的 GPUI 悬浮窗，支持连续复制。采集默认关闭。
 - **开发工具**：Git 常用动作、Maven / Gradle / Node / Cargo 与 Spring Boot 动作，长任务可返回查看输出与停止。
 - **快捷键与语言**：自定义 Action / 全局 / Context 快捷键，支持简体中文、English、全拼与首字母搜索。外观支持跟随系统、浅色和深色。

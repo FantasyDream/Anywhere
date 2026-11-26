@@ -27,7 +27,7 @@ impl LauncherView {
                     Switch::new("clipboard-recording")
                         .checked(self.settings_editor.model.clipboard_recording)
                         .disabled(self.settings_editor.model.saving)
-                        .accessibility_label(l10n::clipboard(self.locale))
+                        .accessibility_label(l10n::record_clipboard_history(self.locale))
                         .on_change(cx.listener(|this, checked, _, cx| {
                             this.set_clipboard_recording(*checked, cx);
                         })),
@@ -103,6 +103,7 @@ impl LauncherView {
                 self.settings_editor.draft.capture_clipboard,
                 Switch::new("capture-clipboard")
                     .checked(self.settings_editor.draft.capture_clipboard)
+                    .accessibility_label(l10n::clipboard_text(self.locale))
                     .on_change(cx.listener(|this, checked, _, cx| {
                         this.settings_editor.draft.capture_clipboard = *checked;
                         cx.notify();

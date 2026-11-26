@@ -144,6 +144,8 @@ impl WebPackageRepository {
             .open(stage.path().join("package.awplugin"))?;
         package.write_archive(&mut archive)?;
         archive.sync_all()?;
+        // Close staged files before publishing the directory on Windows.
+        drop(archive);
         for asset in package.assets() {
             let path = stage.path().join("assets").join(asset.path());
             fs::create_dir_all(path.parent().context("invalid Web resource parent")?)?;

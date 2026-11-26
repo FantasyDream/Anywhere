@@ -145,6 +145,8 @@ impl LauncherView {
         };
 
         let toolbar = self.render_tasks_toolbar(locale, subtitle, cx);
+        let find_shortcut = crate::platform::primary_shortcut_label("F");
+        let stop_shortcut = crate::platform::primary_shortcut_label(".");
         div()
             .id("tasks-surface")
             .key_context("Tasks")
@@ -160,10 +162,9 @@ impl LauncherView {
             .relative()
             .flex()
             .flex_col()
-            .rounded(px(LAUNCHER_CORNER_RADIUS))
             .overflow_hidden()
             .when(self.standalone_tasks, |element| {
-                element.pt(px(metrics::TITLE_BAR_INSET))
+                element.child(self.render_window_titlebar(cx))
             })
             .child(toolbar)
             .when_some(self.notice.clone(), |element, notice| {
@@ -199,15 +200,19 @@ impl LauncherView {
                             .flex()
                             .items_center()
                             .gap(px(metrics::SPACE_SM))
-                            .child(components::keycap("⌘F"))
-                            .child(components::keycap("⌘."))
+                            .child(components::keycap(find_shortcut.clone()))
+                            .child(components::keycap(stop_shortcut.clone()))
                             .child(
                                 Button::new("tasks-keyboard-help-footer")
                                     .ghost()
                                     .label(l10n::keyboard_help(locale))
-                                    .on_click(cx.listener(|this, _, _, cx| {
+                                    .on_click(cx.listener(move |this, _, _, cx| {
                                         this.set_notice(
-                                            l10n::task_keyboard_help(this.locale, "⌘F", "⌘."),
+                                            l10n::task_keyboard_help(
+                                                this.locale,
+                                                &find_shortcut,
+                                                &stop_shortcut,
+                                            ),
                                             components::NoticeKind::Info,
                                         );
                                         cx.notify();

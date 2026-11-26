@@ -272,10 +272,9 @@ pub fn spring_bundle() -> ActionBundle {
 
 pub use super::dynamic::DeveloperActions;
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod tests {
     use super::*;
-    #[cfg(unix)]
     #[test]
     fn a_non_executable_wrapper_with_spaces_is_a_literal_argument_and_has_priority() {
         let dir = tempfile::tempdir().unwrap();

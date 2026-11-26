@@ -102,6 +102,7 @@ impl LiveLauncher {
                         ))),
                     };
                 }
+                configure_application_search_paths(&application, &preferences);
                 *anywhere_core::core::sync::lock_cache(&access_error, "search_access_error") = None;
                 let host_error = if !explicit_data_directory
                     && previous.launch_at_login != preferences.launch_at_login

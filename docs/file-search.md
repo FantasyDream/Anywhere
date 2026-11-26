@@ -1,7 +1,7 @@
 # 文件搜索
 
-macOS 默认使用 Spotlight 快批和 Rust 完整文件名遍历，Ripgrep 是可选快批。Windows
-普通文件名查询使用 Everything 本地 IPC，安装和复验步骤见 [Windows 指南](windows.md#文件搜索)。
+两端共用 Rust 文件名遍历。macOS 默认用 Spotlight 提供快批，也可选择 Ripgrep。
+Windows 可用 Everything 本地 IPC 加速首批结果。安装和复验步骤见 [Windows 指南](windows.md#文件搜索)。
 
 ## 入口与界面
 
@@ -20,7 +20,7 @@ Global Search 输入 `files` / File Search / “文件搜索”，执行普通 A
 
 ## 匹配与完整性
 
-名称归一为 NFC → full case fold → NFC，多个词都需命中 basename，标点按字面处理。Rust 遍历支持中文全拼 / 首字母匹配，Windows Everything 索引只提供字面命中。普通名称和显式路径有独立字节边界；控制字符输入拒绝。
+名称归一为 NFC → full case fold → NFC，多个词都需命中 basename，标点按字面处理。两端完整遍历均支持中文全拼和首字母匹配。普通名称和显式路径有独立字节边界，控制字符输入会被拒绝。
 
 `~` / `~/…` 和中文全角 `～/…` 先通过与 Context 相同的路径展开器解析主目录，仍受原授权范围限制。显式目录浏览直接子项；已有文件定位该文件；未完整名称在父目录匹配。路径必须位于实际授权 roots 中，规范化和真实目标检查防止 `..` 或链接越界，不隐式扩大范围。
 
@@ -51,10 +51,9 @@ Settings → Search 允许在默认 `SystemIndex`、`Ripgrep` 与并发合并的
 `Combined` 之间切换快批引擎。快批调用使用本次查询冻结的配置。Ripgrep 或 Combined 需要
 应用可找到 `rg` 才能使用该快批分支。快批为空或不可用时仍会完整遍历。
 
-Windows 普通名称查询只调用 Everything。Platform 向 IPC 传入冻结的根目录和
-转义后的字面名称；Core 复核实际路径、文件类型、隐藏和排除规则，再把命中写入
-同一个查询结果存储。返回范围取决于 Everything 的索引覆盖，每次最多 4,096 项
-候选。索引不可用或命中上限时报告部分结果。显式路径沿用范围校验与直接目录浏览。
+Windows 向 Everything IPC 传入冻结的根目录和转义后的字面名称。Core 先复核索引候选
+的实际路径、文件类型、匹配条件、隐藏和排除规则，再发布快批。完整遍历负责最终结果，
+并补齐索引缺失、超过候选上限及非字面匹配。显式路径沿用范围校验与直接目录浏览。
 
 | 模块 | 职责 |
 |---|---|

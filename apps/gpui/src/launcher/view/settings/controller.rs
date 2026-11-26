@@ -1,7 +1,7 @@
 use super::{
     excluded_app_ids, l10n, lines, locale_for_language, set_input_value, shortcut_action_title,
     ActionShortcutBinding, ActionShortcutRoute, ContextShortcutDraft, HostPreferences,
-    LauncherEvent, LauncherView, LiveEvent, Screen, SettingsExitIntent, ShortcutCatalogAction,
+    LauncherEvent, LauncherView, LiveEvent, SettingsExitIntent, ShortcutCatalogAction,
 };
 use gpui_kit::{assets::IconName, Context, FocusHandle, Focusable as _, Window};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -356,7 +356,16 @@ impl LauncherView {
     }
 
     pub(super) fn request_close_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let _ = self.request_settings_exit(SettingsExitIntent::Close, window, cx);
+        let intent = if self.settings_editor.dismiss_on_done {
+            SettingsExitIntent::Dismiss
+        } else {
+            SettingsExitIntent::Close
+        };
+        let _ = self.request_settings_exit(intent, window, cx);
+    }
+
+    pub(super) fn request_dismiss_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let _ = self.request_settings_exit(SettingsExitIntent::Dismiss, window, cx);
     }
 
     pub(super) fn request_settings_exit(
@@ -564,7 +573,7 @@ impl LauncherView {
                 .await;
             let _ = window_handle.update(cx, |_, window, cx| {
                 let _ = this.update(cx, |this, cx| {
-                    if this.screen != Screen::Settings
+                    if !this.is_settings_surface()
                         || !this.settings_editor.close_pending
                         || this.settings_editor.model.saving
                         || this.settings_dirty(cx)
@@ -601,6 +610,10 @@ impl LauncherView {
         match intent {
             SettingsExitIntent::Close => {
                 self.toggle_screen(window, cx);
+                true
+            }
+            SettingsExitIntent::Dismiss => {
+                self.close_settings_to_background(window, cx);
                 true
             }
             SettingsExitIntent::Wake(mode) => {
@@ -671,14 +684,20 @@ impl LauncherView {
             });
         }
         self.sync_search_placeholder(window, cx);
-        self.toggle_screen(window, cx);
-        if let Some(intent) = intent {
-            match intent {
-                SettingsExitIntent::Close => {}
-                SettingsExitIntent::Wake(mode) => {
-                    let _ = self.activate_from_entry(mode, false, window, cx);
-                }
-                SettingsExitIntent::Quit => cx.emit(LauncherEvent::QuitRequested),
+        match intent {
+            Some(SettingsExitIntent::Dismiss) => {
+                self.close_settings_to_background(window, cx);
+            }
+            Some(SettingsExitIntent::Wake(mode)) => {
+                self.toggle_screen(window, cx);
+                let _ = self.activate_from_entry(mode, false, window, cx);
+            }
+            Some(SettingsExitIntent::Quit) => {
+                self.toggle_screen(window, cx);
+                cx.emit(LauncherEvent::QuitRequested);
+            }
+            Some(SettingsExitIntent::Close) | None => {
+                self.toggle_screen(window, cx);
             }
         }
     }

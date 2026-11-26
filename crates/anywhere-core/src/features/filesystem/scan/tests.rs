@@ -68,7 +68,7 @@ fn all_pages(store: &ScanStore, first: ScanPage) -> BTreeSet<PathBuf> {
 }
 
 #[test]
-fn authoritative_index_paginates_only_verified_matches_and_reports_truncation() {
+fn provisional_index_keeps_only_verified_hits_and_traversal_finds_unindexed_matches() {
     struct FixtureIndex(Vec<FileSearchHit>);
     impl FileSearchIndex for FixtureIndex {
         fn search_index(
@@ -100,7 +100,7 @@ fn authoritative_index_paginates_only_verified_matches_and_reports_truncation() 
     let expected: Vec<_> = (0..(PAGE_SIZE + 7))
         .map(|index| create_file(&root, &format!("report-{index:03}.pdf")))
         .collect();
-    let mut hits = expected.clone();
+    let mut hits = expected[..10].to_vec();
     hits.push(expected[0].clone());
     hits.push(FileSearchHit {
         path: root.join("report-deleted.pdf"),
@@ -125,20 +125,27 @@ fn authoritative_index_paginates_only_verified_matches_and_reports_truncation() 
         },
     )
     .unwrap();
-    let mut first = None;
-    store
-        .run_index(&FixtureIndex(hits), "report", &|| false, |page| {
-            first = Some(page);
-            Ok(())
-        })
+    let provisional = store
+        .provisional_index_hits(&FixtureIndex(hits), "report", &|| false)
         .unwrap();
-    let first = first.unwrap();
+    let indexed: std::collections::HashSet<_> =
+        provisional.into_iter().map(|hit| hit.path).collect();
+    assert_eq!(
+        indexed,
+        expected[..10].iter().map(|hit| hit.path.clone()).collect()
+    );
+    assert!(!store.progress().finished);
+
+    let first = finish(&store);
     assert!(first.progress.finished);
-    assert_eq!(first.progress.issue_count, 1);
-    assert_eq!(first.progress.confirmed_matches, expected.len() as u64);
+    assert_eq!(first.progress.confirmed_matches, expected.len() as u64 + 1);
     let all = all_pages(&store, first);
-    assert!(!all.contains(&unindexed.path));
-    assert_eq!(all, expected.into_iter().map(|hit| hit.path).collect());
+    let expected: std::collections::BTreeSet<_> = expected
+        .into_iter()
+        .map(|hit| hit.path)
+        .chain([unindexed.path])
+        .collect();
+    assert_eq!(all, expected);
 }
 
 #[test]
@@ -507,11 +514,16 @@ fn missing_roots_report_partial_but_do_not_hide_other_roots() {
 fn literal_short_unicode_names_share_one_matching_contract() {
     let fixture = tempfile::tempdir().unwrap();
     let root = fixture.path().canonicalize().unwrap();
+    let line_name = if cfg!(windows) {
+        "report line.txt"
+    } else {
+        "report\nline.txt"
+    };
     for name in [
         "报告[季度].md",
         "Café.txt",
         "Straße.md",
-        "report\nline.txt",
+        line_name,
         "abbax.txt",
     ] {
         std::fs::write(root.join(name), "").unwrap();
@@ -521,7 +533,7 @@ fn literal_short_unicode_names_share_one_matching_contract() {
         ("[季度]", "报告[季度].md"),
         ("cafe\u{301}", "Café.txt"),
         ("STRASSE", "Straße.md"),
-        ("line", "report\nline.txt"),
+        ("line", line_name),
     ] {
         let store = ScanStore::new(query, FileSearchFilter::All, options(&root)).unwrap();
         let page = finish(&store);

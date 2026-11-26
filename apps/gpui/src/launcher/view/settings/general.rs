@@ -65,7 +65,7 @@ impl LauncherView {
         ))
         .into();
         let dark_bg: gpui_kit::Hsla = gpui_kit::rgba(crate::ui::argb(
-            crate::ui::design_tokens::colors::OPAQUE_DARK.window,
+            crate::ui::design_tokens::colors::FIXED.fallback_surface,
         ))
         .into();
         let light_accent: gpui_kit::Hsla = gpui_kit::rgba(crate::ui::argb(
@@ -151,9 +151,11 @@ impl LauncherView {
         locale: Locale,
         cx: &Context<Self>,
     ) -> gpui_kit::Stateful<Div> {
+        let label = mode.label(locale);
         div()
             .id(id)
             .role(gpui_kit::Role::Button)
+            .aria_label(label.clone())
             .aria_selected(active)
             .flex_1()
             .min_w_0()
@@ -202,7 +204,7 @@ impl LauncherView {
                                 FontWeight::MEDIUM
                             })
                             .text_color(theme::primary())
-                            .child(mode.label(locale)),
+                            .child(label),
                     )
                     .when(active, |row| {
                         row.child(

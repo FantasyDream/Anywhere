@@ -44,7 +44,7 @@ impl LauncherView {
             .size_full()
             .flex()
             .flex_col()
-            .pt(px(metrics::TITLE_BAR_INSET))
+            .child(self.render_window_titlebar(cx))
             .child(
                 div()
                     .h(px(metrics::ROW_HEIGHT_COMFORTABLE))
@@ -325,7 +325,13 @@ impl LauncherView {
             l10n::delete_entry(self.locale),
             l10n::refresh(self.locale),
         ];
-        let shortcuts = ["↵", "⌘↵", "␣", "⌘⇧⌫", "⌘R"];
+        let shortcuts = [
+            "↵".to_owned(),
+            crate::platform::primary_shortcut_label("Enter"),
+            "␣".to_owned(),
+            crate::platform::primary_shortcut_label("Shift+Backspace"),
+            crate::platform::primary_shortcut_label("R"),
+        ];
         let icons = [
             IconName::Copy,
             IconName::CornerUpLeft,
@@ -358,7 +364,7 @@ impl LauncherView {
                             }),
                     )
                     .title(label)
-                    .trailing(components::keycap(shortcuts[index]))
+                    .trailing(components::keycap(shortcuts[index].clone()))
                     .build()
                     .test_support()
                     .when(enabled, |row| {
@@ -385,7 +391,9 @@ impl LauncherView {
         let command_hint = if selected {
             None
         } else if index < 9 {
-            Some(format!("⌘{}", index + 1))
+            Some(crate::platform::primary_shortcut_label(
+                &(index + 1).to_string(),
+            ))
         } else {
             None
         };
@@ -444,7 +452,7 @@ impl LauncherView {
                                 .size(px(metrics::ICON_SIZE))
                                 .text_color(theme::secondary()),
                         )
-                        .child("⌘K"),
+                        .child(crate::platform::primary_shortcut_label("K")),
                     )
                     .child(self.clipboard_copy_button(
                         format!("shelf-copy-{item_id}"),

@@ -88,6 +88,7 @@ impl LauncherView {
             );
         }
         if show_actions {
+            let shortcut = crate::platform::primary_shortcut_label("K");
             row_actions = row_actions.child(
                 components::row_action_button(
                     format!("candidate-{index}-actions"),
@@ -97,7 +98,7 @@ impl LauncherView {
                 .tooltip(components::text_tooltip(l10n::shortcut_hint(
                     self.locale,
                     &l10n::actions(self.locale),
-                    "⌘K",
+                    &shortcut,
                 )))
                 .gap(px(metrics::SPACE_XS))
                 .on_click(cx.listener(|this, _, _, cx| {
@@ -105,7 +106,7 @@ impl LauncherView {
                     this.show_object_actions(cx);
                 }))
                 .child(Icon::new(IconName::Ellipsis).size(px(14.)))
-                .child("⌘K"),
+                .child(shortcut),
             );
         }
         let mut row = components::ListRow::new(format!("candidate-{index}"))

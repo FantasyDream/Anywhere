@@ -1,6 +1,62 @@
 use super::*;
 
 impl LauncherView {
+    fn choose_application_search_paths(
+        &mut self,
+        folders: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.settings_editor.model.saving {
+            return;
+        }
+        let title = if folders {
+            l10n::windows_add_application_folders(self.locale)
+        } else {
+            l10n::windows_add_application_shortcuts(self.locale)
+        };
+        let dialog = rfd::AsyncFileDialog::new()
+            .set_title(title.clone())
+            .set_parent(window);
+        let operation = self.begin_settings_operation();
+        let window_handle = self.window_handle;
+        cx.notify();
+        cx.spawn(async move |this, cx| {
+            let selected = if folders {
+                dialog.pick_folders().await
+            } else {
+                dialog
+                    .add_filter(
+                        title,
+                        crate::platform::capabilities::APPLICATION_SEARCH_FILE_EXTENSIONS,
+                    )
+                    .pick_files()
+                    .await
+            };
+            let _ = cx.update_window(window_handle, |_, _, cx| {
+                let _ = this.update(cx, |this, cx| {
+                    if operation != this.settings_editor.save_generation {
+                        return;
+                    }
+                    this.settings_editor.model.saving = false;
+                    if this.screen == Screen::Settings {
+                        if let Some(selected) = selected {
+                            let paths = &mut this.settings_editor.draft.application_search_paths;
+                            *paths =
+                                unique_trimmed(paths.iter().map(String::as_str).chain(
+                                    selected.iter().filter_map(|item| item.path().to_str()),
+                                ));
+                        } else if this.settings_editor.close_pending && !this.settings_dirty(cx) {
+                            this.finish_settings_exit_after_save(cx);
+                        }
+                    }
+                    cx.notify();
+                });
+            });
+        })
+        .detach();
+    }
+
     fn choose_search_directories(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.settings_editor.model.saving {
             return;
@@ -108,132 +164,132 @@ impl LauncherView {
         }
     }
 
-    pub(in crate::launcher::view) fn search_settings(&mut self, cx: &mut Context<Self>) -> Div {
-        #[cfg(not(windows))]
-        let engine = match self.settings_editor.draft.file_search_engine {
-            FileSearchEngine::Ripgrep => l10n::search_engine_ripgrep(self.locale),
-            FileSearchEngine::Combined => l10n::search_engine_combined(self.locale),
-            _ => l10n::search_engine_system_index(self.locale),
+    fn file_search_engine_settings(
+        &self,
+        engines: &'static [FileSearchEngine],
+        cx: &Context<Self>,
+    ) -> Div {
+        let locale = self.locale;
+        let selected = self.settings_editor.draft.file_search_engine;
+        let label = move |engine| {
+            crate::platform::capabilities::file_search_engine_label(engine, locale)
         };
+        let view = cx.weak_entity();
+        self.settings_row_bare(
+            l10n::search_engine(locale),
+            l10n::search_engine_description(locale),
+            Button::new("cycle-file-engine")
+                .secondary()
+                .label(label(selected))
+                .dropdown_caret(true)
+                .dropdown_menu(move |mut menu, _, _| {
+                    for &engine in engines {
+                        let view = view.clone();
+                        menu = menu.item(
+                            PopupMenuItem::new(label(engine))
+                                .checked(engine == selected)
+                                .on_click(move |_, _, cx| {
+                                    let _ = view.update(cx, |this, cx| {
+                                        this.settings_editor.draft.file_search_engine = engine;
+                                        cx.notify();
+                                    });
+                                }),
+                        );
+                    }
+                    menu
+                }),
+        )
+    }
+
+    pub(in crate::launcher::view) fn search_settings(&mut self, cx: &mut Context<Self>) -> Div {
+        use crate::platform::capabilities;
+        let engines = capabilities::file_search_engines();
         div()
             .flex()
             .flex_col()
             .gap(px(metrics::SPACE_LG))
-            .child(self.settings_rows_card(vec![
-                    self.settings_row_bare(
-                        l10n::file_search(self.locale),
-                        l10n::search_file_names_in_the_file_search(self.locale),
-                        Switch::new("file-search-enabled")
-                            .checked(self.settings_editor.draft.file_search_enabled)
-                            .on_change(cx.listener(|this, checked, _, cx| {
-                                this.settings_editor.draft.file_search_enabled = *checked;
-                                cx.notify();
-                            })),
-                    ),
-                    #[cfg(not(windows))]
-                    self.settings_row_bare(
-                        l10n::search_engine(self.locale),
-                        l10n::search_engine_description(self.locale),
-                        Button::new("cycle-file-engine")
-                            .secondary()
-                            .label(engine)
-                            .dropdown_caret(true)
-                            .dropdown_menu({
-                                let view = cx.weak_entity();
-                                let locale = self.locale;
-                                let selected = self.settings_editor.draft.file_search_engine;
-                                move |mut menu, _, _| {
-                                    for (engine, label) in [
-                                        (
-                                            FileSearchEngine::SystemIndex,
-                                            l10n::search_engine_system_index(locale),
-                                        ),
-                                        (
-                                            FileSearchEngine::Ripgrep,
-                                            l10n::search_engine_ripgrep(locale),
-                                        ),
-                                        (
-                                            FileSearchEngine::Combined,
-                                            l10n::search_engine_combined(locale),
-                                        ),
-                                    ] {
-                                        let view = view.clone();
-                                        menu = menu.item(
-                                            PopupMenuItem::new(label)
-                                                .checked(engine == selected)
-                                                .on_click(move |_, _, cx| {
-                                                    let _ = view.update(cx, |this, cx| {
-                                                        this.settings_editor
-                                                            .draft
-                                                            .file_search_engine = engine;
-                                                        cx.notify();
-                                                    });
-                                                }),
-                                        );
-                                    }
-                                    menu
-                                }
-                            }),
-                    ),
-                    self.settings_row_bare(
-                        l10n::include_hidden_files(self.locale),
-                        l10n::include_dotfiles_and_files_in_hidden_directories(self.locale),
-                        Switch::new("file-search-hidden")
-                            .checked(self.settings_editor.draft.file_search_include_hidden)
-                            .on_change(cx.listener(|this, checked, _, cx| {
-                                this.settings_editor.draft.file_search_include_hidden = *checked;
-                                cx.notify();
-                            })),
-                    ),
-                    self.settings_stack_row(
-                        l10n::directory_access(self.locale),
-                        if cfg!(windows) {
-                            l10n::windows_file_search_access_message(self.locale)
-                        } else {
-                            l10n::file_search_access_message(self.locale)
-                        },
-                        div()
-                            .flex()
-                            .items_center()
-                            .flex_wrap()
-                            .gap(px(metrics::SPACE_SM))
-                            .child(
-                                Button::new("authorize-search-directories")
-                                    .secondary()
-                                    .label(l10n::authorize_search_directories(self.locale))
-                                    .disabled(self.settings_editor.model.saving)
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.choose_search_directories(window, cx);
-                                    })),
-                            )
-                            .when(!cfg!(windows), |row| row.child(
-                                Button::new("open-full-disk-access")
-                                    .ghost()
-                                    .label(l10n::full_disk_access(self.locale))
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        if !open_privacy_settings(
-                                            PrivacySettingsPane::FullDiskAccess,
-                                        ) {
-                                            this.set_notice(
-                                                l10n::open_system_settings_failed(this.locale),
-                                                components::NoticeKind::Error,
-                                            );
-                                            cx.notify();
-                                        }
-                                    })),
-                            )),
-                    ),
-                ]))
+            .when(
+                !capabilities::APPLICATION_SEARCH_FILE_EXTENSIONS.is_empty(),
+                |page| page.child(self.application_search_paths_settings(cx)),
+            )
+            .child(
+                self.settings_rows_card(
+                    std::iter::once(
+                        self.settings_row_bare(
+                            l10n::file_search(self.locale),
+                            l10n::search_file_names_in_the_file_search(self.locale),
+                            Switch::new("file-search-enabled")
+                                .checked(self.settings_editor.draft.file_search_enabled)
+                                .accessibility_label(l10n::file_search(self.locale))
+                                .on_change(cx.listener(|this, checked, _, cx| {
+                                    this.settings_editor.draft.file_search_enabled = *checked;
+                                    cx.notify();
+                                })),
+                        ),
+                    )
+                    .chain(
+                        (engines.len() > 1).then(|| self.file_search_engine_settings(engines, cx)),
+                    )
+                    .chain([
+                        self.settings_row_bare(
+                            l10n::include_hidden_files(self.locale),
+                            l10n::include_dotfiles_and_files_in_hidden_directories(self.locale),
+                            Switch::new("file-search-hidden")
+                                .checked(self.settings_editor.draft.file_search_include_hidden)
+                                .accessibility_label(l10n::include_hidden_files(self.locale))
+                                .on_change(cx.listener(|this, checked, _, cx| {
+                                    this.settings_editor.draft.file_search_include_hidden =
+                                        *checked;
+                                    cx.notify();
+                                })),
+                        ),
+                        self.settings_stack_row(
+                            l10n::directory_access(self.locale),
+                            capabilities::file_search_access_description(self.locale),
+                            div()
+                                .flex()
+                                .items_center()
+                                .flex_wrap()
+                                .gap(px(metrics::SPACE_SM))
+                                .child(
+                                    Button::new("authorize-search-directories")
+                                        .secondary()
+                                        .label(l10n::authorize_search_directories(self.locale))
+                                        .disabled(self.settings_editor.model.saving)
+                                        .on_click(cx.listener(|this, _, window, cx| {
+                                            this.choose_search_directories(window, cx);
+                                        })),
+                                )
+                                .when(capabilities::FILE_SEARCH_PRIVACY_SETTINGS, |row| {
+                                    row.child(
+                                        Button::new("open-full-disk-access")
+                                            .ghost()
+                                            .label(l10n::full_disk_access(self.locale))
+                                            .on_click(cx.listener(|this, _, _, cx| {
+                                                if !open_privacy_settings(
+                                                    PrivacySettingsPane::FullDiskAccess,
+                                                ) {
+                                                    this.set_notice(
+                                                        l10n::open_system_settings_failed(
+                                                            this.locale,
+                                                        ),
+                                                        components::NoticeKind::Error,
+                                                    );
+                                                    cx.notify();
+                                                }
+                                            })),
+                                    )
+                                }),
+                        ),
+                    ]),
+                ),
+            )
             .child(self.settings_list_editor_card(
                 l10n::authorized_directories(self.locale),
                 l10n::authorized_directories_help(self.locale),
                 &self.settings_editor.file_roots_input,
                 "file-search-roots",
-                if cfg!(windows) {
-                    r"C:\Users\me\Documents, D:\Projects"
-                } else {
-                    "/Users/me/Documents, /Users/me/Projects"
-                },
+                capabilities::FILE_SEARCH_PATH_EXAMPLES,
                 false,
                 cx,
             ))
@@ -255,6 +311,79 @@ impl LauncherView {
                 true,
                 cx,
             ))
+    }
+
+    fn application_search_paths_settings(&self, cx: &Context<Self>) -> Div {
+        let controls =
+            div()
+                .flex()
+                .flex_col()
+                .gap(px(metrics::SPACE_SM))
+                .child(
+                    div()
+                        .flex()
+                        .flex_wrap()
+                        .gap(px(metrics::SPACE_SM))
+                        .children(
+                            [
+                                (
+                                    "application-search-add-folders",
+                                    l10n::windows_add_application_folders(self.locale),
+                                    true,
+                                ),
+                                (
+                                    "application-search-add-shortcuts",
+                                    l10n::windows_add_application_shortcuts(self.locale),
+                                    false,
+                                ),
+                            ]
+                            .into_iter()
+                            .map(|(id, label, folders)| {
+                                Button::new(id)
+                                    .secondary()
+                                    .label(label)
+                                    .disabled(self.settings_editor.model.saving)
+                                    .on_click(cx.listener(move |this, _, window, cx| {
+                                        this.choose_application_search_paths(folders, window, cx);
+                                    }))
+                            }),
+                        ),
+                )
+                .children(
+                    self.settings_editor
+                        .draft
+                        .application_search_paths
+                        .iter()
+                        .enumerate()
+                        .map(|(index, path)| {
+                            let selected = path.clone();
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(metrics::SPACE_SM))
+                                .child(div().flex_1().min_w_0().truncate().child(path.clone()))
+                                .child(
+                                    Button::new(SharedString::from(format!(
+                                        "application-search-remove-{index}"
+                                    )))
+                                    .ghost()
+                                    .label(l10n::remove(self.locale))
+                                    .disabled(self.settings_editor.model.saving)
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        this.settings_editor
+                                            .draft
+                                            .application_search_paths
+                                            .retain(|path| path != &selected);
+                                        cx.notify();
+                                    })),
+                                )
+                        }),
+                );
+        self.settings_rows_card([self.settings_stack_row(
+            l10n::windows_application_search_paths(self.locale),
+            l10n::windows_application_search_paths_help(self.locale),
+            controls,
+        )])
     }
 
     #[allow(clippy::too_many_arguments)]

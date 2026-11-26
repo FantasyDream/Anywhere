@@ -210,6 +210,28 @@ fn names(snapshot: &IndexSnapshot) -> Vec<&str> {
 }
 
 #[test]
+fn application_index_drops_a_scan_from_superseded_search_paths() {
+    let index = ApplicationIndex::default();
+    index.set_paths(vec!["old-source".into()]);
+    let old_paths = index.published.lock().unwrap().paths.clone();
+    let old_generation = index.issue_scan();
+    index.publish_for_paths(old_generation, report(&["Old"], 0), Some(&old_paths));
+    let old_snapshot = index.snapshot().unwrap();
+    index.set_paths(vec!["new-source".into()]);
+    assert!(!index.is_current(&old_snapshot).unwrap());
+    assert!(names(&index.snapshot().unwrap()).is_empty());
+    let new_paths = index.published.lock().unwrap().paths.clone();
+    let new_generation = index.issue_scan();
+
+    index.publish_for_paths(old_generation, report(&["Old"], 0), Some(&old_paths));
+    assert!(names(&index.snapshot().unwrap()).is_empty());
+    index.publish_for_paths(new_generation, ScanStatus::Failed, Some(&new_paths));
+    assert!(names(&index.snapshot().unwrap()).is_empty());
+    index.publish_for_paths(new_generation, report(&["New"], 0), Some(&new_paths));
+    assert_eq!(names(&index.snapshot().unwrap()), ["New"]);
+}
+
+#[test]
 fn an_older_scan_cannot_replace_a_newer_completed_index() {
     let index = ApplicationIndex::default();
     let older = index.issue_scan();

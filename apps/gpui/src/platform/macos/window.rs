@@ -167,6 +167,18 @@ pub(in crate::platform) fn show_standard_button(
     }
 }
 
+fn hide_standard_buttons(window: &NSWindow) {
+    for button in [
+        NSWindowButton::CloseButton,
+        NSWindowButton::MiniaturizeButton,
+        NSWindowButton::ZoomButton,
+    ] {
+        if let Some(button) = window.standardWindowButton(button) {
+            button.setHidden(true);
+        }
+    }
+}
+
 pub(in crate::platform) fn configure_window(window: &NSWindow) {
     let style_mask = launcher_window_style_mask();
     if window.styleMask() != style_mask {
@@ -181,15 +193,7 @@ pub(in crate::platform) fn configure_window(window: &NSWindow) {
     }
     window.setTitlebarAppearsTransparent(true);
     window.setTitleVisibility(NSWindowTitleVisibility::Hidden);
-    for button in [
-        NSWindowButton::CloseButton,
-        NSWindowButton::MiniaturizeButton,
-        NSWindowButton::ZoomButton,
-    ] {
-        if let Some(button) = window.standardWindowButton(button) {
-            button.setHidden(true);
-        }
-    }
+    hide_standard_buttons(window);
     apply_window_layer(window, window_layer_policy(NativeSurface::Launcher));
     window.setAnimationBehavior(objc2_app_kit::NSWindowAnimationBehavior::None);
     window.setMovableByWindowBackground(false);

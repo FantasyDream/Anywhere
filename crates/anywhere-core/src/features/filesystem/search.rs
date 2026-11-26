@@ -249,9 +249,10 @@ impl AsyncCandidateSource for FileSearchSource {
                         .is_ok_and(|p| p.enabled && p.generation == policy.generation)
             })
         };
-        let use_file_index = !store.is_path_query() && self.platform.file_search_index().is_some();
         let index = async {
-            if use_file_index || store.is_path_query() {
+            if store.is_path_query()
+                || policy.options.engine == anywhere_platform::FileSearchEngine::DirectScan
+            {
                 return Ok(());
             }
             let permit = tokio::select! { p = self.index_worker.clone().acquire_owned() => p?, _ = execution.superseded() => return Ok::<_, anyhow::Error>(()), };
@@ -265,8 +266,7 @@ impl AsyncCandidateSource for FileSearchSource {
             let index_store = store.clone();
             let result = tokio::task::spawn_blocking(move || {
                 let _permit = permit;
-                let hits = platform.search_files_with_options(&query, 64, &options, &*check)?;
-                Ok::<_, anyhow::Error>(index_store.verify_index_hits(hits, &*check))
+                index_store.provisional_hits(platform.as_ref(), &query, &options, &*check)
             })
             .await?;
             // A late index batch must never replace confirmed traversal results.
@@ -285,7 +285,9 @@ impl AsyncCandidateSource for FileSearchSource {
             Ok(())
         };
         let scan = async {
-            if !use_file_index {
+            if !store.is_path_query()
+                && policy.options.engine != anywhere_platform::FileSearchEngine::DirectScan
+            {
                 tokio::select! { _ = tokio::time::sleep(std::time::Duration::from_millis(110)) => {}, _ = execution.superseded() => return Ok::<_, anyhow::Error>(()), }
             }
             let permit = tokio::select! { p = self.worker.clone().acquire_owned() => p?, _ = execution.superseded() => return Ok(()), };
@@ -296,8 +298,6 @@ impl AsyncCandidateSource for FileSearchSource {
             let check = current.clone();
             let tx = sender.clone();
             let actions = self.actions.clone();
-            let platform = self.platform.clone();
-            let text = request.text.clone();
             tokio::task::spawn_blocking(move || {
                 let _permit = permit;
                 let publish = |page| {
@@ -307,12 +307,7 @@ impl AsyncCandidateSource for FileSearchSource {
                     tx.blocking_send(scan_batch(page, &actions, &store))
                         .map_err(|_| anyhow::anyhow!("search receiver closed"))
                 };
-                let result =
-                    if let Some(index) = platform.file_search_index().filter(|_| use_file_index) {
-                        store.run_index(index, &text, &*check, publish)
-                    } else {
-                        store.run(&*check, publish)
-                    };
+                let result = store.run(&*check, publish);
                 if let Err(error) = result {
                     if !check() {
                         store.fail(&error);

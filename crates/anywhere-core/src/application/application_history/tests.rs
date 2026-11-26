@@ -231,9 +231,10 @@ fn runaway_scripts_are_interrupted_and_the_next_runtime_still_works() {
 
 #[test]
 fn scripts_borrow_utf8_output_and_reject_oversized_results() {
+    let root = tempfile::tempdir().unwrap();
     let entries = script::transform(
-        "export function transform() { return [{key:'项目',title:'项目 🚀',target:{kind:'directory',path:'/tmp/项目'}}]; }",
-        &json!({}), Arc::new(|| false),
+        "export function transform(input) { return [{key:'项目',title:'项目 🚀',target:{kind:'directory',path:input.path}}]; }",
+        &json!({"path":root.path().join("项目")}), Arc::new(|| false),
     ).unwrap();
     assert_eq!(entries[0].title, "项目 🚀");
     assert!(script::transform(

@@ -76,8 +76,8 @@ Web 工具页头显示工具名称。应用历史的对象菜单保留对象标�
 - 输入、清空查询和结果数量变化引起的窗口伸缩直接切换，不播放原生 resize 或
   图层隐式动画。macOS 在同一无动画事务内更新窗口位置、尺寸与材质布局，并在
   提交前重绘可见内容，避免缩放旧的 Metal 图像造成撕裂；顶部锚点保持不变。
-- 窗口外框、高光边和阴影由原生材质与 AppKit 提供，GPUI 不再覆盖窗口级描边。
-  页面高度不能因外框边框被挤压或裁切。
+- 窗口外框、高光边和阴影由系统材质提供。GPUI 使用统一的内容圆角，页面高度不能因
+  原生边框被挤压或裁切。
 - 固定高度工具行中的标题和副标题为单行并显式截断；按钮和快捷键作为不可收缩
   控件留在右侧，说明文字占剩余宽度，不能侵入操作区。
 - 操作浮层通过 `row_popup`（非空列表跟随选中行滚动坐标）或 `page_popup`（空态与页头菜单）在 deferred 层绘制，以窗口右缘为锚并
@@ -85,14 +85,15 @@ Web 工具页头显示工具名称。应用历史的对象菜单保留对象标�
   `menuSurface`，底层行文字不得透入。不能把 `absolute + right/top` 面板塞进
   滚动内容容器。对象动作请求失败时必须关闭空面板，不能留下永久 loading 或
   不可点击的浮层。
-- Tasks 保留原生 traffic lights，页头从 28 px titlebar inset 之后开始；
-  多操作区和脏草稿操作区在窄宽度下换行，不覆盖标题或相邻操作。
+- Settings、Tasks、Clipboard Shelf 和独立工具窗口的窗口按钮通过统一平台抽象按系统习惯呈现：macOS 保留左上角原生交通灯，Windows 在右上角绘制最小化 / 最大化（还原）/ 关闭按钮。
+  工具页头位于 28 px 窗口控制区下方。多操作区和脏草稿操作区在窄宽度下换行，
+  不覆盖标题或相邻操作。
 - Running Tasks 输出区跟随当前可见流；用户向上滚动后暂停自动跟随，直到选择
   Latest。
 - Clipboard History 使用 Launcher 宽度与单列结果；Clipboard Shelf 使用独立
   480×520 浮动窗口，最小 360×360，定位在鼠标所在屏幕右下角，不内嵌完整正文。
-  Shelf 页头从 28 px titlebar inset 后开始，原生交通灯、状态图标、搜索框与可见
-  Esc 不得相交。可见 Esc 和键盘 Esc 走同一路由：依次处理预览、局部操作 /
+  Shelf 页头从 28 px 窗口控制区后开始，状态图标、搜索框与可见 Esc 不得相交。
+  可见 Esc 和键盘 Esc 依次处理预览、局部操作 /
   删除确认、查询，最后才是关闭窗口。
 - 未知 NativeTool 明确显示错误，
   不尝试解释任意 UI DSL；输入正文在固定页头下使用有界滚动区域，长路径和无空格
@@ -162,8 +163,15 @@ Reduce Transparency、Increase Contrast 与 18 px 圆角；下层 AppKit adapter
 到 Glass 或 HUD。macOS 26+ 的 Launcher、Settings、Tasks 和 Clipboard Shelf
 统一使用 `WindowGlassStyle::Regular`，映射为未着色的
 `NSGlassEffectViewStyle::Regular`。以 macOS 系统通知为视觉对照，玻璃浓度、
-折射、高光和轮廓均由 AppKit 决定，不用额外蒙版模拟或压平材质。
-以后 Windows 的 Mica/Acrylic adapter 复用同一计划，不修改任何页面。
+折射、高光和轮廓由 AppKit 合成。
+Windows 在产品窗口中请求 DWM Desktop Acrylic。macOS 和 Windows 共用 GPUI 内容布局、
+控件配色和字体。两端在绘制前注册随应用分发的 Noto Sans SC 与 Fira Mono；字体覆盖范围
+以外的字符由系统补齐。Noto Sans SC 使用从 2.004 的可变 TTF 固定得到的四个字重（400、
+500、600、700），供 Core Text 和 DirectWrite 选择相同的字形。字体按 SIL OFL 随包发布。
+Windows 的 GPUI 内容铺满窗口，DWM 对内容和 Acrylic 一起裁切并绘制阴影。Acrylic
+启用后关闭 DWM 描边，外圆角沿用系统尺寸。
+[Noto Sans SC 2.004](https://github.com/notofonts/noto-cjk/releases/tag/Sans2.004) · [Fira Mono](https://github.com/google/fonts/tree/4c89430f86c811a3522161890da7b63894e1117c/ofl/firamono)
+[Windows 指南](windows.md) · [Microsoft DWM 圆角说明](https://learn.microsoft.com/en-us/windows/apps/desktop/modernize/ui/apply-rounded-corners)
 
 Reduce Transparency 时拆除材质并使用不透明 fallback，变化由
 `NSWorkspace.notificationCenter()` 的
@@ -201,7 +209,7 @@ Increase Contrast 沿用该外观的高对比度角色。`menuSurface`、确认�
 `onDark*` 字色与前景观；Field、Card、Hover、Selection、Keycap 等半透明局部
 表面随玻璃明暗选择对应表面并搭配同向文字。Accent、Warning、Danger、Success
 及图标也有表面变体，不能只切换三个灰阶角色。搜索头、候选标题和模式选项沿用
-`.SystemUIFont`，主要标题使用 Semibold，说明文字保持 Normal，与 macOS
+产品统一字体 Noto Sans SC，主要标题使用 Semibold，说明文字保持 Normal，与 macOS
 通知卡的层级一致。
 
 设置 → 通用 → 外观提供跟随系统、浅色和深色。已有设置默认跟随系统。保存后为

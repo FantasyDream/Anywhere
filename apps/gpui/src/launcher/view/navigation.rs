@@ -285,6 +285,19 @@ impl LauncherView {
     }
 
     pub fn open_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        self.open_settings_with_exit_mode(false, window, cx)
+    }
+
+    pub fn open_settings_from_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        self.open_settings_with_exit_mode(true, window, cx)
+    }
+
+    fn open_settings_with_exit_mode(
+        &mut self,
+        dismiss_on_done: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
         if matches!(
             self.runtime_state,
             RuntimeState::Starting | RuntimeState::Failed
@@ -315,6 +328,7 @@ impl LauncherView {
         self.close_preview(cx);
         self.close_web_surface(cx);
         self.screen = Screen::Settings;
+        self.settings_editor.dismiss_on_done = dismiss_on_done;
         self.root_navigation_open = false;
         self.shortcuts.recording = None;
         self.settings_editor.action_picker_open = false;
@@ -416,7 +430,7 @@ impl LauncherView {
         cx: &mut Context<Self>,
     ) -> bool {
         if self.is_settings_surface() {
-            self.request_close_settings(window, cx);
+            self.request_dismiss_settings(window, cx);
             false
         } else {
             self.prepare_hide(cx);

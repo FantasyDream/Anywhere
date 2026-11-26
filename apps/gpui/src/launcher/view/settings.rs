@@ -1,5 +1,4 @@
 use super::*;
-#[cfg(not(windows))]
 use anywhere_platform::FileSearchEngine;
 use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
 
@@ -30,10 +29,6 @@ impl LauncherView {
         let clipboard_confirmation = self
             .clipboard_confirmation
             .map(|confirmation| self.render_settings_clipboard_confirmation(confirmation, cx));
-        let close_prompt = self
-            .settings_editor
-            .close_pending
-            .then(|| self.render_settings_close_prompt(dirty, cx));
         let sidebar = self.render_settings_sidebar(cx);
         div()
             .id("settings-surface")
@@ -59,7 +54,7 @@ impl LauncherView {
                     .min_w(px(0.))
                     .h_full()
                     .overflow_x_hidden()
-                    .pt(px(28.))
+                    .pt(px(metrics::TITLE_BAR_INSET))
                     .flex()
                     .flex_col()
                     .child(
@@ -171,11 +166,18 @@ impl LauncherView {
                             ),
                     ),
             )
+            .child(
+                div()
+                    .absolute()
+                    .top_0()
+                    .left_0()
+                    .right_0()
+                    .child(self.render_window_titlebar(cx)),
+            )
             .when_some(action_picker, |element, picker| element.child(picker))
             .when_some(clipboard_confirmation, |element, prompt| {
                 element.child(prompt)
             })
-            .when_some(close_prompt, |element, prompt| element.child(prompt))
             .into_any_element()
     }
 
@@ -407,8 +409,9 @@ impl LauncherView {
         )
     }
 
-    fn render_settings_close_prompt(&self, dirty: bool, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn render_settings_close_prompt(&self, cx: &mut Context<Self>) -> AnyElement {
         let error = self.settings_close_error_message();
+        let dirty = self.settings_dirty(cx);
         let (title, description) = if dirty {
             (
                 l10n::save_before_close(self.locale),

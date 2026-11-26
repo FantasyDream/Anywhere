@@ -493,26 +493,19 @@ impl LauncherView {
         if !self.preview.open {
             return KeyFlow::Continue;
         }
-        let KeyModifiers {
-            command,
-            control,
-            alt,
-            shift,
-            modified,
-        } = input.modifiers;
         if input.key == "escape"
-            || (command && !control && !alt && !shift && input.key.eq_ignore_ascii_case("l"))
+            || (input.modifiers.primary_only() && input.key.eq_ignore_ascii_case("l"))
         {
             self.close_preview(cx);
             self.focus_active_editor(window, cx);
             return KeyFlow::Handled;
         }
-        if (!modified
+        if (!input.modifiers.modified
             && matches!(
                 input.key,
                 "left" | "right" | "home" | "end" | "backspace" | "delete"
             ))
-            || (command && !control && !alt && !shift && input.key.eq_ignore_ascii_case("a"))
+            || (input.modifiers.primary_only() && input.key.eq_ignore_ascii_case("a"))
         {
             if matches!(self.screen, Screen::Launcher | Screen::FileSearch) {
                 self.file_search.browsing = false;

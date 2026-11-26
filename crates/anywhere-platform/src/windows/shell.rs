@@ -78,17 +78,17 @@ pub(super) fn frontmost_application() -> Option<ApplicationInfo> {
     })
 }
 
-fn wide(value: &OsStr) -> Result<Vec<u16>> {
+pub(super) fn wide(value: &OsStr) -> Result<Vec<u16>> {
     let mut units: Vec<_> = value.encode_wide().collect();
     ensure!(!units.contains(&0), "shell target contains an embedded NUL");
     units.push(0);
     Ok(units)
 }
 
-struct Apartment;
+pub(super) struct Apartment;
 
 impl Apartment {
-    fn open() -> Result<Self> {
+    pub(super) fn open() -> Result<Self> {
         let status = unsafe { CoInitializeEx(null(), COINIT_APARTMENTTHREADED as u32) };
         ensure!(
             status >= 0,
@@ -168,5 +168,31 @@ pub(super) fn open_terminal(path: &Path) -> Result<()> {
         .current_dir(dunce::simplified(path))
         .creation_flags(CREATE_NEW_CONSOLE)
         .spawn()?;
+    Ok(())
+}
+
+pub(super) fn open_file_in_application(application: &Path, target: &Path) -> Result<()> {
+    ensure!(
+        target.is_absolute() && target.exists(),
+        "history target no longer exists"
+    );
+    let executable = super::applications::resolve_launch_executable(application)?;
+    Command::new(&executable)
+        .arg(dunce::simplified(target))
+        .spawn()?;
+    Ok(())
+}
+
+pub(super) fn open_url_in_application(application: &Path, url_value: &str) -> Result<()> {
+    let parsed = url::Url::parse(url_value)?;
+    ensure!(
+        matches!(parsed.scheme(), "http" | "https" | "obsidian"),
+        "unsupported application URL scheme"
+    );
+    if parsed.scheme() == "obsidian" {
+        return open(parsed.as_str().as_ref());
+    }
+    let executable = super::applications::resolve_launch_executable(application)?;
+    Command::new(&executable).arg(parsed.as_str()).spawn()?;
     Ok(())
 }

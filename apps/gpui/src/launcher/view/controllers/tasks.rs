@@ -393,7 +393,7 @@ impl LauncherView {
             return KeyFlow::Continue;
         }
         if self.tasks.tool_options_open {
-            if input.modifiers.command && input.key.eq_ignore_ascii_case("k") {
+            if input.modifiers.primary_only() && input.key.eq_ignore_ascii_case("k") {
                 self.close_tool_options(cx);
                 return KeyFlow::Handled;
             }
@@ -410,7 +410,7 @@ impl LauncherView {
             return KeyFlow::Handled;
         }
         if self.tasks.task_actions_open {
-            if input.modifiers.command && input.key.eq_ignore_ascii_case("k") {
+            if input.modifiers.primary_only() && input.key.eq_ignore_ascii_case("k") {
                 self.close_task_actions(cx);
                 return KeyFlow::Handled;
             }

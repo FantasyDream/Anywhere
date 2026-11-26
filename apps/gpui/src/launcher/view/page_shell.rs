@@ -1,4 +1,147 @@
 use super::*;
+use gpui_kit::component::ActiveTheme as _;
+
+const CAPTION_BUTTON_WIDTH: f32 = 40.0;
+const CAPTION_ICON_SIZE: f32 = 12.0;
+
+#[derive(IntoElement)]
+struct WindowTitlebar {
+    view: Entity<LauncherView>,
+    locale: Locale,
+    is_settings: bool,
+}
+
+impl RenderOnce for WindowTitlebar {
+    fn render(self, window: &mut Window, cx: &mut gpui_kit::App) -> impl IntoElement {
+        let resizable = !self.is_settings;
+        let drag_band = div()
+            .flex_1()
+            .h_full()
+            .window_control_area(gpui_kit::WindowControlArea::Drag)
+            .on_mouse_down(MouseButton::Left, move |event, window, _| {
+                if resizable && event.click_count >= 2 {
+                    crate::platform::toggle_window_size(window);
+                } else {
+                    window.start_window_move();
+                }
+            });
+        let mut bar = div()
+            .id("tool-window-titlebar")
+            .test_support()
+            .h(px(metrics::TITLE_BAR_INSET))
+            .w_full()
+            .flex_shrink_0()
+            .flex()
+            .items_center()
+            .child(drag_band);
+
+        if crate::platform::WINDOW_CONTROLS
+            != crate::platform::WindowControlsStyle::TrailingCaptionButtons
+        {
+            return bar;
+        }
+
+        let minimize_label = l10n::minimize_window(self.locale);
+        let resize_label = l10n::toggle_window_size(self.locale);
+        let close_label = l10n::close(self.locale);
+        let resize_icon = if crate::platform::is_window_maximized(window) {
+            IconName::WindowRestore
+        } else {
+            IconName::WindowMaximize
+        };
+        let close_hover_bg = cx.theme().danger;
+        let close_active_bg = cx.theme().danger_active;
+        let close_hover_fg = cx.theme().danger_foreground;
+        let close_view = self.view.clone();
+        let is_settings = self.is_settings;
+
+        let minimize_button = div()
+            .id("product-window-minimize")
+            .test_support()
+            .w(px(CAPTION_BUTTON_WIDTH))
+            .h_full()
+            .flex_shrink_0()
+            .flex()
+            .items_center()
+            .justify_center()
+            .text_color(theme::secondary())
+            .hover(|style| style.bg(theme::hover()).text_color(theme::primary()))
+            .active(|style| style.bg(theme::selected()).text_color(theme::primary()))
+            .tooltip(components::text_tooltip(minimize_label))
+            .on_mouse_down(MouseButton::Left, |_, window, cx| {
+                window.prevent_default();
+                cx.stop_propagation();
+            })
+            .on_click(|_, window, cx| {
+                cx.stop_propagation();
+                window.minimize_window();
+            })
+            .child(Icon::new(IconName::WindowMinimize).size(px(CAPTION_ICON_SIZE)));
+
+        let close_button = div()
+            .id("product-window-close")
+            .test_support()
+            .w(px(CAPTION_BUTTON_WIDTH))
+            .h_full()
+            .flex_shrink_0()
+            .flex()
+            .items_center()
+            .justify_center()
+            .text_color(theme::secondary())
+            .hover(move |style| style.bg(close_hover_bg).text_color(close_hover_fg))
+            .active(move |style| style.bg(close_active_bg).text_color(close_hover_fg))
+            .tooltip(components::text_tooltip(close_label))
+            .on_mouse_down(MouseButton::Left, |_, window, cx| {
+                window.prevent_default();
+                cx.stop_propagation();
+            })
+            .on_click(move |_, window, cx| {
+                cx.stop_propagation();
+                close_view.update(cx, |this, cx| {
+                    if is_settings {
+                        this.request_dismiss_settings(window, cx);
+                    } else {
+                        this.go_back(window, cx);
+                    }
+                });
+            })
+            .child(Icon::new(IconName::WindowClose).size(px(CAPTION_ICON_SIZE)));
+
+        let mut controls = div()
+            .flex_shrink_0()
+            .h_full()
+            .flex()
+            .items_center()
+            .child(minimize_button);
+        if resizable {
+            let resize_button = div()
+                .id("product-window-resize")
+                .test_support()
+                .w(px(CAPTION_BUTTON_WIDTH))
+                .h_full()
+                .flex_shrink_0()
+                .flex()
+                .items_center()
+                .justify_center()
+                .text_color(theme::secondary())
+                .hover(|style| style.bg(theme::hover()).text_color(theme::primary()))
+                .active(|style| style.bg(theme::selected()).text_color(theme::primary()))
+                .tooltip(components::text_tooltip(resize_label))
+                .on_mouse_down(MouseButton::Left, |_, window, cx| {
+                    window.prevent_default();
+                    cx.stop_propagation();
+                })
+                .on_click(|_, window, cx| {
+                    cx.stop_propagation();
+                    crate::platform::toggle_window_size(window);
+                })
+                .child(Icon::new(resize_icon).size(px(CAPTION_ICON_SIZE)));
+            controls = controls.child(resize_button);
+        }
+        bar = bar.child(controls.child(close_button));
+        bar
+    }
+}
 
 impl LauncherView {
     pub(super) fn empty_page_state(
@@ -75,27 +218,10 @@ impl LauncherView {
             .size_full()
             .flex()
             .flex_col()
-            // Tasks keeps native traffic lights. Give the first header row its
-            // own titlebar band so the close icon and labels never sit below
-            // the red/yellow/green controls.
-            .when(self.standalone_tasks, |element| {
-                element.pt(px(metrics::TITLE_BAR_INSET))
-            })
-            // Standalone Web tool windows use a frameless transparent titlebar
-            // with native traffic lights; reserve a draggable band above the header.
-            .when(self.standalone_tool, |element| {
-                element.child(
-                    div()
-                        .id("tool-window-titlebar")
-                        .test_support()
-                        .h(px(metrics::TITLE_BAR_INSET))
-                        .w_full()
-                        .flex_shrink_0()
-                        .on_mouse_down(MouseButton::Left, |_, window, _| {
-                            window.start_window_move()
-                        }),
-                )
-            })
+            .when(
+                self.standalone_tasks || self.standalone_tool || self.is_settings_surface(),
+                |element| element.child(self.render_window_titlebar(cx)),
+            )
             .child(self.render_page_header(title_area, trailing, cx))
             .child(if self.standalone_tool {
                 Self::full_width_divider()
@@ -121,6 +247,14 @@ impl LauncherView {
                     .overflow_hidden()
                     .child(content),
             )
+    }
+
+    pub(super) fn render_window_titlebar(&self, cx: &Context<Self>) -> impl IntoElement {
+        WindowTitlebar {
+            view: cx.entity(),
+            locale: self.locale,
+            is_settings: self.is_settings_surface(),
+        }
     }
 
     pub(super) fn page_search_title(

@@ -344,7 +344,7 @@ impl LauncherView {
             components::footer_action_button(
                 "clipboard-footer-actions",
                 actions_label,
-                "⌘K",
+                crate::platform::primary_shortcut_label("K"),
                 false,
             )
             .on_click(cx.listener(|this, _, _, cx| {
