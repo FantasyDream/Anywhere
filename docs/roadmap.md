@@ -44,6 +44,8 @@
 
 ### V0.15 插件开发体验
 
+Phase 1 的范围、任务依赖和验收步骤见[插件实施手册](web-plugin-phase-1.md)。设计依据和后续能力评估见[架构审查](web-plugin-evolution.md)。
+
 - 增加隔离的浏览器 Host Mock 和可诊断包校验；
 - 明确同名包更新对快捷键、Usage 与 KV 的影响；
 - 补齐 Host / SDK 兼容表与安装回滚矩阵；
