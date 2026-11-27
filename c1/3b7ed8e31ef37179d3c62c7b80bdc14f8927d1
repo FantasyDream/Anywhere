@@ -1,0 +1,37 @@
+docs/web-plugin-evolution.md
+  s_ef8fa223cf58d1::t_221193b2af54e0 29,49,54,61,79-80,82,84,89
+  s_ef8fa223cf58d1::t_6cbb144e57452b 7,23,47-48,52,58,67,71-78,81,85-88,90,92
+  s_ef8fa223cf58d1::t_d0142d643e48d3 91
+  s_ef8fa223cf58d1::t_50302ad1663122 5-6,83,95-97
+  s_ef8fa223cf58d1::t_9e638643b9aee9 1-4,8-15,17-22,25-28,30,33-38,42-46,51,53,55-57,59,62-65,70,93-94,98,100-101
+  s_ef8fa223cf58d1::t_69d38981680e1f 32
+  s_ef8fa223cf58d1::t_1f2d08cfffdcf7 68,99
+  s_ef8fa223cf58d1::t_7e959672e13e93 16,24,31,39-41,50,60,66,69
+docs/README.md
+  s_ef8fa223cf58d1::t_50302ad1663122 50
+  s_ef8fa223cf58d1::t_1f2d08cfffdcf7 49
+docs/web-plugin-phase-1.md
+  s_ef8fa223cf58d1::t_e852c827dc9d32 1-13,18-52,54-135,138-149,151-162,164-220
+  s_ef8fa223cf58d1::t_44e098db360657 53,136-137,232-233
+  s_ef8fa223cf58d1::t_f7b61b22126f98 14-17
+  s_ef8fa223cf58d1::t_733b46dd02f340 150,163,221-231,234-235
+docs/roadmap.md
+  s_ef8fa223cf58d1::t_50302ad1663122 47
+  s_ef8fa223cf58d1::t_1f2d08cfffdcf7 48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "c13b7ed8e31ef37179d3c62c7b80bdc14f8927d1",
+  "prompts": {},
+  "sessions": {
+    "s_ef8fa223cf58d1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a21c14-5ffd-74c2-924f-b35621e05909",
+        "model": "gpt-6.2-sol"
+      },
+      "human_author": "diwen.zhang <diwen.zhang@lkcoffee.com>"
+    }
+  }
+}
