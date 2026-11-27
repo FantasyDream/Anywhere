@@ -12,6 +12,8 @@
 - 补齐标准 Win32 菜单栏，执行前复验动态启用状态。Context 读取绑定激活窗口。
 - QuickLook 预览与外部关闭同步，并保护独立打开的预览窗口。修正 Windows 文件路径展示、
   Explorer 选区文案和剪贴板设置写入期间丢失的保存请求。
+- 修正 Windows 应用搜索位置错误拒绝 `C:\`、`D:\` 等磁盘根目录的问题，
+  根目录现在可以正常保存并跨启动读取。
 - 接入 Windows 应用历史身份、只读 Git、后台任务 Job Object 和 WebView2，
   内置 JSON Workspace 可打开为独立窗口。已知缺陷和抽测范围见
   [Windows 功能进度](docs/windows-progress.md)。

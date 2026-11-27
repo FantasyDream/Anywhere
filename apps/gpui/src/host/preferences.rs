@@ -193,7 +193,6 @@ impl HostPreferences {
                     && self.application_search_paths.iter().all(|value| {
                         let path = Path::new(value);
                         path.is_absolute()
-                            && path.parent().is_some()
                             && value.len()
                                 <= anywhere_protocol::policy::MAX_SEARCH_PATH_BYTES as usize
                             && !value.chars().any(char::is_control)
@@ -562,6 +561,28 @@ mod tests {
         assert!(preferences.validate().is_ok());
         preferences.file_search_excluded_names = vec!["../cache".to_owned()];
         assert!(preferences.validate().is_err());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_application_search_paths_accept_drive_roots() {
+        let preferences = HostPreferences {
+            application_search_paths: [r"C:\", r"D:\", r"E:\"]
+                .into_iter()
+                .map(str::to_owned)
+                .collect(),
+            ..HostPreferences::default()
+        };
+        assert!(preferences.validate().is_ok());
+
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("settings.json");
+        preferences.save(&path).unwrap();
+        let loaded = HostPreferences::load(&path).unwrap();
+        assert_eq!(
+            loaded.application_search_paths,
+            preferences.application_search_paths
+        );
     }
 
     #[test]
