@@ -46,7 +46,7 @@ Rust Core 负责 Context、匹配、排序、授权和执行。自动化、构�
 |---|---|
 | [第三方插件开发](plugin-development.md) | 独立模板、SDK、统一样式、权限、打包与更新 |
 | [Web 插件架构](web-plugin-design.md) | 包身份、能力代理、Context 输入、生命周期和系统边界 |
-| [第三方 Web 插件架构审查与 V0.15 建议方案](web-plugin-evolution.md) | 作者开发流程、候选插件与能力缺口、局部重构和分阶段验收（提案） |
+| [第三方 Web 插件架构审查与 V0.15 定案](web-plugin-evolution.md) | 源码审查发现、三通道交互、单一 API 2 / protocol 2 契约与分阶段验收 |
 | [第三方 Web 插件 Phase 1 实施手册](web-plugin-phase-1.md) | 开工契约、11 项实施任务、逐步检查、平台矩阵和交接格式 |
 | [路线图](roadmap.md) | 后续功能、依赖与 1.0 门槛 |
 | [应用历史设计](application-history.md) | V0.14：IDE / 编辑器 / 笔记最近对象与原应用打开；当前已有 18 个配置化来源 |

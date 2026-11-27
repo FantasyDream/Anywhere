@@ -1,101 +1,99 @@
-# 第三方 Web 插件架构审查与 V0.15 建议方案
+# 第三方 Web 插件架构审查与 V0.15 定案
 
-2026-11-27，审查基线为 `964dd1e1`。本文是实施前提案。现有包的开发步骤、权限和额度仍以[插件开发指南](plugin-development.md)及[运行时契约](web-plugin-design.md)为准。
+2026-11-27，审查基线为 `964dd1e1`。本文记录源码审查结论与 V0.15 最终架构定案。现有包的开发步骤、权限和额度仍以[插件开发指南](plugin-development.md)及[运行时契约](web-plugin-design.md)为准。
 
-准备开工时，按[Phase 1 实施手册](web-plugin-phase-1.md)的版本、权限和任务顺序执行。本页保留设计取舍和源码证据。
+准备开工时，按[Phase 1 实施手册](web-plugin-phase-1.md)的版本、权限与任务顺序执行。**当前生态仅有仓库内的三个参考包（`json-workspace`、`web-text`、`background-context`），本轮明确不承担历史兼容包袱**：Manifest、桥协议、SDK 门面与打包工具一次性收口到单一当前契约（`apiVersion: "2"`、`protocol: 2`、全线 `camelCase`、零依赖 Node 22 CLI），仓库内全部示例与模板同步迁移。
 
-**建议保留 WebView、按需 QuickJS 和 Rust 能力代理，做局部重构。** 现有架构足以让作者独立交付文本工具。开发时的主要成本是反复导入才能知道包为什么装不上、命令为什么没出现。使用时，插件能识别工单号却只能复制链接，能看到用户选中的 CSV 文件名却读不到内容。结合 Phase 1 定稿，建议先交付作者工具、跨平台快捷键和安装审查，再接入后台反馈、窗口控制、外链和选中文件的读取与预览。各项能力可独立验收。
+**架构结论：保留 WebView、按需 QuickJS 与 Rust 能力代理，聚焦局部重构。** 当前基础已能支撑离线文本与混合工具，真正制约交付的是四类问题：一是缺少统一作者工具链与隔离 Mock；二是 `Invocation` 生命周期、单向/双向宿主交互与 WebView 遮挡边界未拆清；三是后台命令缺少干净的完成反馈与可定位诊断；四是外链交接、单文件原生身份与原生预览尚未贯通。
 
 ## 当前作者能做到哪一步
 
 | 用户入口 | 现有能力 | 对作者的实际意义 |
 | --- | --- | --- |
-| 搜索命令、Action 快捷键、Current App 中的适用动作 | Manifest 静态命令进入现有 ActionRegistry，按 Context 匹配并沿用 Launcher 排序和用户绑定。来源应用与实时前台应用可分别按权限读取 | 标题打开可以是空输入。需要对象的命令可声明 `requireContext`，识别 JSON 也有静态匹配器。命令标题和关键词由包提供，宿主尚无第三方动态结果贡献点。[命令注册](../crates/anywhere-core/src/application/web_plugins/catalog.rs#L120) |
-| 打开工具页或独立窗口 | WKWebView / WebView2 加载本地资源。SDK 提供启动、Context / Input 订阅、取消、语言和共享样式。宿主提供独立工具窗口及其文档身份 | HTML、React 等均可处理业务。作者无需管理窗口、主题或 IPC。搜索框内容由 `input.read/write` 控制，与启动时投影的对象有不同语义。[SDK 门面](../packages/plugin-sdk/src/api.ts#L15) · [窗口绑定](../crates/anywhere-core/src/application/web_plugins/invocation.rs#L84) |
-| 自动识别或显式运行后台命令 | 自动 resolver 只读获准 Context / Input / 应用信息，只产生本包命名空间的数据。显式命令还可使用获准的剪贴板文本和包私有 KV。QuickJS 每次按需创建，有执行时间、内存和调用次数限制 | JSON Workspace 已用一个普通包组合解析、无界面复制和 Web 编辑，共用偏好。适合离线、短时任务。当前 QuickJS 在 App 进程内运行。[解析器权限](../crates/anywhere-core/src/application/web_plugins/background_provider.rs#L182) · [混合包](../plugins/examples/json-workspace/manifest.json) |
-| 安装、更新、停用、回滚 | Rust 校验包字节、平台和声明权限。导入批准绑定本次审查和内容摘要，同 ID 更新沿用本地安装来源。可回到上一份获批内容 | 包 ID、命令 ID、安装来源、摘要与本次执行身份各有用途。用户设置快捷键后可以持续使用同一命令，每次执行仍须复验资格。本地来源不能证明发布者身份。[安装记录](../crates/anywhere-core/src/application/web_plugins/packages.rs#L115) · [命令身份](../crates/anywhere-core/src/core/action/web_command.rs#L12) |
+| 搜索命令、Action 快捷键、Current App 适用动作 | Manifest 静态命令进入 `ActionRegistry`，按 Context 匹配并沿用 Launcher 排序与用户绑定；来源应用与实时前台应用可按权限读取 | 空输入命令与 `requireContext` 命令均可声明，JSON 已有静态匹配器；尚无第三方首页动态结果贡献点。[命令注册](../crates/anywhere-core/src/application/web_plugins/catalog.rs#L120) |
+| 打开工具页或独立窗口 | WKWebView / WebView2 加载本地资源；SDK 提供启动、Context / Input 订阅、取消、语言和共享样式；宿主提供独立工具窗口与文档身份 | HTML / React 等直接承载业务，作者无需处理窗口、主题或底层 IPC。[SDK 门面](../packages/plugin-sdk/src/api.ts#L15) · [窗口绑定](../crates/anywhere-core/src/application/web_plugins/invocation.rs#L84) |
+| 自动识别或显式运行后台命令 | 自动 resolver 只读获准 Context / Input / 应用信息，仅产出 `plugin.<id>.*` 数据；显式命令额外可使用剪贴板文本与包私有 KV；QuickJS 进程内按需创建 | `json-workspace` 已在单个普通包中组合解析、无界面复制与 Web 编辑并共享偏好。[解析器权限](../crates/anywhere-core/src/application/web_plugins/background_provider.rs#L182) · [混合包](../plugins/examples/json-workspace/manifest.json) |
+| 安装、更新、停用、回滚 | Rust 校验归档字节、平台与权限；批准绑定本次审查摘要，同 ID 更新保留安装来源与上一份获批内容 | 快捷键绑定稳定命令 ID，执行时仍按当前安装与摘要复验资格。[安装记录](../crates/anywhere-core/src/application/web_plugins/packages.rs#L115) · [命令身份](../crates/anywhere-core/src/core/action/web_command.rs#L12) |
 
-## 发现与优先级
+## 源码审查发现与本轮架构修正
 
-| 优先级 | 源码或实测所见 | 影响及处理建议 |
+| 优先级 | 源码实测发现 | V0.15 定案处理 |
 | --- | --- | --- |
-| 本轮修复 | 批准更新时，仅当新摘要和当前摘要不同才设置 `previous`。已安装 A、更新到 B、再次导入相同的 B 后，记录中的上一版会变为空。[批准与回滚](../crates/anywhere-core/src/application/web_plugins/packages.rs#L168) | 开发者重复导入会失去回到 A 的入口。对已启用的同来源、同摘要包保留上一版与现有实例。已停用包的重新启用作为明确操作处理。以 A → B → B → 回滚 A 验收，并覆盖重启后的结果。 |
-| 本轮修复 | 后台命令先模拟文档 ready 并忽略其回复，随后才运行导出函数。ready 会记录 Usage。返回的业务值在普通执行入口被丢弃，成功时关闭 Launcher。[后台执行](../crates/anywhere-core/src/application/web_plugins/background_action.rs#L143) · [记录 Usage](../crates/anywhere-core/src/application/web_plugins/rpc_dispatch.rs#L209) · [执行结果](../crates/anywhere-core/src/application/execute.rs#L24) | 脚本失败也可能增加排序计数。抽出有限任务的开始、完成、取消三个时点，执行成功只记一次。记录失败作为已完成动作的警告。Web 页面继续以有效 ready 表示打开成功。按下文的版本约定接入定稿所需的后台结果反馈。 |
-| 本轮补齐 | SDK 已有仓库外模板及可注入的 transport。发布给作者的 CLI 只有 `init` 和后台模板选项，包内工具负责收集资源，完整语义校验在 Rust。后台运行时又将多种脚本错误合并为一个失败原因。[创建器](../packages/plugin-sdk/tools/create.mjs#L100) · [包检查器](../crates/anywhere-plugin/examples/inspect_web_package.rs#L5) · [后台错误出口](../crates/anywhere-core/src/application/web_plugins/background_runtime.rs#L130) | 修改业务后要反复构建、打包、导入才看到真实反馈。开发工具应按包、命令、字段或导出名提示如何修正，并支持用合成数据复验。默认诊断只含错误类别、位置和额度。 |
-| 本轮补齐 | Web 与显式后台命令共享 SDK 方法，自动 resolver 通过独立的只读分派执行。Manifest 与 API 当前严格匹配版本 1，未知字段和权限会被拒绝，SDK 的 TypeScript 接口也不能区分 resolver 与命令。[协议](../crates/anywhere-protocol/src/web_plugin.rs#L4) · [版本检查](../crates/anywhere-plugin/src/web/manifest.rs#L20) · [后台 SDK](../packages/plugin-sdk/src/background.ts#L60) | 作者可以写出类型检查通过、只在 resolver 中被拒绝的调用。给新模板只读 resolver 门面和命令门面，由同一份能力说明驱动文档、诊断和测试。Rust 继续逐次授权，旧 SDK 门面继续兼容。 |
-| 发布参考包前修复 | 本次重建 JSON Workspace 0.7.3 时示例门禁失败。逐项比较 ZIP 后，唯一不同的资源是 Manifest 的 110 个换行，内置包为 CRLF，本机重建为 LF。两者解析出的 Manifest 相同。[逐字节门禁](../scripts/check-web-examples.sh#L12) · [打包资源写入](../packages/plugin-sdk/tools/package.py#L81) | 作者拿同一份源码构建会得到不同包。先固定受版本控制的打包文本输入换行，双平台干净检出重建并比较，随后同步内置包。导入时仍审查实际字节及摘要。 |
-| 下一阶段评估 | 一次插件目录发布会清空已有 invocation、取消后台任务、撤销子窗口资格，并可能推进查询 revision。这是现行全目录失效契约。[目录发布](../crates/anywhere-core/src/application/web_plugins/application.rs#L43) · [清理实例](../crates/anywhere-core/src/application/web_plugins/invocation.rs#L175) · [窗口契约](architecture.md#从-flutter-桥接到进程内共享) | 更新插件 A 时，正在使用 B 的窗口也可能要求重开。先用独立开发配置消除日常迭代对正式窗口的干扰。只有多包并行工作成为实际需求时，再按安装来源、摘要及授权代次缩小撤销范围，并保留查询目录的原子发布。 |
-
-前次架构审查通过了 66 项 Core 插件测试、SDK 检查、仓库外两个模板，以及 JSON 混合包与真实 Rust 宿主的协议测试。示例整体验证停在上表的包字节比较。当时 GPUI 和完整工程检查均停在基线已有的 Rust 格式差异。
+| P0 必改 | 批准同摘要包时仅当摘要变化才写 `previous`，导致 A → B → B 丢弃 A；缓存资产损坏时存储层已采用 fail-closed 拒绝覆盖。[批准与回滚](../crates/anywhere-core/src/application/web_plugins/packages.rs#L168) · [缓存校验](../crates/anywhere-core/src/persistence/web_packages.rs#L125) | `approve` 先 `stage` 验证完整性：损坏资产维持 fail-closed；完好且已启用时做幂等 no-op（保留 `previous` 与在用窗口）；完好但已停用时在审查卡以“批准并启用”显式恢复并保留 `previous`。 |
+| P0 必改 | 后台命令先伪造 `lifecycle.ready` 提前记 Usage 并丢弃返回值；`invocation.rs` 对所有调用套用 10s ready 超时，会误杀 30s `url.open` 确认；`suspend()` 取消会误杀交接默认浏览器后的 JS 尾声。[后台执行](../crates/anywhere-core/src/application/web_plugins/background_action.rs#L143) · [超时清理](../crates/anywhere-core/src/application/web_plugins/invocation.rs#L423) | 拆分 `RuntimeLifecycle::Webview` 与 `RuntimeLifecycle::Background`（无 10s ready 清理）；由 `execute.rs` 在合法返回后记一次 Usage；浏览器受理外链后进入 `HandoffCompleted`，失焦仅拒绝新宿主调用、保留剩余 250ms CPU 尾声完成返回。 |
+| P0 必改 | `dispatch_web_frame` 仅返回 JSON 字符串，无法区分普通回复与宿主窗口动作；原生 WebView 浮于 GPUI 像素之上，若通过 `visibility_script(false)` 隐藏会令 `web-bootstrap.js` 立刻以 `INACTIVE` 中止确认中的 RPC。[回复交付](../apps/gpui/src/launcher/view/controllers/web.rs#L41) · [前端挂起](../resources/web-bootstrap.js#L142) | 引入三通道模型：数据 RPC、结构化单向 `WebDispatchOutcome`、双向 `HostInteraction`（确认等待前释放 `web_rpc_workers` 许可）；弹出确认卡时仅调原生 `view.set_visible(false)` 而不派发 `visibility_script(false)`，确认或取消后恢复可见。 |
+| P0 必改 | 桥帧存在 `request_id`/`plugin_id`/`type_id` 与 camelCase 混用；Rust 默认 `BTreeMap` 反序列化会静默覆盖重复 JSON 键；SDK 未区分只读 resolver 门面，且含历史别名与 Python 打包脚本。[桥协议](../crates/anywhere-protocol/src/web_bridge.rs#L14) · [后台 SDK](../packages/plugin-sdk/src/background.ts#L60) · [旧打包器](../packages/plugin-sdk/tools/package.py) | 一步升级至 `apiVersion: "2"`、`protocol: 2` 全线 `camelCase`；Rust 直反序列化 DTO + `unique_map` 拒绝重复键；`anywhere-protocol` 维护单一 `MethodSpec` 驱动生成物；SDK 拆出只读 `defineResolver` 并删除历史别名；退役 `package.py`，统一到零依赖 Node 22 CLI。 |
+| P0 必改 | 选区采集会对多选展开子项，且 `projection.rs` 仅存路径并用 `path.is_file()` 跟随符号链接；独立工具窗使用空 `PreviewStore::default()` 导致无快照目录。[选区采集](../crates/anywhere-core/src/application/context_capture.rs#L276) · [工具窗预览](../crates/anywhere-core/src/application/tool_window.rs#L44) | 读/预览严格限定 Finder / Explorer 原始单文件选区（`depth == 0`），按平台实现防链接/重解析点校验与稳定文件身份；15s `resume` 保持句柄稳定、`tool_window` 重签并共享父 `PreviewStore`，采用 16 MiB 私有只读快照。 |
+| P1 补齐 | `background_runtime.rs` 将所有异常折叠为单一 `RuntimeError`，静默 resolver 失败无处排查；包内 `manifest.json` 跨平台 CRLF/LF 曾破坏逐字节门禁。[异常出口](../crates/anywhere-core/src/application/web_plugins/background_runtime.rs#L124) · [逐字节门禁](../scripts/check-web-examples.sh#L12) | 通过 `ctx.catch()` 与中断原子状态输出结构化错误类，增加每包 10 条、零正文内容的内存诊断环缓冲展示于设置页；Node CLI 写归档统一 UTF-8 + LF + 末尾换行，并产出确定性 ZIP。 |
+| 下一阶段 | 一次目录发布会清空全部在用 invocation 与子窗口资格。[目录发布](../crates/anywhere-core/src/application/web_plugins/application.rs#L43) | 本轮使用 `ANYWHERE_DATA_DIR` 隔离开发实例，待多包并行编辑成为高频需求后再按 `(package_id, digest, generation)` 缩窄撤销粒度。 |
 
 ## 用候选插件决定能力范围
 
-| 插件与一次完整操作 | 已能复用 | 做完这件事还缺什么 | 建议 |
+| 插件与一次完整操作 | 已能复用 | 做完这件事还缺什么 | V0.15 定位 |
 | --- | --- | --- | --- |
-| 时间戳、Base64、JSON 转换。选中文本，按快捷键复制结果 | 自有 Context、后台命令、文本剪贴板、Usage | 离线执行已够用，作者需要测无输入、超时和拒绝授权 | 作为零新增权限的基准 |
-| 工单跳转、站内文档快捷入口。选中工单号，回车进入对应页面 | 只读 resolver 识别编号，显式 Action 获取对象 | 让默认浏览器打开包声明的 HTTPS 站点 | 本轮首选，验证从识别到执行的完整链路 |
-| Markdown 阅读器、CSV 检查器。选中一个本地文件，查看渲染或列统计 | 文件名、类型和不透明句柄，Web UI，独立窗口 | 读取本次明确选中的单个小文本文件 | 本轮候选，仅在两端能证明文件身份时交付 |
-| 片段库、离线词典。在 Launcher 输入后逐项选择并复制 | 小型 KV 或包内词库，Web 页内搜索，剪贴板写入 | 要在宿主原生列表中选条目，需要命令内的查询、稳定对象 ID、分页及对象动作 | 后续先做显式进入的列表，避免每次唤醒调度所有插件 |
-| 翻译、工单查询。选中文字或编号，得到远端结果 | Context、Web 页、显式命令 | 受限 HTTP 请求、取消与超时、按站点授权。有账户时还需系统凭据库 | 后续单独设计。浏览器跳转可先满足只需打开站点的插件 |
-| 图片 OCR。选中图片，复制识别文本 | 资源元数据和文本剪贴板 | 图像输入、解码像素预算、OCR 服务及异步任务反馈。剪贴板图片另需授权 | 后续按平台验证，文本读取接口保持单一用途 |
-| 项目构建、浏览器标签切换、向笔记仓库追加内容 | 内置项目任务、来源应用和当前 URL 等已有产品入口 | 分别需要受控任务模板与输出、准确的浏览器会话身份、授权目录内的写入与冲突处理 | 保留各自领域的身份和执行所有者，将来逐项开放。浏览器事项沿用[独立规划](browser-feature.md) |
+| 时间戳、Base64、JSON 转换：选中文本后按快捷键复制结果 | 自有 Context、后台命令、文本剪贴板、Usage | 补齐本地 Mock、后台沙箱测试与错误诊断 | 零新增权限基准 |
+| 工单跳转、站内文档入口：识别工单号，回车交默认浏览器打开 | 只读 resolver、显式 Action | 宿主确认后由默认浏览器打开获准 HTTP(S) URL | 必做试点，贯通识别→确认→交接 |
+| Markdown 阅读器、CSV 检查器：选中单个本地文件查看渲染或预览 | 文件名、类型与句柄，Web UI，独立窗口 | 单文件原生身份租约、UTF-8 文本读取与原生预览 | 必做试点，两端验证原生身份后开放 |
+| 片段库、离线词典：在命令内列表筛选并执行动作 | KV / 包内词库、Web 搜索、剪贴板写入 | 命令内原生列表、稳定对象 ID、分页与对象动作 | 下一阶段验证 |
+| 翻译、远端工单查询：拉取远端结果 | Context、Web 页、显式命令 | 受限 HTTP、取消超时、按站点授权与系统凭据库 | 后续单独设计 |
+| 图片 OCR、项目构建、浏览器标签切换、笔记写入 | 已有内置领域入口 | 各自受控预算、会话身份或授权目录写入契约 | 后续逐项评估；浏览器沿用[独立规划](browser-feature.md) |
 
-## 本轮拟交付的设计
+## V0.15 目标架构与三通道宿主交互
 
-### 让作者在仓库外完成一次迭代
+现有桥接把所有插件调用塞进“单向字符串回复”模型，导致窗口关闭、30 秒外链确认与原生预览都无法安全落地。V0.15 将插件 → 宿主调用明确拆成三条通道，均由 `anywhere-protocol` 的封闭 `MethodSpec` 表驱动权限、角色与超时预算：
 
-1. **取得工具。** 随对应 Host 预览提供 SDK 安装包、校验和、支持平台及兼容表。从指定 GitHub Release 获取可移动的 vendor 模板，提供 Web、TypeScript Web、后台和混合包起点。用 JSON Workspace 验证混合包，模板标注已实际测试的平台。
-2. **提前发现错误。** 采用定稿中的 Node CLI 命令 `anywhere-plugin validate` 和 `pack`。源码阶段提供字段位置、类型与权限检查，打包时再检查完整产物。在 CI 中将实际产物交给与应用导入相同的 Rust 包检查器，普通作者只需 Node。检查结果标识目标宿主版本、平台、命令、需求权限和错误位置。导出函数缺失应在隔离的合成运行测试中定位。
-3. **缩短反馈。** 建议给模板增加一个可直接运行的 `npm run dev`，启动本地预览、监听源码变更并在开发入口装载 `@anywhere/sdk/mock`。作者可切换无对象、选区、拒绝、超限、隐藏恢复和中途撤销，查看方法、结果码及耗时。临时预览使用独立入口、内存 KV、合成剪贴板及文件。为“命令为何隐藏”显示适用类型、缺少的 grant 和当前运行角色，处理大段输入时只显示字节数。复用 SDK transport 和协议夹具，在同一输入下对照真实 Rust 结果。[现有 transport](../packages/plugin-sdk/src/client.ts#L17) · [仓库外模板验收](../scripts/check-plugin-starter.sh)
-4. **回到真实宿主。** 以临时插件目录和数据目录导入构建产物，走正常审查、安装、启动和撤销。普通 Reload 继续加载获批摘要。SDK 的检查、预览和测试命令使用同一套夹具。作者可将其直接放入 CI。VS Code 也用专用开发宿主运行集成测试，可参考其对单元测试与真实宿主测试的分工。[VS Code 扩展测试](https://code.visualstudio.com/api/working-with-extensions/testing-extension)
+```mermaid
+flowchart LR
+    JS["WebView / QuickJS"] --> Broker["Rust Broker (权限 + 角色 + 代次校验)"]
+    Broker -->|"通道 1: 数据 RPC (5s, web_rpc_workers)"| Data["context / input / clipboard / storage / resources.readText"]
+    Broker -->|"通道 2: 单向宿主意图 (WebDispatchOutcome)"| Effect["GPUI 窗口控制 (window.back / window.close)"]
+    Broker -->|"通道 3: 双向宿主交互 (HostInteraction + oneshot)"| Interact["GPUI 确认卡 (url.open 30s) / 原生预览 (preview.open 5s)"]
+    Interact -->|"先释放 worker 许可, 隐藏原生 WebView 层"| Reply["确认/受理后复验代次再执行平台 API"]
+```
 
-### 外链与文件读取
+- **通道 1（数据 RPC，5 秒）**：`context`、`input`、`clipboard`、`storage`、`app`、`resources.stat`、`resources.readText` 沿用 `web_rpc_workers` 线程池与现有分块传输。
+- **通道 2（单向宿主意图）**：`dispatch_web_frame` 改为返回结构化 `WebDispatchOutcome { reply_frame, host_action: Option<WebHostAction> }`，绑定 `(handle, document_epoch, request_id, window_generation)`，杜绝前端伪造 JSON 回复字符串触发窗口关闭或返回。
+- **通道 3（双向宿主交互）**：`url.open`（30 秒确认）与 `preview.open`（5 秒平台受理）经窗口/会话级异步通道发往 GPUI 并以 `oneshot` 回传，同时满足四条铁律：等待交互前立即释放 `web_rpc_workers` 许可；单文档/单窗口互斥锁防并发确认（第二个请求返回 `BUSY`）；`rpc_state.rs` 与 SDK `client.ts` 按 `MethodSpec` 对齐方法级超时；WebView 上展示 GPUI 确认卡时仅调原生 `view.set_visible(false)` 而**绝不**派发 `visibility_script(false)`，避免 `web-bootstrap.js` 误中止等待中的 RPC。
 
-下表给出工单和文件两个试点的建议授权策略。`url.open` 与 `resources.read` 分开声明和批准，均禁止自动解析器调用。能力可用性取决于宿主实现、当前运行角色及本次安装授权。能力查询只帮助作者决定如何展示操作，broker 在产生副作用或交付数据前仍复验资格。
+### 1. 作者工具链与双 Mock
 
-| 契约 | 打开站点链接 · 建议必做 | 读取选中文本文件 · 有条件交付 |
+1. **统一零依赖 Node 22 CLI（`anywhere-plugin`）**：提供 `init [--ts | --background | --hybrid]`、`validate [dir] [--built]`、`pack [dir] --output <file.awplugin>`、`test [dir]`，彻底退役 `package.py`。
+2. **严格校验与确定性 ZIP**：`validate` 在源码阶段即带轻量级重复 JSON 键扫描器（与 Rust 共用夹具）；`pack` 仅使用 `node:zlib`（`deflateRawSync` + `crc32`），生成 UTF-8 标志 `0x0800`、**不含 Bit 3 Data Descriptor**、**不含额外扩展字段**、固定时间戳 `(2026,1,1,0,0,0)` 与权限 `0o100644`、LF 换行、压缩比超 200 倍自动回落 Stored 的确定性归档，直接匹配 `archive.rs` 与 `preflight.rs`。
+3. **双 Mock 与零噪音开发循环**：
+   - `@anywhere/sdk/mock`：浏览器 UI 预览与单测 transport，支持切换平台/语言/主题、无对象、选区、拒绝、超限、隐藏恢复、外链确认与文件读取，正式产物零注入。
+   - `@anywhere/sdk/mock/background`：基于 `node:vm` 剥离 globals 的纯 ES2023 沙箱，主动暴露 QuickJS 不存在的 `URL`、`TextEncoder`、`fetch`、`setTimeout`、`console`，同时校验导出函数名、resolver 只读约束与后台返回值格式。
+4. **精简 vendor 与真实宿主隔离**：`vendor/plugin-sdk/` 只打包 `dist/`、`styles/`、`schemas/`、`tools/`、`package.json`、`README.md`、`LICENSE`（不复制 `templates/`）；单源 Agent Skill 投影到 `.agents/skills/anywhere-plugin-dev/`；双平台均通过 `ANYWHERE_DATA_DIR` 启动隔离开发实例验证真实导入与撤销。[现有 transport](../packages/plugin-sdk/src/client.ts#L17) · [仓库外模板验收](../scripts/check-plugin-starter.sh)
+
+### 2. 外链与选中文件读取
+
+`url.open`、`resources.read`、`preview.open` 彼此独立声明与批准，**全部禁止自动 resolver 调用**。宿主通过 `WebInvocation.capabilities` 与 `WebResource.{readable, previewable}` 提供只读 UI 提示，真正产生副作用或交付数据前仍由 Rust broker 逐次复验资格。
+
+| 契约 | 打开站点链接（`url.open`） | 读取选中文本文件（`resources.stat` / `resources.readText`） |
 | --- | --- | --- |
-| 作者调用 | `url.open`，接收绝对 URL。定稿允许 HTTP 和 HTTPS，建议首批工单插件声明确切 HTTPS origin。两种授权范围的取舍见下文 | `resources.readText`，只接收此次调用获得的句柄。除 `context.read` 对应类型外，另需选中文件正文读取权限 |
-| 用户动作 | 用户执行命令后，Host 显示包名及可核对的完整目标，用户确认后交给默认浏览器。取消留在原处。页面加载、恢复和选区探测均不能自动打开 | 首版限用户在 Finder / Explorer 中明确选中的一个普通文件，再显式执行读取命令。授予读权限时说明该包可见正文。输入框里的路径、目录、工作区推断、脚本产出的数据仅作显示 |
-| 宿主落点 | Rust 解析并规范化 URL，按 scheme、host、有效端口匹配 origin，拒绝内嵌凭据。使用现有平台打开接口。桥只返回交接结果，页面网络策略保持 `connect-src 'none'`。[平台接口](../crates/anywhere-platform/src/traits.rs#L279) · [页面策略](../apps/gpui/src/web_tool.rs#L365) | 现有启动投影保存的是句柄到路径的映射，后续快照仅取投影值，独立窗口还会复制映射。先为**明确的启动选区**建立宿主管理的文件租约，绑定包、调用和文档代次。独立窗口重新签发句柄。打开后复验原生文件身份，无法确认原对象时要求重新选择。[启动投影](../crates/anywhere-core/src/application/web_plugins/projection.rs#L69) · [后续快照](../crates/anywhere-core/src/application/web_plugins/host_state.rs#L44) · [窗口复制](../crates/anywhere-core/src/application/web_plugins/invocation.rs#L109) |
-| 额度、错误与取消 | 一次用户确认只交接一次，拒绝未声明目标，区分取消、过期、宿主打开失败。发生失焦后保留已经完成的交接结果，SDK 不重试打开 | 首版建议 UTF-8 且最多 1 MiB，按字节有界读取，沿用现有文本分块。拒绝目录、链接跳转、非法 UTF-8 及超限项。合法 UTF-8 也可能含 NUL，若首版限定文本文件，需明定 NUL 处理并测试边界。隐藏、更新、取消时丢弃迟到结果并释放资源。旧句柄不能读到同路径替换后的文件 |
-| 降级 | 不支持时可显示目标，已有剪贴板写权限的包可提供复制链接 | 不支持、权限不足或无法证明身份时，保留粘贴文本入口。任一平台的身份契约未验证，该平台继续只提供元数据 |
+| 权限与参数 | `{ "name": "url.open", "origins": ["https://..."] }`，最多 16 个精确 `http`/`https` origin（拒绝路径、尾部斜杠、查询、片段、userinfo、通配子域、空数组），或单独 `["*"]`（不可混用）。运行时 URL ≤ 8 KiB | 需同时具备 `context.read`（含 `core.file`）与 `resources.read`；仅接受本次启动选区签发的单文件句柄。`readText` 支持 `maxBytes`（1 字节至 1 MiB，默认 1 MiB） |
+| 用户交互与风险提示 | 每次均由宿主弹出确认卡，高亮 Rust 规范化后的 `scheme://host[:port]`（非 ASCII 域名同步展示 Punycode）、完整路径/查询参数及展开项；支持 `Enter` 确认、`Esc` 取消；V0.15 不设“记住此站点”。审查卡对 `resources.read`/`clipboard.readText` + `url.open` 外泄组合、`["*"]` 与明文 `http://` 给出醒目警告 | 首版仅限用户从 Finder / Explorer 明确选中的**单个普通本地文件**（`source == FinderSelection && depth == 0 && source_context_id.is_none()`）；拒绝多选展开项、目录、符号链接、重解析点与脚本自造数据。File Search `⌘K` 留待后续扩展 |
+| 宿主实现与身份验证 | 确认卡展示与系统打开共用同一份 Rust 规范化 `url.as_str()`，页面保持 `connect-src 'none'`。[平台接口](../crates/anywhere-platform/src/traits.rs#L279) · [页面策略](../apps/gpui/src/web_tool.rs#L365) | macOS 检查祖先链接后 `O_RDONLY \| O_NOFOLLOW \| O_NONBLOCK`，拒绝 `SF_DATALESS` iCloud 占位并记录 `(st_dev, st_ino)` 与短期只读 FD；Windows 使用 `FILE_SHARE_READ \| FILE_SHARE_WRITE \| FILE_SHARE_DELETE` + `FILE_FLAG_OPEN_REPARSE_POINT`，按 reparse tag 放行已落盘 OneDrive 云标签、拒绝符号链接/挂载点/未下载占位，取 128 位 `FileIdInfo`（不支持稳定 ID 的 FAT32/exFAT/SMB 安全降级为仅元数据） |
+| 句柄、额度与错误 | 一次确认只交接一次；区分 `USER_CANCELLED`、`BUSY`、`EXPIRED`、`PERMISSION_DENIED`；外链打开后失焦不中断后台返回，SDK 永不自动重试 | 15s `resume` 保持同句柄稳定（由新 `document_epoch` 与底层身份复验把关），仅 `tool_window` 重签新句柄。上限 +1 字节判超限，允许空文件，拒绝非法 UTF-8、含 NUL 字节及 JSON 编码后超传输上限项 |
 
-### 只重构已有边界
+## V0.15 锁定决策（无历史兼容包袱）
 
-- **协议与 SDK。** 在 `anywhere-protocol` 的封闭方法集上给业务能力补齐所需权限、允许的角色、支持版本和额度。沿用现有生成器输出 TS 类型与机器可读能力表。SDK 给页面、显式命令、只读 resolver 合适的入口，并保留旧入口。授权判定和类型化执行仍在 Rust，GPUI 展示这份说明。新增能力走具体方法。每次新增都应能回答由谁授权、何时取消、用户在哪里看见结果。[桥协议](../crates/anywhere-protocol/src/web_bridge.rs#L14) · [现有生成器](../crates/anywhere-protocol/examples/generate_web_sdk_contract.rs)
-- **任务与页面。** 先把后台命令的完成与 Usage 从页面 ready 拆开，复用现有登记身份、预算、取消和 broker。WebView 的 origin、主框架和代次校验保留在页面入口。resolver 继续使用只读投影。文件读取、stat 和预览共用原生对象身份及租约。现阶段无需更换 JS 引擎、重写插件体系或拆出通用插件进程。
-- **兼容与数据。** 现有 v1 Host 严格解析 Manifest，校验器还写定了每包最多八项权限。新增权限时明确总额与每项范围预算，并测试边界。采用新声明的包标明新契约和最低 Host，由作者工具在导入前提示。新 Host 继续加载 v1 包，仅用基础能力的新 SDK 仍可产出 v1 包。旧 Host 可能只返回已有的版本或解析错误。协议帧版本与 SDK 包版本单独记录。更新界面在现有权限清单旁展示新增、移除的权限及站点，批准仍绑定精确摘要。[权限上限](../crates/anywhere-plugin/src/web/manifest.rs#L105) · [安装审查界面](../apps/gpui/src/launcher/view/pages/web_packages.rs#L303)
-- **后续原生列表。** 先试片段库的命令内列表。用户进入后才将查询交给对应插件，返回有上限的条目、包内对象 ID 与声明过的动作。Rust 负责查询代次、取消、发布和选择时复验，GPUI 负责键盘、焦点、对象菜单。首页动态搜索待两个实际插件证明需求和延迟预算后再评估。内置异步候选源已存在，其静态来源 ID 和目录寿命需经适配。[候选源契约](../crates/anywhere-core/src/core/search/candidate_source.rs#L168)
+本轮全部按“单一当前版本、零历史包袱”落地；解包开发模式、自定义宿主动作菜单与第三方首页动态搜索明确留待后续阶段。
 
-## Phase 1 定稿的实施补充
-
-定稿中的 Mock、Node CLI、混合模板、命令多语言和图标、SDK 随 Release 分发、开发 Skill 和四种安装入口都纳入本阶段。解包开发模式、自定义宿主动作菜单和第三方动态搜索留待后续。以下约定解决这些功能相互影响时的具体行为。
-
-### 开工前锁定的契约
-
-| 问题 | 建议写进接口的约定与验收 |
+| 决策域 | 最终定案与验收要点 |
 | --- | --- |
-| **新模板能在哪些 Host 导入** | v1 Manifest 拒绝未知字段。`serde(default)` 能让新 Host 读取旧包，旧 Host 仍会拒绝带 `localizedTitles`、新权限或 `$schema` 的新包。建议将 `$schema` 限于作者源文件，由打包器在生成归档 Manifest 时剔除，审查与摘要统一针对归档字节。其余新增声明使用明确的目标契约。Manifest schema 由现有生成器单源发布到 SDK，桥与 TS 由对应生成器投影。固定 `maxBytes`、`modifiedMs`、`closeWindow` 在线上的拼写，用同一份 JSON 走通 TS → Rust → TS。复核时用现有 Rust 检查器读取 Text Pad，基础包通过，分别单加根字段 `$schema`、命令字段 `localizedTitles` 均报未知字段。新模板需另验目标为 v1 的实际产物。[严格 Manifest](../crates/anywhere-protocol/src/web_plugin.rs#L9) · [Manifest 生成器](../crates/anywhere-protocol/examples/generate_web_plugin_schema.rs) · [桥与 SDK 生成器](../crates/anywhere-protocol/examples/generate_web_sdk_contract.rs) |
-| **哪个角色可执行什么** | Web 页可申请返回、关闭当前窗口或预览，并可按权限读文件、打开链接。显式后台 Action 可按权限读文件、打开链接，通过返回值控制本次执行反馈。自动 resolver 仅识别获准输入。建议只向有界面角色暴露窗口与预览方法，运行时仍拒绝角色不符的调用。同一包同时拥有 UI 和 resolver 时逐项测试，安装 grant 不能替代角色检查。[只读分派](../crates/anywhere-core/src/application/web_plugins/background_provider.rs#L182) |
-| **文件句柄和预览谁持有** | `stat`、`readText`、`preview.open` 共用来源、原生对象身份和当前代次检查。动态快照可以仅显示名称，其投影不能直接当可读句柄。恢复或独立开窗后，如需继续访问，由宿主重签并更新 SDK 可见的句柄。预览需要单独的 `preview.open` grant，展示不隐含正文读取权。现有内部 `PreviewResource` 含绝对路径，使用 Rust → GPUI 的宿主内部消息传递。JS 只收到成功或类型化错误。对必须按路径打开的外部查看器，使用可验证身份的交接或有额度的宿主只读快照。验证旧句柄、同路径对象替换、QuickLook 未安装及关闭后的租约释放。[内部预览对象](../crates/anywhere-core/src/features/preview.rs#L11) · [Windows 预览](../apps/gpui/src/platform/windows/preview.rs) |
-| **窗口命令何时算完成** | 领域层产生一次性、带文档与请求身份的宿主动作。GPUI 在执行前复验当前窗口、document generation 和 request ID。主窗口 back 返回上页，close 清理后隐藏。独立窗口两者都只结束该工具窗。SDK 成功表示宿主已接受，本次销毁造成的断开不得触发重复执行。预览需等平台受理后再返回成功。测试把 A 的回复延迟到 B 已打开，B 的窗口、焦点和预览均不受影响。[现有回执判定](../apps/gpui/src/launcher/view/mod.rs#L2807) · [回复交付](../apps/gpui/src/launcher/view/controllers/web.rs#L331) |
-| **外链授权覆盖哪些目的地** | 按协议、主机、端口授权准确的 HTTP(S) origin。通用链接工具可单独申请任意 HTTP(S) 目的地，审查卡标明授权范围。两种授权每次都由宿主显示完整目的地并确认。Web、显式后台、Mock 共享未声明站点、取消和交接后失焦的用例。浏览器打开与插件读取网络响应是独立能力。[现有平台打开契约](../crates/anywhere-platform/src/macos/shell.rs#L37) · [实施契约](web-plugin-phase-1.md#能力和运行角色) |
-| **后台返回值和诊断如何兼容** | 旧命令返回的任意 JSON 曾被正常执行入口忽略。建议仅对新契约命令解释 `message` 和 `closeWindow`，旧包即使恰巧返回同名字段也保持既有行为。消息限定字节、纯文本显示。`closeWindow=false` 在原搜索展示反馈并保留选择，默认关闭时若要求展示消息，应在关闭前交给宿主提示层，或由插件选择保留原搜索页。Usage 在成功后只记一次。生产诊断给出包、入口和错误类别。开发配置可显示经脱敏、按 UTF-8 字节截断的堆栈，异常正文可能包含选区或文件内容。取消、资源耗尽和普通脚本异常分别用合成任务验证。[返回值处理](../crates/anywhere-core/src/application/web_plugins/background_action.rs#L93) · [异常出口](../crates/anywhere-core/src/application/web_plugins/background_runtime.rs#L124) |
+| **版本、字段与防重键** | 一步收口到 `schemaVersion: 1`、`apiVersion: "2"`、`protocol: 2`，权限上限升至 16 项；导入 `apiVersion: "1"` 旧包直接返回带重建指引的明确错误。桥帧统一全线 `camelCase`（修正 `requestId`、`pluginId`、`commandId`、`typeId`）。源 Manifest 允许顶层 `$schema`，`pack` 剔除并规范化 LF 归档。Rust 严格直反序列化 DTO（`deny_unknown_fields`）并为 `localizedTitles` 等 `BTreeMap` 使用自定义 `unique_map` 拒绝重复键（禁止先经 `serde_json::Value` 折叠）；Node CLI 同步提供重复键扫描器并共用夹具。[Manifest DTO](../crates/anywhere-protocol/src/web_plugin.rs#L9) · [桥与 SDK 生成器](../crates/anywhere-protocol/examples/generate_web_sdk_contract.rs) |
+| **角色门面与能力探针** | `anywhere-protocol` 维护唯一 `MethodSpec`（方法、角色、权限、超时档位、参数与返回 schema），同步生成 `web-plugin-bridge.schema.json` 与 `contract.ts`（含 `methodTimeouts`）。SDK 移弃 `plugin.host`、`context.getCurrentApp` 历史别名，区分三套类型门面：WebView（`definePlugin`）、显式后台 Action（`anywhere-background`，无 `window`/`preview`）、只读 resolver（`defineResolver`，编译期仅暴露只读读取）；`WebInvocation.capabilities` 与 `WebResource.{readable, previewable}` 提供非权威 UI 提示，Rust 逐次执行权威校验。[只读分派](../crates/anywhere-core/src/application/web_plugins/background_provider.rs#L182) |
+| **后台生命周期、返回值与诊断** | 拆分 `RuntimeLifecycle::Webview`（保留 10s ready 超时）与 `RuntimeLifecycle::Background`（`Running \| AwaitingInteraction \| HandoffCompleted`，无 10s ready 清理）。外链由 OS 受理后标为 `HandoffCompleted`，失焦仅拒绝新宿主调用，允许剩余 250ms CPU 尾声正常返回；显式取消/停用/卸载/目录发布仍立即硬取消。返回值仅接受 `null`/`undefined` 或 `{ message?, closeWindow? }`（`deny_unknown_fields`，纯文本 ≤ 512 字节）；因 V0.15 无 OS Toast，**`message` 非空且未显式指定 `closeWindow` 时默认 `false`**（留在搜索页展示），无 `message` 默认 `true`，同时传非空 `message` 与 `closeWindow: true` 由 CLI / Mock 发出告警。`execute.rs` 在有效返回后记一次 Usage（写入失败按已有 `warning` + `close_window = false` 处理）。`ctx.catch()` 细分错误类别并写入每包最近 10 条、零用户正文内容的内存诊断环缓冲（设置页可见，开发/调试模式可附 ≤ 1 KiB 脱敏堆栈）。[后台执行](../crates/anywhere-core/src/application/web_plugins/background_action.rs#L93) · [异常出口](../crates/anywhere-core/src/application/web_plugins/background_runtime.rs#L124) |
+| **原生预览与独立工具窗** | 预览需单独 `preview.open` grant，不隐含文本读取权。独立工具窗必须共享父级已配置的 `PreviewStore`（修复 `tool_window.rs` 空 store 缺陷）。宿主从已验证 FD 复制私有只读快照（硬上限 **16 MiB**，超出返 `TOO_LARGE`）到 `<preview-root>/preview-<rand>/<sanitized-name-with-ext>`（保留扩展名供 Quick Look 识别，并剥离 `\|`/`\r`/`\n` 以兼容 Windows QuickLook 窗口标题匹配）。`controllers/preview.rs` 扩展 `PreviewTarget::WebDocument` 与动态 `owner_title`，关闭预览时归还焦点到原 WebView 并释放快照。[内部预览对象](../crates/anywhere-core/src/features/preview.rs#L11) · [GPUI 预览](../apps/gpui/src/launcher/view/controllers/preview.rs) · [Windows 预览](../apps/gpui/src/platform/windows/preview.rs) |
+| **跨平台快捷键与元数据** | Host 注入平台信息，`environment.formatShortcut` / `matchesShortcut` 同源处理 `Mod`、精确修饰键、AltGr、长按重复与中文 IME 组词；`json-workspace` 同步迁移键帽、监听、提示与中英文标题。命令支持 `localizedTitles`（Phase 1 渲染 `en`/`zh`，允许合法短 BCP-47 标签保留兼容，≤ 200 字节无控制字符）、`subtitle`（≤ 200 字节，回退插件名）与协议层白名单 `icon`（`catalog.rs` 对未知图标显式回退 `"code"`，CLI 发告警；避免落入 GPUI `presentation.rs` 的默认命令图标）。[搜索字段](../crates/anywhere-core/src/core/action/descriptor.rs#L99) · [图标映射](../apps/gpui/src/launcher/presentation.rs#L416) |
+| **四入口安装与防僵尸锁** | 选择器、设置页拖放、`.awplugin` 文件对象动作（Core 校验 `core.file` 后发类型化 `HostView` 到 `ApplicationRuntime::inspect_web_package`）与系统双击统一路由至单一审查卡。隐藏 Launcher 或离开 WebPackages 页自动取消未批准的 `pending`，杜绝僵尸锁阻塞后续双击。macOS `Info.plist` 同时声明 `UTExportedTypeDeclarations`（`dev.anywhere.plugin-package`）与 `CFBundleDocumentTypes`，实施前先核验 `gpui_kit` `on_open_urls` 挂载；Windows 复用 `current_user_sid()` 建立当前用户 DACL 命名管道 `\\.\pipe\dev.anywhere.launcher.handoff.<SID>` 交接单一本地包，拒绝 URL 与多余参数并遵守 `--background` / `ANYWHERE_DATA_DIR`。[审查 UI](../apps/gpui/src/launcher/view/pages/web_packages.rs#L303) · [macOS Info.plist](../apps/gpui/macos/Info.plist) · [Windows 单实例](../apps/gpui/src/platform/windows.rs#L60) |
 
-### 容易漏掉的交付验收
+## 实施顺序、验证与后续演进
 
-- **作者工具走到最终产物。** `validate` 区分尚未 build 的源项目和已经生成的归档。Node 打包器与 Rust 导入器共用合法和错误包夹具，覆盖路径大小写与 Unicode 冲突、压缩比、字节预算和 LF/CRLF。旧 Python 包仍可导入，验证新旧打包器对相同资源计算的宿主内容摘要，以及固定工具链下 Node 包跨平台重建的一致性。Mock 用同一组结果码、额度及撤销用例对照真实 broker。正式页不安装 Mock，QuickJS 模板不依赖 DOM。[归档校验](../crates/anywhere-plugin/src/web/archive.rs#L95) · [路径规范](../crates/anywhere-plugin/src/web/path.rs)
-- **从公开资产验收分发。** 现有 workflow 上传 Actions artifact，发布流程单独列出 Release 文件。两处都加 SDK 与校验和，标注 tag、SDK 版本和最低 Host。用发布 URL 获取包后在仓库外运行 `init`，核实 vendor 包包含 schema、Mock 导出、模板及 Skill。Skill 从单一源打包，对各 Agent 分别验证发现路径，并提供可直接阅读的项目指南。vendor 提供 SDK 本身，模板中的 esbuild、TypeScript 首次安装仍需要可用的软件源或缓存。[工作流](../.github/workflows/macos.yml) · [Release 资产](releasing.md) · [vendor 复制清单](../packages/plugin-sdk/tools/create.mjs#L35)
-- **跨平台快捷键和命令元数据。** JSON Workspace 的键帽、帮助文字和处理器均有 macOS 硬编码，但已有 Ctrl+Tab 与输入法组词保护。共享键位规格保留这些行为，区分额外修饰键、AltGr 和按住重复，保留原生粘贴与宿主 Esc / 动作菜单。Mock 切平台后标签与监听同时更新。用 WKWebView、WebView2 分别验收格式化、复制、粘贴和中文组词。命令标题按当前语言回退到 `title`，未知图标回退到公共图标。验证切换语言后中文、英文、拼音搜索仍命中同一 Action ID，快捷键和 Usage 延续。[示例按键](../plugins/examples/json-workspace/src/main.jsx#L266) · [示例提示](../plugins/examples/json-workspace/src/i18n.mjs#L13) · [搜索字段](../crates/anywhere-core/src/core/action/descriptor.rs#L99)
-- **四个安装入口共用一次审查。** 选择器、拖放、选中文件动作及系统打开都提交到同一 inspect / approve 流程。建议一次展示一个包，审查中收到另一个包时保留当前卡并明确提示。签发 token 后只批准该次捕获的字节。审查卡对比命令、后台解析器、权限新增与已有权限的范围变化。只有可空输入打开的 Web 命令才显示“立即打开”。后台专用包和依赖选区的命令提供返回列表入口。macOS 验证 Finder 冷启动及已启动时的文件事件。Windows 便携 ZIP 需说明用户如何关联或“打开方式”选择 EXE。已有实例的第二次启动目前仅恢复窗口，还需把待审查文件交给主实例。双平台用含空格及中文的本地文件分别验证，也覆盖取消、重复打开和已安装 B 再导入 B 后仍能回滚到 A。[单份待审查记录](../crates/anywhere-core/src/application/web_plugins/packages.rs#L115) · [Windows 单实例入口](../apps/gpui/src/platform/windows.rs#L60) · [便携包内容](../scripts/package-windows.py)
+按“基线与回滚 → 单一 API 2 / protocol 2 契约 → Node 22 CLI 与双 Mock → 跨平台快捷键与示例 → 后台语义与诊断 → 三通道窗口与外链 → 单文件原生身份 → 原生预览 → 统一四入口安装 → 发行验收”顺序推进，具体依赖、入口与完成条件见[任务清单](web-plugin-phase-1.md#如何接手)。
 
-## 实施顺序与验收决定
+**升级与状态回归**聚焦单一版本内的真实生命周期：A → B → B → 回滚 A、同摘要已停用包“批准并启用”、损坏缓存 fail-closed、同 ID 更名/删命令/增减权限、卸载重装使用新 KV 命名空间，以及旧候选、旧句柄、旧 `document_epoch` 与迟到回复的可控并发验证。[命令绑定策略](../crates/anywhere-core/src/core/action/descriptor.rs#L201) · [安装与卸载](../crates/anywhere-core/src/application/web_plugins/packages.rs#L193)
 
-先完成旧包兼容、回滚和作者工具，再逐项接入宿主能力。原生文件身份验证通过后才接入预览。安装入口和发行资产需分别验证真实宿主。具体依赖、步骤和完成条件见[任务清单](web-plugin-phase-1.md#如何接手)。
+**桌面验收**使用同一组参考与试点包（Text Pad、JSON Workspace、工单跳转、单文件 CSV），在 WKWebView 与 WebView2 分别记录安装、撤销、WebView 遮挡确认卡、焦点返回、中文 IME、隐藏恢复、独立窗口、Quick Look 与系统双击冷/热启动实测结果。上述新增能力与双平台桌面验收目前均为 Pending。[macOS 验收](test-acceptance-macos.md) · [Windows 插件验收](test-acceptance-windows.md#webview2-与插件) · [Windows 证据范围](windows-progress.md)
 
-下一阶段可用片段库和词典试验命令内列表，再评估按包撤销、凭据与定域网络、长任务和公开分发。列表先测快速连续输入时的首批延迟、旧结果清理和目标正确性。
-
-**升级回归**需用旧 SDK / 新 Host、新 SDK 的基础包 / 旧 Host、新能力包 / 旧 Host 三组实物。覆盖同 ID 更名、删命令、增加权限、回滚及卸载重装。原业务 ID 的快捷键和 Usage 可延续，缺失命令的旧绑定不能执行。同一安装可继承 KV，卸载重装使用新的存储命名空间。回滚恢复获批包，KV 格式回退由插件处理。对旧候选、旧句柄和迟到结果分别验证执行与发布时的资格。[命令绑定策略](../crates/anywhere-core/src/core/action/descriptor.rs#L201) · [安装与卸载](../crates/anywhere-core/src/application/web_plugins/packages.rs#L193)
-
-**桌面验收**使用同一组外部包，在 WKWebView、WebView2 分别记录安装、撤销、焦点返回、中文 IME、隐藏恢复和独立窗口结果。Windows 已有内置 JSON 工作流的单机记录，第三方安装、更新和撤销矩阵仍待执行。上述新增能力与桌面验收均为 Pending。[macOS 验收](test-acceptance-macos.md) · [Windows 插件验收](test-acceptance-windows.md#webview2-与插件) · [Windows 证据范围](windows-progress.md)
+**下一阶段演进**优先以片段库与离线词典验证命令内原生列表（进入命令后按需查询、稳定对象 ID、分页与对象动作，沿用[候选源契约](../crates/anywhere-core/src/core/search/candidate_source.rs#L168)），再依次评估按包粒度撤销、系统凭据与定域 HTTP、长任务与公开分发。
