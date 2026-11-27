@@ -9,13 +9,13 @@ pub mod search_exclusions;
 pub mod search_storage;
 mod traits;
 use anyhow::Result;
+pub use file_search::{FileSearchBackend, FileSearchQuery};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 pub use traits::{
     ApplicationCatalog, ApplicationHost, ClipboardHost, ContextReader, FileSearchHost,
     FileSearchIndex, GitHost, MenuHost, Platform, ResourceOpener,
 };
-pub use file_search::{FileSearchBackend, FileSearchQuery};
 #[cfg(any(target_os = "macos", test))]
 pub(crate) mod editor_context;
 #[cfg(any(windows, test))]
@@ -50,7 +50,7 @@ pub struct ApplicationInfo {
     pub name: String,
     #[serde(default)]
     pub pid: i32,
-    /// Process launch identity; prevents accepting a reused PID.
+    /// Launch identity and any native window identity required by the adapter.
     #[serde(default)]
     pub instance_id: Option<String>,
 }

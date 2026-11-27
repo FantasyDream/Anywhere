@@ -2,7 +2,7 @@
 
 **理解当前操作对象的桌面启动器。** 搜索应用和动作，从当前应用、选中文本、文件或 URL 直接执行下一步。
 
-[使用指南](docs/usage.md) · [架构](docs/architecture.md) · [开发与构建](docs/development.md) · [插件开发](docs/plugin-development.md) · [全量验收](docs/test-acceptance-checklist.md) · [路线图](docs/roadmap.md) · [更新记录](CHANGELOG.md)
+[使用指南](docs/usage.md) · [架构](docs/architecture.md) · [开发与构建](docs/development.md) · [插件开发](docs/plugin-development.md) · [桌面验收（macOS）](docs/test-acceptance-macos.md) · [桌面验收（Windows）](docs/test-acceptance-windows.md) · [路线图](docs/roadmap.md) · [更新记录](CHANGELOG.md)
 
 ## 项目状态
 
@@ -13,7 +13,7 @@ V0.14 已接入[应用历史与动作排序](docs/mvp-gpui.md)：通用文件读
 | 平台 | 状态 |
 |---|---|
 | macOS 15+ | 主要开发和验证平台；从源码构建本机架构的 GPUI App |
-| Windows 11 x64 | 当前源码提供 GPUI 开发预览和 ZIP 打包入口，桌面实机验收待完成。见 [Windows 指南](docs/windows.md) |
+| Windows 11 x64 | 源码提供 GPUI 预览与 x64 ZIP，已有单机抽测。见 [Windows 使用与构建](docs/windows.md)及[实现进度](docs/windows-progress.md) |
 | Linux | 共享 Rust crate 保留编译和测试检查 |
 
 本地开发包使用持久本机签名，手动 GitHub 打包使用独立 CI 开发签名；公开分发所需的签名、公证、安装升级和完整辅助功能矩阵仍需验收。当前进度见 [GPUI 技术方案与验收](docs/mvp-gpui.md)，更早的界面阶段记录只作为[历史证据](docs/archive/README.md)。
@@ -29,19 +29,19 @@ V0.14 已接入[应用历史与动作排序](docs/mvp-gpui.md)：通用文件读
 ## 能做什么
 
 - **应用与动作搜索**：启动或切回应用，搜索当前应用的可用菜单，通过 Scope 筛选领域动作。
-- **Context 动作**：读取 Finder 选中项 / 目录、选中文本、浏览器当前 URL 和近期剪贴板；支持路径、URL 与项目类型识别。
-- **文件搜索**：两端共用完整遍历、名称匹配、目录范围、类型过滤和分页。macOS 使用 Spotlight 或 Ripgrep 提供快批，并支持 Quick Look。Windows 可通过 Everything 加速首批结果。
+- **Context 动作**：读取 Finder / Explorer 选中项和目录、选中文本、支持的浏览器当前 URL 与近期剪贴板；支持路径、URL 与项目类型识别。
+- **文件搜索**：两端共用完整遍历、名称匹配、目录范围、类型过滤和分页。macOS 使用 Spotlight 或 Ripgrep 提供快批，并支持 Quick Look。Windows 提供 Everything、Windows Search、Ripgrep、组合快批和直接遍历。
 - **剪贴板历史**：本机保存和检索文本、图片、文件列表及可读取格式；另有独立置顶的 GPUI 悬浮窗，支持连续复制。采集默认关闭。
 - **开发工具**：Git 常用动作、Maven / Gradle / Node / Cargo 与 Spring Boot 动作，长任务可返回查看输出与停止。
 - **快捷键与语言**：自定义 Action / 全局 / Context 快捷键，支持简体中文、English、全拼与首字母搜索。外观支持跟随系统、浅色和深色。
 - **应用历史**：在对应 Current App 中自动出现 IDEA、VS Code、Sublime Text、Obsidian 等来源；设置中可检测、自定义路径或停用来源。接入与限制见[来源指南](docs/application-history-sources.md)。
 - **Web 插件预览**：可信本地包、明确权限、统一主题与 TypeScript SDK；JSON Workspace 作为普通插件实现。
 
-终端 / PTY、插件进程隔离、插件市场和浏览器历史暂未交付。第三方 Context 目前仅支持按需解析获准输入；文件及剪贴板预览使用按需 macOS Quick Look；其他平台的原生预览尚未实现。
+终端 / PTY、插件进程隔离、插件市场和浏览器历史暂未交付。第三方 Context 按需解析获准输入。macOS 的 Current App 提供 Accessibility 菜单动作，Windows 支持标准 Win32 菜单栏。macOS 使用系统 Quick Look，Windows 可接入外部 QuickLook。详见[系统预览](docs/native-preview.md)。
 
 ## 快速使用
 
-首次打开后以菜单栏后台应用驻留，可点击菜单栏搜索图标或使用全局快捷键恢复。默认快捷键：
+以下为 macOS 默认快捷键。Windows 可从通知区域恢复，也可按 `Ctrl+Alt+Space` 打开 Current App 或按 `Ctrl+Alt+K` 打开全局搜索。
 
 | 按键 | 操作 |
 |---|---|
@@ -56,7 +56,7 @@ V0.14 已接入[应用历史与动作排序](docs/mvp-gpui.md)：通用文件读
 
 有查询或工具页面的 Launcher 隐藏后保留状态 15 秒；空白首页重新采集当前环境。Clipboard Shelf 与后台任务使用各自窗口生命周期。
 
-权限按功能开启：辅助功能用于菜单 / 选中文本，自动化用于 Finder / 浏览器，磁盘授权限制文件搜索范围。某个来源不可用时，其他功能仍可使用。完整操作、权限、数据位置和限制见[使用指南](docs/usage.md)。
+权限按功能开启：辅助功能用于菜单 / 选中文本，自动化用于 Finder / 浏览器，磁盘授权限制文件搜索范围。某个来源不可用时，其他功能仍可使用。完整操作、权限和数据位置见 [macOS 使用指南](docs/usage.md)与 [Windows 指南](docs/windows.md)。
 
 ## 架构
 
@@ -75,7 +75,7 @@ flowchart TD
     Broker --> Runtime
 ```
 
-Rust 负责识别、匹配、排序、执行、授权和资源预算；GPUI 负责呈现与交互；AppKit、Quick Look 和 WebKit 适配保持为薄边界。第一方模块编译期自动注册，第三方插件通过独立包与统一 TypeScript SDK 接入：WebView 运行界面，按需 QuickJS 运行后台 Context / Action，权限与生命周期统一由 Rust 管理。
+Rust 负责识别、匹配、排序、执行、授权和资源预算；GPUI 负责呈现与交互；AppKit / WebKit 与 Win32 / WebView2 通过各自的平台适配层接入。第一方模块编译期自动注册，第三方插件通过独立包与统一 TypeScript SDK 接入：WebView 运行界面，按需 QuickJS 运行后台 Context / Action，权限与生命周期统一由 Rust 管理。
 
 代码定位先看 [AGENTS.md](AGENTS.md)。详见[架构与代码地图](docs/architecture.md)、[Context 模型](docs/context-model.md)及[插件开发指南](docs/plugin-development.md)。
 

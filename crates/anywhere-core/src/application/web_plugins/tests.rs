@@ -172,6 +172,23 @@ fn catalog_requires_exact_review_and_platform_and_rejects_duplicate_ids() {
 }
 
 #[test]
+fn windows_bind_keeps_the_custom_protocol_origin_used_by_the_host() {
+    let manifest = serde_json::json!({"schemaVersion":1,"id":"dev.example.tool","name":"Example","version":"1.0.0","apiVersion":"1","platforms":["windows"],"entry":"index.html","permissions":[{"name":"context.read","types":[TEXT]}],"commands":[{"id":"open","title":"Text Pad","keywords":["scratchpad"],"accepts":[TEXT],"entrypoint":"workspace"}]});
+    let package = package_manifest(manifest, "hello");
+    let catalog =
+        WebPluginCatalog::prepare(WebPlatform::Windows, [(&package, approval(&package))]).unwrap();
+    let registry = catalog.append_to(&ActionRegistry::default()).unwrap();
+    let mut service = WebPluginService::default();
+    service.replace_catalog(catalog);
+    let input = context("document");
+    let invocation = start(&mut service, &reference(&registry), &input);
+    let binding = service.bind(&invocation, WebPlatform::Windows).unwrap();
+
+    assert!(binding.origin().starts_with("anywhere-plugin://"));
+    assert!(binding.origin().ends_with(".plugin.local"));
+}
+
+#[test]
 fn normal_search_never_exports_keywords_or_unmatched_text_fallbacks() {
     let package = package(
         serde_json::json!([{"name":"context.read","types":[TEXT]}]),

@@ -1,7 +1,8 @@
 use super::{
-    excluded_app_ids, l10n, lines, locale_for_language, set_input_value, shortcut_action_title,
-    ActionShortcutBinding, ActionShortcutRoute, ContextShortcutDraft, HostPreferences,
-    LauncherEvent, LauncherView, LiveEvent, SettingsExitIntent, ShortcutCatalogAction,
+    excluded_app_ids, l10n, lines, locale_for_language, set_input_value, set_textarea_value,
+    shortcut_action_title, ActionShortcutBinding, ActionShortcutRoute, ContextShortcutDraft,
+    HostPreferences, LauncherEvent, LauncherView, LiveEvent, SettingsExitIntent,
+    ShortcutCatalogAction,
 };
 use gpui_kit::{assets::IconName, Context, FocusHandle, Focusable as _, Window};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -189,6 +190,8 @@ impl LauncherView {
 
     pub(super) fn save_settings(&mut self, cx: &mut Context<Self>) {
         if self.settings_editor.model.saving {
+            self.settings_editor.draft_save_queued |= self.settings_dirty(cx);
+            cx.notify();
             return;
         }
         if let Err(error) = self.commit_context_shortcut_draft(cx) {
@@ -349,10 +352,22 @@ impl LauncherView {
                         tracing::warn!(operation_id, "settings_save_channel_closed");
                     }
                 }
+                this.resume_queued_draft_save(cx);
                 cx.notify();
             });
         })
         .detach();
+    }
+
+    pub(super) fn resume_queued_draft_save(&mut self, cx: &mut Context<Self>) {
+        if std::mem::take(&mut self.settings_editor.draft_save_queued)
+            && self.is_settings_surface()
+            && self.settings_editor.model.error.is_none()
+            && !self.settings_editor.model.saving
+            && self.settings_dirty(cx)
+        {
+            self.save_settings(cx);
+        }
     }
 
     pub(super) fn request_close_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -629,19 +644,19 @@ impl LauncherView {
 
     pub(super) fn discard_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.settings_editor.draft = self.preferences.clone();
-        set_input_value(
+        set_textarea_value(
             &self.settings_editor.excluded_apps_input,
             self.settings_editor.draft.excluded_apps.join("\n"),
             window,
             cx,
         );
-        set_input_value(
+        set_textarea_value(
             &self.settings_editor.file_roots_input,
             self.settings_editor.draft.file_search_roots.join("\n"),
             window,
             cx,
         );
-        set_input_value(
+        set_textarea_value(
             &self.settings_editor.file_exclusions_input,
             self.settings_editor
                 .draft

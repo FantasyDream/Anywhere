@@ -29,12 +29,10 @@ pub(crate) fn auxiliary_window_traffic_light_position() -> Option<gpui_kit::Poin
     const TRAFFIC_LIGHT_X: f32 = 14.0;
     const TRAFFIC_LIGHT_Y: f32 = 16.0;
     match WINDOW_CONTROLS {
-        WindowControlsStyle::NativeTrafficLights => {
-            Some(gpui_kit::point(
-                gpui_kit::px(TRAFFIC_LIGHT_X),
-                gpui_kit::px(TRAFFIC_LIGHT_Y),
-            ))
-        }
+        WindowControlsStyle::NativeTrafficLights => Some(gpui_kit::point(
+            gpui_kit::px(TRAFFIC_LIGHT_X),
+            gpui_kit::px(TRAFFIC_LIGHT_Y),
+        )),
         WindowControlsStyle::TrailingCaptionButtons => None,
     }
 }
@@ -75,6 +73,14 @@ pub(crate) fn file_search_access_description(locale: Locale) -> String {
         l10n::windows_file_search_access_message(locale)
     } else {
         l10n::file_search_access_message(locale)
+    }
+}
+
+pub(crate) fn file_selection_label(locale: Locale) -> String {
+    if cfg!(windows) {
+        l10n::explorer_selection(locale)
+    } else {
+        l10n::finder_selection(locale)
     }
 }
 

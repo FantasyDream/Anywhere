@@ -305,13 +305,9 @@ impl WebPluginService {
             .document_epoch
             .checked_add(1)
             .context("Web document epoch exhausted")?;
-        let scheme = match platform {
-            WebPlatform::Macos => "anywhere-plugin",
-            WebPlatform::Windows => "https",
-        };
         let binding = WebDocumentBinding {
             invocation_id: invocation_id.into(),
-            origin: format!("{scheme}://{runtime_id}.plugin.local"),
+            origin: format!("anywhere-plugin://{runtime_id}.plugin.local"),
             runtime_id,
             document_epoch,
             content_digest: entry.digest.clone(),

@@ -9,7 +9,7 @@ use std::{
     ptr::{null, null_mut},
 };
 use windows_sys::Win32::{
-    Foundation::{CloseHandle, FILETIME, HANDLE},
+    Foundation::{CloseHandle, FILETIME, HANDLE, HWND},
     System::{
         Com::{CoInitializeEx, CoTaskMemFree, CoUninitialize, COINIT_APARTMENTTHREADED},
         SystemInformation::GetSystemDirectoryW,
@@ -41,12 +41,25 @@ impl Drop for Process {
 
 pub(super) fn frontmost_application() -> Option<ApplicationInfo> {
     let window = unsafe { GetForegroundWindow() };
+    let application = window_application(window)?;
+    (application.pid as u32 != std::process::id() && unsafe { GetForegroundWindow() } == window)
+        .then_some(application)
+}
+
+/// Resolve exactly the window captured at activation, even while Anywhere is foreground.
+pub(super) fn captured_application_window(application: &ApplicationInfo) -> Option<HWND> {
+    let (_, raw_window) = application.instance_id.as_deref()?.rsplit_once(':')?;
+    let window = std::ptr::without_provenance_mut(raw_window.parse::<usize>().ok()?);
+    (window_application(window)?.eq(application)).then_some(window)
+}
+
+pub(super) fn window_application(window: HWND) -> Option<ApplicationInfo> {
     if window.is_null() {
         return None;
     }
     let mut pid = 0;
-    unsafe { GetWindowThreadProcessId(window, &mut pid) };
-    if pid == 0 || pid == std::process::id() {
+    let thread = unsafe { GetWindowThreadProcessId(window, &mut pid) };
+    if thread == 0 || pid == 0 {
         return None;
     }
     let process = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
@@ -65,7 +78,11 @@ pub(super) fn frontmost_application() -> Option<ApplicationInfo> {
     let mut kernel = FILETIME::default();
     let mut user = FILETIME::default();
     if unsafe { GetProcessTimes(process.0, &mut created, &mut exited, &mut kernel, &mut user) } == 0
-        || unsafe { GetForegroundWindow() } != window
+    {
+        return None;
+    }
+    let mut current_pid = 0;
+    if unsafe { GetWindowThreadProcessId(window, &mut current_pid) } != thread || current_pid != pid
     {
         return None;
     }
@@ -74,7 +91,7 @@ pub(super) fn frontmost_application() -> Option<ApplicationInfo> {
         bundle_id: format!("windows.exe:{}", path.to_str()?.to_lowercase()),
         name: path.file_stem()?.to_str()?.to_owned(),
         pid: i32::try_from(pid).ok()?,
-        instance_id: Some(format!("{pid}:{created}")),
+        instance_id: Some(format!("{pid}:{created}:{}", window.addr())),
     })
 }
 

@@ -1,8 +1,8 @@
-# 开发包与发布检查
+# macOS 开发包与发布检查
 
 当前为 macOS 15+ GPUI 开发预览。脚本提供本机架构 App、持久本机签名、ZIP 与
 SHA-256 校验；正式发行所需的 Developer ID、公证、干净机器升级和完整物理
-辅助技术矩阵尚未完成。
+辅助技术矩阵尚未完成。Windows x64 的 ZIP 构建见 [Windows 指南](windows.md#构建与打包)，运行状态和剩余分发工作见 [Windows 功能进度](windows-progress.md)。
 
 ## 1. 确认范围与版本
 

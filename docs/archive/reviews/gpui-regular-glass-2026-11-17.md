@@ -45,7 +45,7 @@ GPUI 共244项。最终 `scripts/check.sh` 通过：工作区 Rust 为928 passed
 
 使用当前源码重新构建的指定包与隔离业务数据，记录 App摘要 / 签名 / 版本、
 macOS、显示器 / 缩放、系统外观与辅助显示选项。完整流程沿用
-[测试清单](../../test-acceptance-checklist.md)；以下是本次必须重验的视觉序列。
+[测试清单](../../test-acceptance-macos.md)；以下是本次必须重验的视觉序列。
 
 | 场景 | 操作与预期 | 状态 |
 | --- | --- | --- |

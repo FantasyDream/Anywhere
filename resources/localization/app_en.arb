@@ -80,6 +80,7 @@
   "contextDescription": "Choose what Anywhere can use when you open it.",
   "windowsContextDescription": "Current App reads the foreground app, Explorer folder and selection, browser page URL, and focused text selection.",
   "finderSelection": "Finder selection",
+  "explorerSelection": "File Explorer selection",
   "selectedFilesDescription": "Selected files and folders",
   "selectedText": "Selected text",
   "selectedTextDescription": "Text selected in the current app",
@@ -277,6 +278,7 @@
   "clipboardPermissionHelp": "Allow clipboard access in System Settings, then reopen Anywhere.",
   "appChangedHelp": "The original app exited or restarted. Reopen Anywhere to capture it again.",
   "tooManyItemsHelp": "Select up to 32 items in Finder, then reopen Anywhere.",
+  "windowsTooManyItemsHelp": "Select up to 64 items in File Explorer, then reopen Anywhere.",
   "authorizeSearchDirectories": "Authorize search directories",
   "partialResults": "Partial results",
   "noMatchingFiles": "No matching files",
@@ -629,6 +631,8 @@
   "openingWebTool": "Opening the Web tool…",
   "actionCompleted": "Action completed",
   "previewUnavailableWith": "Preview is unavailable: {error}",
+  "windowsQuickLookUnavailable": "QuickLook for Windows is unavailable. Make sure it is running and try again.",
+  "windowsQuickLookExistingWindow": "Close the other QuickLook window and try the preview again.",
   "@previewUnavailableWith": {
     "placeholders": {
       "error": {

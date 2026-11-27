@@ -139,7 +139,7 @@ impl LauncherView {
             return true;
         }
 
-        if self.can_resume_workspace() {
+        if input_mode != InputMode::Environment && self.can_resume_workspace() {
             self.begin_resume(cx);
             if self.screen == Screen::Tasks {
                 self.start_tasks_refresh(cx);

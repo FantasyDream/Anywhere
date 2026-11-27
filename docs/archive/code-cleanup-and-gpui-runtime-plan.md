@@ -56,7 +56,7 @@ workspace 771 项通过 / 6 ignored 均为当前源码结果。实施前的审�
   `Runtime::shutdown_background`，避免 Core / helper 收尾阻塞 AppKit / GPUI
   主线程；Web、preview 的 generation 与显式关闭继续保留。
 - T02：新增 `projection_measure`，10,000 候选 Release 基线与证据边界记录在
-  [性能](../performance.md#2026-11-13-合成投影基线)。
+  [性能](benchmarks/gpui-2026-11.md#2026-11-13-合成投影基线)。
 - T24（部分）：r4 隔离包完成隐藏启动、UIElement / 无 Dock 启动、真实热键、
   key / active、英文查询、中文 IME、72 / 137 / 473 高度与固定顶部、15 秒内
   恢复、Finder 失焦隐藏、模式选择器、Settings 六类，以及白 / 深背景 Glass

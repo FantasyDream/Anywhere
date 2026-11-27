@@ -18,10 +18,38 @@ pub(crate) fn locale_for_language(language: UiLanguage) -> Locale {
     language.locale()
 }
 
+pub(crate) fn readable_file_path(path: &str) -> &str {
+    anywhere_platform::paths::display_path(std::path::Path::new(path))
+        .to_str()
+        .unwrap_or(path)
+}
+
+pub(crate) fn readable_extended_path(value: &str) -> Option<String> {
+    if let Some(unc) = value.strip_prefix(r"\\?\UNC\") {
+        return Some(format!(r"\\{unc}"));
+    }
+    value
+        .strip_prefix(r"\\?\")
+        .map(|path| path.to_owned())
+}
+
+pub(crate) fn readable_search_roots(roots: &[String]) -> Vec<String> {
+    roots
+        .iter()
+        .map(|root| {
+            let readable = readable_file_path(root);
+            readable
+                .strip_prefix(r"\\?\UNC\")
+                .map(|unc| format!(r"\\{unc}"))
+                .unwrap_or_else(|| readable.to_owned())
+        })
+        .collect()
+}
+
 /// Replace the user's home directory with `~` and middle-truncate deep paths so
 /// the root anchor and immediate parent directories stay readable.
 pub(crate) fn format_path_middle_truncated(path: &str) -> String {
-    let trimmed = path.trim();
+    let trimmed = readable_file_path(path.trim());
     if trimmed.is_empty() {
         return String::new();
     }
@@ -36,10 +64,10 @@ pub(crate) fn format_path_middle_truncated(path: &str) -> String {
         })
         .unwrap_or_else(|| trimmed.to_owned());
     let segments: Vec<&str> = contracted
-        .split('/')
+        .split(std::path::is_separator)
         .filter(|part| !part.is_empty())
         .collect();
-    if segments.len() <= 4 && contracted.chars().count() <= 48 {
+    if segments.len() <= 2 || segments.len() <= 4 && contracted.chars().count() <= 48 {
         return contracted;
     }
     let leading = if contracted.starts_with('~') {
@@ -422,13 +450,18 @@ pub(crate) fn context_capture_status_detail(
     match status {
         ContextCaptureStatus::Captured => l10n::last_context_capture(locale),
         ContextCaptureStatus::PermissionDenied => match source {
-            ContextSource::FinderSelection => l10n::finder_permission_help(locale),
+            ContextSource::FinderSelection if cfg!(target_os = "macos") => {
+                l10n::finder_permission_help(locale)
+            }
             ContextSource::SelectedText => l10n::selected_text_permission_help(locale),
             ContextSource::BrowserCurrentPage => l10n::browser_permission_help(locale),
             ContextSource::Clipboard => l10n::clipboard_permission_help(locale),
             _ => l10n::permission_needed(locale),
         },
         ContextCaptureStatus::ApplicationChanged => l10n::app_changed_help(locale),
+        ContextCaptureStatus::TooManyItems if cfg!(windows) => {
+            l10n::windows_too_many_items_help(locale)
+        }
         ContextCaptureStatus::TooManyItems => l10n::too_many_items_help(locale),
         _ => String::new(),
     }
@@ -513,6 +546,20 @@ mod tests {
     use super::*;
 
     #[test]
+    fn extended_path_projection_leaves_ordinary_copy_untouched() {
+        assert_eq!(
+            readable_extended_path(r"\\?\C:\Users\me\project\package.json").as_deref(),
+            Some(r"C:\Users\me\project\package.json")
+        );
+        assert_eq!(
+            readable_extended_path(r"\\?\UNC\server\share\report.txt").as_deref(),
+            Some(r"\\server\share\report.txt")
+        );
+        assert_eq!(readable_extended_path("Run in this project"), None);
+        assert_eq!(readable_extended_path(r"C:\Users\me\project"), None);
+    }
+
+    #[test]
     fn middle_truncation_keeps_prefix_and_tail_segments() {
         let short = "/Users/me/notes.txt";
         assert_eq!(format_path_middle_truncated(short), short);
@@ -520,6 +567,35 @@ mod tests {
         let truncated = format_path_middle_truncated(deep);
         assert!(truncated.contains('…'));
         assert!(truncated.ends_with("src › lib.rs"));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_file_paths_hide_redundant_verbatim_prefixes_and_truncate_by_component() {
+        let short = r"\\?\C:\Test\报告";
+        assert_eq!(format_path_middle_truncated(short), r"C:\Test\报告");
+        let deep = r"\\?\C:\Test\Documents\Projects\Anywhere\crates\anywhere-core\src";
+        assert_eq!(
+            format_path_middle_truncated(deep),
+            "C: › … › anywhere-core › src"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_file_capture_label_and_limit_refer_to_explorer() {
+        assert_eq!(
+            crate::platform::capabilities::file_selection_label(Locale::En),
+            "File Explorer selection"
+        );
+        assert_eq!(
+            context_capture_status_detail(
+                ContextCaptureStatus::TooManyItems,
+                ContextSource::FinderSelection,
+                Locale::En,
+            ),
+            "Select up to 64 items in File Explorer, then reopen Anywhere.",
+        );
     }
 
     #[test]

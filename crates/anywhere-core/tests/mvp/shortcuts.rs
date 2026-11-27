@@ -81,12 +81,13 @@ async fn binding_resolves_current_business_action_outside_query_and_scope_and_re
         .await
         .unwrap()
         .succeeded());
+    let expected_copy = anywhere_platform::paths::display_path(&root);
     assert!(platform
         .calls
         .lock()
         .unwrap()
         .iter()
-        .any(|(kind, value)| kind == "copy" && value == &root.to_string_lossy()));
+        .any(|(kind, value)| kind == "copy" && value == &expected_copy.to_string_lossy()));
     assert!(history
         .lock()
         .unwrap()

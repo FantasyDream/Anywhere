@@ -21,6 +21,11 @@ anywhere-platform = { path = "crates/anywhere-platform" }
 anywhere-plugin = { path = "crates/anywhere-plugin" }
 anywhere-core = { path = "crates/anywhere-core" }
 
+[patch.crates-io]
+accesskit_windows = { path = "third_party/accesskit_windows" }
+gpui-fast = { path = "third_party/gpui-fast" }
+gpui-fast-windows = { path = "third_party/gpui-fast-windows" }
+
 [profile.release]
 panic = "unwind"
 lto = "thin"

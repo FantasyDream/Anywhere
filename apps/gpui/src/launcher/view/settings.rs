@@ -115,7 +115,11 @@ impl LauncherView {
                                                 } else {
                                                     l10n::retry_shortcuts(self.locale)
                                                 })
-                                                .disabled(self.settings_editor.model.saving)
+                                                .disabled(
+                                                    self.settings_editor.draft_save_queued
+                                                        || self.settings_editor.model.saving
+                                                            && !dirty,
+                                                )
                                                 .on_click(cx.listener(|this, _, _, cx| {
                                                     this.save_settings(cx)
                                                 })),

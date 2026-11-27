@@ -310,6 +310,8 @@ impl LauncherView {
         cx: &mut Context<Self>,
     ) -> Div {
         let active = row.status.is_active();
+        let readable_directory =
+            crate::launcher::presentation::readable_file_path(&row.directory).to_owned();
         let (status_color, status_icon) = task_status_style(row.status);
         let status_label = match row.status {
             anywhere_protocol::ExecutionSessionStatus::Running => l10n::running(locale),
@@ -426,11 +428,13 @@ impl LauncherView {
             .child(
                 div()
                     .id("task-detail-directory")
+                    .aria_label(readable_directory.clone())
+                    .test_support()
                     .truncate()
                     .text_size(px(metrics::LABEL_SIZE))
                     .text_color(theme::secondary())
-                    .tooltip(components::text_tooltip(row.directory.clone()))
-                    .child(row.directory.clone()),
+                    .tooltip(components::text_tooltip(readable_directory.clone()))
+                    .child(readable_directory.clone()),
             )
             .child(
                 div()
@@ -470,7 +474,13 @@ impl LauncherView {
                         ))
                         .text_color(theme::secondary())
                         .child(row.command.clone())
-                        .child(row.directory.clone()),
+                        .child(
+                            div()
+                                .id("task-command-directory")
+                                .aria_label(readable_directory.clone())
+                                .test_support()
+                                .child(readable_directory.clone()),
+                        ),
                 )
             })
             .when_some(row.error.clone(), |element, error| {

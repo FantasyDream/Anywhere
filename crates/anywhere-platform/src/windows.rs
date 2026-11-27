@@ -3,17 +3,19 @@ mod clipboard;
 mod context;
 mod everything;
 mod file_search;
+mod menu;
 mod shell;
 mod windows_search;
 
 pub(crate) use file_search::{
-    DEFAULT_ENGINE as DEFAULT_FILE_SEARCH_ENGINE, SUPPORTED_ENGINES as SUPPORTED_FILE_SEARCH_ENGINES,
+    DEFAULT_ENGINE as DEFAULT_FILE_SEARCH_ENGINE,
+    SUPPORTED_ENGINES as SUPPORTED_FILE_SEARCH_ENGINES,
 };
 
 use crate::{
     ApplicationCatalog, ApplicationHost, ApplicationInfo, BundleApplication, ClipboardHost,
     ClipboardSnapshot, ContextReader, FileIndexResults, FileSearchHost, FileSearchIndex, GitHost,
-    InstalledApplications, MenuHost, ResourceOpener,
+    InstalledApplications, MenuDiscovery, MenuHost, MenuLocator, ResourceOpener,
 };
 use anyhow::{ensure, Result};
 use std::path::{Path, PathBuf};
@@ -245,5 +247,21 @@ impl ResourceOpener for WindowsPlatform {
     }
 }
 
-impl MenuHost for WindowsPlatform {}
+impl MenuHost for WindowsPlatform {
+    fn accessibility_trusted(&self, _prompt: bool) -> bool {
+        true
+    }
+
+    fn discover_menu_actions(&self, application: &ApplicationInfo) -> Result<MenuDiscovery> {
+        menu::discover(application)
+    }
+
+    fn perform_menu_action(
+        &self,
+        application: &ApplicationInfo,
+        locator: &MenuLocator,
+    ) -> Result<()> {
+        menu::perform(application, locator)
+    }
+}
 impl GitHost for WindowsPlatform {}

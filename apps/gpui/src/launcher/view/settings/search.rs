@@ -1,5 +1,10 @@
 use super::*;
 
+fn display_path_string(path: &std::path::Path) -> String {
+    let raw = path.to_string_lossy();
+    crate::launcher::presentation::readable_file_path(&raw).to_owned()
+}
+
 impl LauncherView {
     fn choose_application_search_paths(
         &mut self,
@@ -41,15 +46,22 @@ impl LauncherView {
                     this.settings_editor.model.saving = false;
                     if this.screen == Screen::Settings {
                         if let Some(selected) = selected {
+                            let selected_paths = selected
+                                .iter()
+                                .map(|item| display_path_string(item.path()))
+                                .collect::<Vec<_>>();
                             let paths = &mut this.settings_editor.draft.application_search_paths;
-                            *paths =
-                                unique_trimmed(paths.iter().map(String::as_str).chain(
-                                    selected.iter().filter_map(|item| item.path().to_str()),
-                                ));
+                            *paths = unique_trimmed(
+                                paths
+                                    .iter()
+                                    .map(String::as_str)
+                                    .chain(selected_paths.iter().map(String::as_str)),
+                            );
                         } else if this.settings_editor.close_pending && !this.settings_dirty(cx) {
                             this.finish_settings_exit_after_save(cx);
                         }
                     }
+                    this.resume_queued_draft_save(cx);
                     cx.notify();
                 });
             });
@@ -84,7 +96,7 @@ impl LauncherView {
                 Some(selected) => {
                     let selected = selected
                         .into_iter()
-                        .map(|folder| folder.path().display().to_string())
+                        .map(|folder| display_path_string(folder.path()))
                         .collect::<Vec<_>>();
                     let roots =
                         unique_trimmed(existing.iter().chain(&selected).map(String::as_str));
@@ -113,6 +125,7 @@ impl LauncherView {
                     if this.screen == Screen::Settings {
                         this.finish_search_directory_selection(&existing, result, window, cx);
                     }
+                    this.resume_queued_draft_save(cx);
                     cx.notify();
                 });
             });
@@ -137,8 +150,12 @@ impl LauncherView {
                         .as_ref(),
                 ) == previous_roots =>
             {
+                let roots = roots
+                    .iter()
+                    .map(|root| display_path_string(std::path::Path::new(root)))
+                    .collect::<Vec<_>>();
                 self.settings_editor.draft.file_search_roots = roots.clone();
-                set_input_value(
+                set_textarea_value(
                     &self.settings_editor.file_roots_input,
                     roots.join("\n"),
                     window,
@@ -171,9 +188,8 @@ impl LauncherView {
     ) -> Div {
         let locale = self.locale;
         let selected = self.settings_editor.draft.file_search_engine;
-        let label = move |engine| {
-            crate::platform::capabilities::file_search_engine_label(engine, locale)
-        };
+        let label =
+            move |engine| crate::platform::capabilities::file_search_engine_label(engine, locale);
         let view = cx.weak_entity();
         self.settings_row_bare(
             l10n::search_engine(locale),
@@ -361,7 +377,13 @@ impl LauncherView {
                                 .flex()
                                 .items_center()
                                 .gap(px(metrics::SPACE_SM))
-                                .child(div().flex_1().min_w_0().truncate().child(path.clone()))
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .min_w_0()
+                                        .truncate()
+                                        .child(format_path_middle_truncated(path)),
+                                )
                                 .child(
                                     Button::new(SharedString::from(format!(
                                         "application-search-remove-{index}"
@@ -391,7 +413,7 @@ impl LauncherView {
         &self,
         title: String,
         description: String,
-        input: &Entity<InputState>,
+        input: &Entity<TextareaState>,
         id: &'static str,
         placeholder: &'static str,
         use_app_ids: bool,
@@ -407,7 +429,7 @@ impl LauncherView {
             .flex()
             .flex_col()
             .gap(px(metrics::SPACE_SM))
-            .child(self.settings_input_row(title, description, input, id, placeholder));
+            .child(self.settings_textarea_row(title, description, input, id, placeholder));
         if !items.is_empty() {
             let input_entity = input.clone();
             let chips = div()
@@ -455,7 +477,7 @@ impl LauncherView {
                                         lines(current.as_ref())
                                     };
                                     next.retain(|item| item != &target);
-                                    set_input_value(&input_entity, next.join("\n"), window, cx);
+                                    set_textarea_value(&input_entity, next.join("\n"), window, cx);
                                     cx.notify();
                                 }))
                                 .child(

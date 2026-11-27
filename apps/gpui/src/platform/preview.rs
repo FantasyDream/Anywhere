@@ -16,6 +16,9 @@ pub(super) use super::macos::preview::dismiss_quick_look;
 #[cfg(windows)]
 pub use super::windows::preview::PreviewHost;
 
+#[cfg(windows)]
+pub(crate) use super::windows::preview::WindowsPreviewError;
+
 #[cfg(not(any(target_os = "macos", windows)))]
 pub struct PreviewHost;
 

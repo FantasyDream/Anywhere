@@ -30,7 +30,8 @@ pub struct MacOsPlatform;
 mod file_search;
 
 pub(crate) use file_search::{
-    DEFAULT_ENGINE as DEFAULT_FILE_SEARCH_ENGINE, SUPPORTED_ENGINES as SUPPORTED_FILE_SEARCH_ENGINES,
+    DEFAULT_ENGINE as DEFAULT_FILE_SEARCH_ENGINE,
+    SUPPORTED_ENGINES as SUPPORTED_FILE_SEARCH_ENGINES,
 };
 
 impl FileSearchHost for MacOsPlatform {

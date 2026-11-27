@@ -2,6 +2,20 @@
 
 记录用户可感知的变化。开发里程碑不是正式发行日期，逐构建测试与限制见[文档索引](docs/README.md)。
 
+## Windows x64 开发预览（当前源码）
+
+- 新增通知区域图标、全局快捷键、单实例恢复、登录启动和可解压运行的 x64 ZIP。
+- 接入开始菜单、Shell 打包应用和自定义应用位置。Current App 可读取 Explorer
+  目录与选中项、受支持的选中文本和浏览器地址。
+- 增加 Everything、Windows Search 和 Ripgrep 快批；直接遍历覆盖授权范围。
+  剪贴板支持文件列表、图片和富文本，并可通过外部 QuickLook 预览。
+- 补齐标准 Win32 菜单栏，执行前复验动态启用状态。Context 读取绑定激活窗口。
+- QuickLook 预览与外部关闭同步，并保护独立打开的预览窗口。修正 Windows 文件路径展示、
+  Explorer 选区文案和剪贴板设置写入期间丢失的保存请求。
+- 接入 Windows 应用历史身份、只读 Git、后台任务 Job Object 和 WebView2，
+  内置 JSON Workspace 可打开为独立窗口。已知缺陷和抽测范围见
+  [Windows 功能进度](docs/windows-progress.md)。
+
 ## V0.14.1 开发预览 — 2026-11-24
 
 - Launcher、Settings、Clipboard 与 Running Tasks 使用统一的页头、列表行和操作区；

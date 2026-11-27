@@ -224,9 +224,9 @@ impl ShortcutEditor {
 pub(super) struct SettingsEditor {
     pub(super) model: SettingsModel,
     pub(super) draft: HostPreferences,
-    pub(super) excluded_apps_input: Entity<InputState>,
-    pub(super) file_roots_input: Entity<InputState>,
-    pub(super) file_exclusions_input: Entity<InputState>,
+    pub(super) excluded_apps_input: Entity<TextareaState>,
+    pub(super) file_roots_input: Entity<TextareaState>,
+    pub(super) file_exclusions_input: Entity<TextareaState>,
     pub(super) history_path_input: Entity<InputState>,
     pub(super) history_filter_input: Entity<InputState>,
     pub(super) history_enabled_only: bool,
@@ -243,6 +243,7 @@ pub(super) struct SettingsEditor {
     pub(super) confirm_accept_focus: FocusHandle,
     pub(super) clipboard_choice: Option<ClipboardSettingsChoice>,
     pub(super) save_generation: u64,
+    pub(super) draft_save_queued: bool,
     pub(super) scrolls: [ScrollHandle; 7],
     pub(super) focus_handle: FocusHandle,
 }
@@ -257,28 +258,21 @@ impl SettingsEditor {
         window: &mut Window,
         cx: &mut Context<LauncherView>,
     ) -> (Self, Subscription) {
-        let excluded_apps_input = if auxiliary {
-            fallback_input.clone()
-        } else {
-            cx.new(|cx| {
-                InputState::new(window, cx).default_value(preferences.excluded_apps.join("\n"))
-            })
-        };
-        let file_roots_input = if auxiliary {
-            fallback_input.clone()
-        } else {
-            cx.new(|cx| {
-                InputState::new(window, cx).default_value(preferences.file_search_roots.join("\n"))
-            })
-        };
-        let file_exclusions_input = if auxiliary {
-            fallback_input.clone()
-        } else {
-            cx.new(|cx| {
-                InputState::new(window, cx)
-                    .default_value(preferences.file_search_excluded_names.join("\n"))
-            })
-        };
+        let excluded_apps_input = cx.new(|cx| {
+            TextareaState::new(window, cx)
+                .default_value(preferences.excluded_apps.join("\n"))
+                .auto_grow(2, 4)
+        });
+        let file_roots_input = cx.new(|cx| {
+            TextareaState::new(window, cx)
+                .default_value(readable_search_roots(&preferences.file_search_roots).join("\n"))
+                .auto_grow(2, 4)
+        });
+        let file_exclusions_input = cx.new(|cx| {
+            TextareaState::new(window, cx)
+                .default_value(preferences.file_search_excluded_names.join("\n"))
+                .auto_grow(2, 4)
+        });
         let history_path_input = if auxiliary {
             fallback_input.clone()
         } else {
@@ -321,6 +315,7 @@ impl SettingsEditor {
             confirm_accept_focus: cx.focus_handle(),
             clipboard_choice: None,
             save_generation: 0,
+            draft_save_queued: false,
             scrolls: std::array::from_fn(|_| ScrollHandle::new()),
             focus_handle: cx.focus_handle(),
         };

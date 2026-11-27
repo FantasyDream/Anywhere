@@ -144,6 +144,7 @@ async fn saved_directory_usage_participates_in_shared_ranking() {
             > score
     );
 }
+#[cfg(unix)]
 #[test]
 fn replacing_failed_database_recovers_on_reload() {
     let tmp = tempfile::tempdir().unwrap();
@@ -229,6 +230,7 @@ async fn external_forget_revokes_a_stale_open_offer_and_preserves_other_saved_pa
         .any(|c| c.command_id.as_deref() == Some(OPEN)));
 }
 
+#[cfg(unix)]
 #[tokio::test]
 async fn replacement_refreshes_already_loaded_state_and_keeps_writing_to_the_new_database() {
     let tmp = tempfile::tempdir().unwrap();
@@ -260,4 +262,44 @@ async fn replacement_refreshes_already_loaded_state_and_keeps_writing_to_the_new
         saved["paths"],
         serde_json::json!([beta.canonicalize().unwrap()])
     );
+}
+
+#[cfg(windows)]
+#[tokio::test]
+async fn a_live_database_refuses_replacement_without_invalidating_saved_actions() {
+    let fixture = tempfile::tempdir().unwrap();
+    let policy = fixture.path().join("extensions.json");
+    let db = fixture.path().join("extension-storage.sqlite3");
+    let moved = fixture.path().join("old.sqlite3");
+    let original = fixture.path().join("original-project");
+    let added = fixture.path().join("added-project");
+    std::fs::create_dir(&original).unwrap();
+    std::fs::create_dir(&added).unwrap();
+
+    let app = review_app();
+    let _manager = SettingsService::open(policy, &app).unwrap();
+    save(&app, &original).await;
+    // SQLite's Windows VFS holds the active file without delete sharing.
+    let error = std::fs::rename(&db, &moved).unwrap_err();
+    assert_eq!(error.raw_os_error(), Some(32));
+    assert!(!moved.exists());
+    assert!(search(&app, "original-project")
+        .await
+        .candidates
+        .iter()
+        .any(|candidate| candidate.command_id.as_deref() == Some(OPEN)));
+
+    save(&app, &added).await;
+    let stored = ModuleStorageHost::open(&db)
+        .unwrap()
+        .bind("saved_directories")
+        .unwrap()
+        .get("directories")
+        .unwrap()
+        .unwrap();
+    let stored: serde_json::Value = serde_json::from_slice(&stored).unwrap();
+    let paths = stored["paths"].as_array().unwrap();
+    assert_eq!(paths.len(), 2);
+    assert!(paths.contains(&serde_json::json!(original.canonicalize().unwrap())));
+    assert!(paths.contains(&serde_json::json!(added.canonicalize().unwrap())));
 }

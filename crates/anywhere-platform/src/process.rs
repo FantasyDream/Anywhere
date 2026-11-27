@@ -1,7 +1,7 @@
 //! Owned, non-interactive child processes. No shell interpolation or unbounded pipe reads.
 mod tooling;
 use tooling::tool_directories;
-pub use tooling::{find_executable, java_environment, wrapped_tool};
+pub use tooling::{find_executable, java_environment, resolve_node_package_manager, wrapped_tool};
 #[cfg(unix)]
 #[path = "process/unix.rs"]
 mod backend;

@@ -74,6 +74,8 @@ jobs:
         run: cargo clippy -p anywhere-gpui -p anywhere-platform --all-targets --locked -- -D warnings
       - name: Run shared Core, GPUI and Windows platform regressions
         run: cargo test -p anywhere-core -p anywhere-gpui -p anywhere-platform --lib --locked -- --test-threads=1
+      - name: Run Windows MVP integration regressions
+        run: cargo test -p anywhere-core --test mvp --locked -- --test-threads=1
       - name: Build Windows executable
         run: cargo build -p anywhere-gpui --release --target x86_64-pc-windows-msvc --locked
       - name: Package and checksum Windows executable

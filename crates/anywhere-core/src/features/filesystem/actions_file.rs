@@ -5,7 +5,7 @@ use crate::core::action::handler::{ActionHandler, ExecutionOutput};
 use crate::core::context::{ContextValue, ResolvedContext};
 use crate::core::session::facts::CLIPBOARD;
 use anyhow::{Context, Result};
-use anywhere_platform::Platform;
+use anywhere_platform::{paths::display_path, Platform};
 use anywhere_protocol::*;
 
 struct OpenFile;
@@ -46,7 +46,7 @@ impl ActionHandler for CopySelectionPaths {
         let json = serde_json::to_string(
             &paths
                 .iter()
-                .map(|path| path.to_string_lossy())
+                .map(|path| display_path(path).to_string_lossy())
                 .collect::<Vec<_>>(),
         )?;
         platform.copy_text(&json)?;

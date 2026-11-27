@@ -1,6 +1,6 @@
 # Anywhere 产品路线图
 
-最后更新：2026-11-24。当前为 **V0.14.1 macOS 15+ GPUI 开发预览**。已发布版本为 [`v0.14.1` pre-release](https://github.com/FantasyDream/Anywhere/releases/tag/v0.14.1)；
+最后更新：2026-11-26。当前发布为 **V0.14.1 macOS 15+ GPUI 开发预览**，源码另有 Windows 11 x64 预览。已发布版本为 [`v0.14.1` pre-release](https://github.com/FantasyDream/Anywhere/releases/tag/v0.14.1)；
 完整物理桌面矩阵、正式签名、公证和 Linux 桌面产物尚未完成。当前
 范围与证据见 [GPUI 技术方案与验收](mvp-gpui.md)，版本以
 [Cargo workspace](../Cargo.toml)和
@@ -25,7 +25,7 @@
 | Running Tasks / Native Tools | 已有 typed 路由、详情和明确未知类型错误 |
 | Web plugins | 安装审查、启停、WebView、IPC、ack、主题与 teardown 已接入 |
 | 共享跨平台 crates | Linux / Windows 编译和 Linux 回归 |
-| Windows GPUI | x64 开发预览已接入。功能范围和实机状态见 [Windows 指南](windows.md) |
+| Windows GPUI | x64 开发预览已接入，待补菜单适配、桌面矩阵和正式分发。见 [Windows 功能进度](windows-progress.md) |
 
 “已接入”表示源码和自动化存在，不等于物理 IME、Accessibility、VoiceOver、
 登录项、Quick Look、WebKit helper 或视觉材质已通过。
@@ -39,7 +39,8 @@
    资源、动态库和 checksum 复验。
 3. 执行[物理桌验矩阵](mvp-gpui.md#物理桌验矩阵)，逐项记录结果。
 4. 修复桌验发现的 IME、焦点、状态栏、Shelf、Quick Look、WebView 和权限问题。
-5. 在不修改历史数字的前提下建立当前 GPUI 性能样本。
+5. 建立对应构建的 GPUI 性能样本。
+6. 按 [Windows 桌面验收](test-acceptance-windows.md) 复验已接入的 Windows 能力并跟踪已知缺陷。
 
 ### V0.15 插件开发体验
 

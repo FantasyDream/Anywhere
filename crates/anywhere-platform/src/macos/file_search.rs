@@ -1,5 +1,7 @@
 //! One bounded Spotlight filename query. No shell, private index or content read.
-use crate::{FileIndexResults, FileSearchBackend, FileSearchEngine, FileSearchHit, FileSearchQuery};
+use crate::{
+    FileIndexResults, FileSearchBackend, FileSearchEngine, FileSearchHit, FileSearchQuery,
+};
 use anyhow::{bail, Context, Result};
 use std::{
     collections::BTreeSet,

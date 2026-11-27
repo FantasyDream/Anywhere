@@ -4,7 +4,7 @@ use crate::core::action::bundle::{ActionBundle, ActionSpec};
 use crate::core::action::handler::{ActionHandler, ExecutionOutput};
 use crate::core::context::ResolvedContext;
 use anyhow::{Context, Result};
-use anywhere_platform::Platform;
+use anywhere_platform::{paths::display_path, Platform};
 use anywhere_protocol::*;
 
 struct OpenTerminal;
@@ -29,7 +29,7 @@ impl ActionHandler for CopyPath {
         platform: &dyn Platform,
     ) -> Result<ExecutionOutput> {
         let path = context.value.path().context("path context required")?;
-        platform.copy_text(&path.to_string_lossy())?;
+        platform.copy_text(&display_path(path).to_string_lossy())?;
         Ok(ExecutionOutput::dismiss())
     }
 }

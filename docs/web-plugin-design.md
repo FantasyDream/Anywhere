@@ -2,7 +2,7 @@
 
 当前采用本地 `.awplugin` 包、系统 WebView、版本化 TypeScript SDK 和 Rust 能力
 代理。WebView 承载 UI；按需 QuickJS 承载有限 Context / 后台命令。两者不直接
-互调，统一通过 Rust broker。最后整理：2026-11-16。
+互调，统一通过 Rust broker。macOS 使用 WKWebView，Windows 使用 WebView2。
 
 开发步骤见[插件开发](plugin-development.md)，整体模块与运行时分工见
 [架构](architecture.md)。
@@ -24,7 +24,7 @@ flowchart TD
   Store --> Runtime[Application Web runtime]
   Runtime --> Handle[Rust-owned document handle]
   Handle --> GPUI[GPUI tool surface]
-  GPUI --> WebView[macOS WKWebView]
+  GPUI --> WebView[WKWebView 或 WebView2]
   WebView --> IPC[versioned JSON string IPC]
   IPC --> Broker[Rust capability broker]
   Background[On-demand QuickJS] --> Broker
@@ -69,7 +69,9 @@ Manifest 声明包 ID、版本、入口、资源、命令、Context resolver、�
 - 资源预算、取消状态和 generation。
 
 WebView 只允许加载该 handle 的入口和已验证资源。导航到其他 origin 被拒绝。
-GPUI 不自行拼资源路径，也不把任意本地路径暴露给页面。
+GPUI 不自行拼资源路径，也不把任意本地路径暴露给页面。Windows 宿主通过
+WebView2 将内部 scheme 映射到对应的 HTTPS origin，资源仍由同一固定文档策略
+校验。Windows 运行依赖和范围见 [Windows 指南](windows.md)。
 
 首次 Web state 以执行请求冻结的 revision 为启动基线，不从选定 Context 自身
 推导。名称搜索得到的 Launcher Entry 可以是 revision 0，而实际执行属于当前
@@ -160,6 +162,6 @@ Settings 中展示包来源、版本、权限、启用状态和错误。安装 /
 - SDK 文本上传、Unicode、1 MiB 边界和失败后恢复；
 - Web teardown 清空文档拥有的全部字段。
 
-物理验收仍需验证 WKWebView 加载、IPC、ack、焦点、IME、返回、崩溃、页面替换、
-WebKit helper 回收和签名包内资源。当前状态见
-[GPUI 技术方案与验收](mvp-gpui.md#物理桌验矩阵)。
+WKWebView 和 WebView2 均需在对应桌面验证加载、IPC、ack、焦点、IME、返回、
+崩溃、页面替换及 helper 回收。Windows 额外覆盖运行库缺失及恢复。见
+[macOS 桌面验收](test-acceptance-macos.md)和 [Windows 桌面验收](test-acceptance-windows.md#webview2-与插件)。

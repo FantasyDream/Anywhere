@@ -1,6 +1,6 @@
 # Context 输入与默认唤醒
 
-现行专题契约；文档整理：2026-11-18。Scope 与返回的完整规则见 [Launcher 交互](launcher-interaction.md)。
+现行专题契约适用于 macOS 和 Windows。Scope 与返回的完整规则见 [Launcher 交互](launcher-interaction.md)。
 
 ## 用户操作
 
@@ -14,7 +14,7 @@
 
 自动填入要求实际识别器产生 URL、真实文件 / 目录或第三方 `plugin.<package-id>.*` 等非 Text Context，或已批准且启用的 Web 工具通过声明的 `inputMatchers` 识别文本。仅有普通 Text 不满足自动跳转条件；无效 URL、不存在的路径和未被任何解析器或命令识别的文本不会打开内容页。识别失败的选区允许继续尝试有效剪贴板。手动输入和进入内容页面后的编辑仍沿用原图规则。
 
-内容 UI 标明 Selected text 或 Recent clipboard。正文可以编辑；它是待处理对象，不作为动作标题查询。URL、路径等仍走同一 Context Graph、Registry 和 Ranking；只处理当前输入及派生 Context，不混入当前应用、网页、Finder 选择或其他捕获文本。
+内容 UI 标明 Selected text 或 Recent clipboard。正文可以编辑；它是待处理对象，不作为动作标题查询。URL、路径等仍走同一 Context Graph、Registry 和 Ranking；只处理当前输入及派生 Context，不混入当前应用、网页、Finder / Explorer 选择或其他捕获文本。
 
 内容页的编辑器拥有焦点且没有修饰键时，`↑` / `↓` 切换候选动作，
 `Enter` / `Return` 执行选中项；`Shift+Enter` 仍插入换行，其余修饰组合
@@ -30,6 +30,7 @@
 - 可识别的选中文本优先。采集尚未完成时短暂等待；500 ms 后可以回退到已捕获的新剪贴板。只在默认唤醒且用户尚未输入、移动选择或切换 Scope 时接受自动填入；用户操作、Esc、新 Session 或关闭取消资格。
 - 剪贴板有效期固定 15 秒。年龄包含采集后到展示前的等待，重复打开/读取不延长有效期。启动前已有的剪贴板无法确认复制时间，不自动填入。
 - macOS 每 250 ms 只观测 pasteboard changeCount；用单调时间记录变化区间起点，因此可能提前最多一个正常观测间隔过期，避免把旧内容当成新复制。快照前后 generation 不同则年龄未知。观察器不读取或保存正文；平台没有年龄能力时安全回退到 Current App。
+- Windows 记录系统剪贴板序号变化的时间。Explorer 的目录和选中项来自 Shell；选中文本和受支持浏览器的 URL 由 UI Automation 读取。来源识别依赖冻结的前台应用与控件能力。
 - 识别在 Rust 后台 worker 执行，路径检查不阻塞界面，窗口先正常显示 Current App。Host 单次只保留一个待识别请求；新捕获到达后重新判定，识别返回时复验交互 / 生命周期资格，并检查 Rust 提供的剪贴板到期时间。输入、Esc、关闭或新 Session 后的旧结果不能自动跳转。
 - Current App 的页面提示只使用其实际消费的环境来源；选区 / 剪贴板读取失败导致自动填入回退时，保留 Settings 中的状态，不显示为 Current App 动作加载失败。真实 Finder / 浏览器和菜单异常提示保留。
 - 本次成功采集的正文经 Capture DTO 提供给 Host；Settings 只保留来源、状态和捕获时间，丢弃正文与剪贴板年龄。正文不写入快捷键配置、Usage 或日志。
@@ -40,7 +41,7 @@
 
 | 模式 | Context 图 | 查询 |
 |---|---|---|
-| Environment | 当前应用、Finder/浏览器环境及显式输入；排除自动文本来源 | 正常动作查询 |
+| Environment | 当前应用、Finder / Explorer / 浏览器环境及显式输入；排除自动文本来源 | 正常动作查询 |
 | Content | 当前 UserInput 及派生 Context | 空查询，列出内容动作 |
 | Search | 当前 UserInput 及派生 Context | 正常全局搜索 |
 | FileSearch | 独立文件工作区，不解析环境 Context | 文件查询 |

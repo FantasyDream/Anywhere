@@ -12,7 +12,7 @@ use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use std::{
     cell::{Cell, RefCell},
     collections::HashMap,
-    ptr::null,
+    ptr::{null, null_mut},
 };
 use tokio::sync::mpsc;
 use windows_sys::{
@@ -26,18 +26,19 @@ use windows_sys::{
             GetMonitorInfoW, MonitorFromPoint, MonitorFromWindow, MONITORINFO,
             MONITOR_DEFAULTTONEAREST,
         },
-        System::Threading::CreateMutexW,
+        System::Threading::{AttachThreadInput, CreateMutexW, GetCurrentThreadId},
         UI::{
             HiDpi::{GetDpiForMonitor, GetDpiForWindow, MDT_EFFECTIVE_DPI},
+            Input::KeyboardAndMouse::SetFocus,
             Shell::{DefSubclassProc, RemoveWindowSubclass, SetWindowSubclass},
             WindowsAndMessaging::{
-                GetCursorPos, GetForegroundWindow, GetPropW, GetWindowLongW, GetWindowRect,
-                GetWindowThreadProcessId, IsIconic, IsWindowVisible, IsZoomed, SetForegroundWindow,
-                SetPropW, SetWindowLongW, SetWindowPos, ShowWindow, ShowWindowAsync, GWL_EXSTYLE,
-                HWND_NOTOPMOST, HWND_TOPMOST, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE,
-                SWP_NOSIZE, SWP_NOZORDER, SW_HIDE, SW_MAXIMIZE, SW_MINIMIZE, SW_RESTORE, SW_SHOW,
-                USER_DEFAULT_SCREEN_DPI, WM_KEYDOWN, WM_NCDESTROY, WM_SYSKEYDOWN, WS_EX_APPWINDOW,
-                WS_EX_TOOLWINDOW, WS_EX_TOPMOST,
+                BringWindowToTop, GetCursorPos, GetForegroundWindow, GetPropW, GetWindowLongW,
+                GetWindowRect, GetWindowThreadProcessId, IsIconic, IsWindowVisible, IsZoomed,
+                SetForegroundWindow, SetPropW, SetWindowLongW, SetWindowPos, ShowWindow,
+                ShowWindowAsync, GWL_EXSTYLE, HWND_NOTOPMOST, HWND_TOPMOST, SWP_FRAMECHANGED,
+                SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SW_HIDE, SW_MAXIMIZE,
+                SW_MINIMIZE, SW_RESTORE, SW_SHOW, USER_DEFAULT_SCREEN_DPI, WM_KEYDOWN,
+                WM_NCDESTROY, WM_SYSKEYDOWN, WS_EX_APPWINDOW, WS_EX_TOOLWINDOW, WS_EX_TOPMOST,
             },
         },
     },
@@ -181,7 +182,9 @@ pub(super) fn configure_settings_window(title: &str) -> bool {
 }
 
 fn apply_launcher_window_style(hwnd: HWND) {
-    set_taskbar_and_topmost_style(hwnd, false, true);
+    let show_in_taskbar =
+        std::env::var_os("ANYWHERE_QA_SHOW_IN_TASKBAR").is_some_and(|value| value == "1");
+    set_taskbar_and_topmost_style(hwnd, show_in_taskbar, true);
 }
 
 fn apply_settings_window_style(hwnd: HWND) {
@@ -252,10 +255,7 @@ pub(super) fn configure_tool_window(window: &Window) {
         if let Some(installed) = installed {
             let hwnd_bits = hwnd as usize;
             defer(move |_| {
-                backdrop::finalize_install(
-                    std::ptr::without_provenance_mut(hwnd_bits),
-                    installed,
-                );
+                backdrop::finalize_install(std::ptr::without_provenance_mut(hwnd_bits), installed);
             });
         }
     }
@@ -411,18 +411,78 @@ pub(super) fn remember_destination() -> bool {
 }
 
 pub(super) fn return_to_previous_application() -> ApplicationReturnResult {
-    let Some((hwnd, _)) = UI
+    let Some((hwnd, pid)) = UI
         .with_borrow(|ui| ui.previous)
         .filter(|(hwnd, pid)| process_id(*hwnd) == Some(*pid))
     else {
+        tracing::warn!("clipboard_shelf_return_destination_unavailable");
         return ApplicationReturnResult::Unavailable;
     };
+    if unsafe { GetForegroundWindow() } == hwnd {
+        let destination_hwnd = hwnd as usize;
+        tracing::debug!(
+            destination_hwnd,
+            destination_pid = pid,
+            "clipboard_shelf_return_destination_already_active"
+        );
+        return ApplicationReturnResult::Returned;
+    }
     if unsafe { IsIconic(hwnd) } != 0 {
         unsafe { ShowWindowAsync(hwnd, SW_RESTORE) };
     }
-    if unsafe { SetForegroundWindow(hwnd) } != 0 {
+    let foreground = unsafe { GetForegroundWindow() };
+    let current_thread = unsafe { GetCurrentThreadId() };
+    let foreground_thread = if !foreground.is_null() {
+        unsafe { GetWindowThreadProcessId(foreground, null_mut()) }
+    } else {
+        Default::default()
+    };
+    let destination_thread = unsafe { GetWindowThreadProcessId(hwnd, null_mut()) };
+    let attached_foreground = foreground_thread != 0
+        && foreground_thread != current_thread
+        && unsafe { AttachThreadInput(current_thread, foreground_thread, 1) } != 0;
+    let attached_destination = destination_thread != 0
+        && destination_thread != current_thread
+        && destination_thread != foreground_thread
+        && unsafe { AttachThreadInput(current_thread, destination_thread, 1) } != 0;
+
+    let set_foreground = unsafe { SetForegroundWindow(hwnd) };
+    let brought_to_top = unsafe { BringWindowToTop(hwnd) };
+    let focused = !unsafe { SetFocus(hwnd) }.is_null();
+
+    if attached_destination {
+        unsafe { AttachThreadInput(current_thread, destination_thread, 0) };
+    }
+    if attached_foreground {
+        unsafe { AttachThreadInput(current_thread, foreground_thread, 0) };
+    }
+
+    let active_foreground = unsafe { GetForegroundWindow() };
+    let active = active_foreground == hwnd;
+    let destination_hwnd = hwnd as usize;
+    let previous_foreground_hwnd = foreground as usize;
+    let active_foreground_hwnd = active_foreground as usize;
+    tracing::debug!(
+        destination_hwnd,
+        destination_pid = pid,
+        previous_foreground_hwnd,
+        active_foreground_hwnd,
+        attached_foreground,
+        attached_destination,
+        set_foreground,
+        brought_to_top,
+        focused,
+        active,
+        "clipboard_shelf_return_destination_activated"
+    );
+    if active {
         ApplicationReturnResult::Returned
     } else {
+        tracing::warn!(
+            destination_hwnd,
+            destination_pid = pid,
+            "clipboard_shelf_return_destination_not_active"
+        );
         ApplicationReturnResult::Failed
     }
 }
@@ -510,6 +570,7 @@ pub(super) fn should_dismiss() -> bool {
     let foreground = unsafe { GetForegroundWindow() };
     window(crate::PRODUCT_NAME).is_some_and(|window| {
         (unsafe { IsWindowVisible(window.hwnd) != 0 })
+            && !preview::owns_foreground(foreground)
             && process_id(foreground).is_some_and(|pid| pid != std::process::id())
     })
 }

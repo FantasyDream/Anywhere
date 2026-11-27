@@ -1,8 +1,6 @@
 # 架构与代码地图
 
-当前源码为 V0.14 macOS 15+ GPUI 开发预览。Rust Core 决定业务语义，GPUI
-呈现并处理输入，AppKit / Quick Look / WebKit 只提供系统适配。最后核对：
-2026-11-23。
+当前源码提供 macOS 15+ 与 Windows 11 x64 的 GPUI 开发预览。Rust Core 决定业务语义，GPUI 呈现并处理输入，macOS 和 Windows 通过平台适配层连接系统能力。
 
 产品入口是 `apps/gpui/src/app.rs`。当前范围与证据见
 [GPUI 交付范围与验收状态](mvp-gpui.md)，窗口、焦点和输入契约见
@@ -19,7 +17,7 @@ flowchart TD
     Features --> Core
     Application --> Persistence[SQLite / preferences]
     Application --> Platform[Platform capabilities]
-    GPUI --> Native[AppKit / Quick Look / WebKit]
+    GPUI --> Native[macOS AppKit / WebKit 或 Windows Win32 / WebView2]
     Web[WebView + TypeScript SDK] --> Broker[Rust capability broker]
     Background[On-demand QuickJS] --> Broker
     Broker --> Runtime
@@ -41,7 +39,7 @@ flowchart TD
 Web CSS；`apps/gpui/src/platform/material/` 读取 macOS 明暗、Reduce
 Transparency、Increase Contrast 和 Reduce Motion，安装
 `NSGlassEffectView` / `NSVisualEffectView`。GPUI 只绘制透明内容层和语义色，
-不伪造原生玻璃，也没有 Flutter / Dart / bridge 之间的 appearance 回传。
+Windows 适配在 `platform/material/windows.rs` 和 `platform/windows/backdrop.rs`，按系统透明效果和窗口类型选用原生合成或不透明主题。详见[界面设计](ui-design.md)。
 
 图标缓存、文件结果窗口和 Web document 分别限额；当前没有跨语言的
 `memory-pressure` 协议或 `ANYWHERE_PROFILE_UI` 开关。性能诊断使用
@@ -71,6 +69,11 @@ apps/gpui/src/
 第一方能力在启动时绑定一次；设置或外部数据刷新只更新策略和业务数据，不重建
 模块生命周期。第三方包使用独立安装批准和 SDK。第三方 Context 限定为
 `plugin.<package-id>.*`，脚本输出不能转换为原生文件权限。
+
+Windows 的桌面服务位于 `crates/anywhere-platform/src/windows/`，包括 Shell
+应用目录和资源打开、Explorer / UIA Context、剪贴板与文件索引。GPUI 的托盘、窗口、
+WebView2 origin、登录项与外部预览接入位于 `apps/gpui/src/platform/windows/`
+及其模块入口。已接入能力和实机证据见 [Windows 功能进度](windows-progress.md)。
 
 ## 启动与依赖
 

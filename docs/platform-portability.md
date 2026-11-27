@@ -1,13 +1,13 @@
 # 跨平台架构与接入契约
 
 macOS 15+ 已发布 GPUI 开发构建。Windows 11 x64 源码提供共用 GPUI 的开发预览，
-范围和实机状态见 [Windows 指南](windows.md)。Linux 参与共享 crate 的编译和回归。
+范围和实机状态见 [Windows 功能进度](windows-progress.md)。Linux 参与共享 crate 的编译和回归。
 
 ## 共享与系统边界
 
 | 层 | 共享内容 | 系统边界 |
 | --- | --- | --- |
-| GPUI product | 页面、导航、输入、Scope、选择、设置与工具状态 | macOS 对接 AppKit / Quick Look / WebKit，Windows 对接 Win32 和任务栏通知区域 |
+| GPUI product | 页面、导航、输入、Scope、选择、设置与工具状态 | macOS 对接 AppKit / Quick Look / WebKit，Windows 对接 Win32、通知区域和 WebView2 |
 | Product host | 数据路径、运行时、偏好、热键、目录授权和登录项 | `apps/gpui/src/host/`、`apps/gpui/src/platform/` |
 | Rust Core | Context Graph、Action、候选、搜索、Ranking、Execution | 通过窄能力接口使用 OS |
 | Platform services | 应用、Context、剪贴板、文件搜索、资源、菜单与 Git | 不把应用 ID、Finder 或 shell 规则散布到 Core |
@@ -42,7 +42,7 @@ GPUI 页面不是 AppKit 控件。系统能力缺失时返回明确禁用状态�
 - 系统文件索引、范围搜索与取消；
 - URL、文件、目录、终端和指定应用打开；
 - Accessibility 菜单发现与重放；
-- 白名单只读 Git 操作。当前 macOS 运行器限制子进程和网络访问，其他平台的 Git 运行器报告不可用。
+- 白名单只读 Git 操作。macOS 使用系统沙箱，Windows 使用 Job Object；详细边界见 [开发动作](developer-actions.md#git)。
 
 能力实现按平台注入。未实现能力显式返回 unsupported、空值或既有安全默认，不
 静默扩大权限。文件、目录、工作区文件和远程 URI 保持不同对象类型。
@@ -65,11 +65,11 @@ Windows 的物理热键注册、布局和冲突矩阵尚待实机验收。
 
 macOS 在 `apps/gpui/src/platform/macos/status_item.rs` 使用 `NSStatusItem` 提供恢复入口。
 主窗口关闭执行 Quick Look / Web / 待执行资格清理后隐藏。Clipboard Shelf（floating）与 Running Tasks（normal）使用各自独立的 GPUI 窗口；Quick Look 在
-`apps/gpui/src/platform/preview.rs` 使用 `QLPreviewPanel`。
+`apps/gpui/src/platform/macos/preview.rs` 使用 `QLPreviewPanel`。
 
 文件与剪贴板资源由 Rust 校验，GPUI 只管理当前选择和 preview generation。关闭
-回调绑定资源与 generation，旧预览不能影响新目标。Windows 已有窗口和托盘宿主，
-系统预览仍待接入。
+回调绑定资源与 generation，旧预览不能影响新目标。Windows 的预览请求
+转给当前用户的外部 QuickLook。各平台生命周期详见 [预览](native-preview.md)。
 
 ## CI 与平台验证
 
@@ -84,9 +84,9 @@ cargo check \
   --all-targets --locked
 ```
 
-Linux 还运行相同共享 crates 的测试。Windows 桌面 job 检查 `anywhere-gpui`、
-构建 x64 可执行文件并产出 ZIP。macOS workflow 运行完整 `scripts/check.sh` 和
-macOS 打包。
+Linux 还运行相同共享 crates 的测试。Windows 桌面 job 对 GPUI 和 Platform 运行
+严格 Clippy，串行执行 Core、GPUI 和 Platform 库测试及 MVP 集成测试，并构建 x64 ZIP。macOS
+workflow 运行完整 `scripts/check.sh` 和 macOS 打包。
 
 ## 后续桌面平台
 
@@ -102,4 +102,4 @@ macOS 打包。
 不支持的来源应在能力层返回明确结果；为赶进度让 Core 猜测平台或虚构成功会破坏
 授权与执行资格。
 
-当前 macOS 证据见 [GPUI 技术方案与验收](mvp-gpui.md)。
+桌面验证分别按 [macOS](test-acceptance-macos.md) 和 [Windows](test-acceptance-windows.md) 指南执行。

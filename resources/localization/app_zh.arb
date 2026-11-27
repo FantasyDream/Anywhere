@@ -80,6 +80,7 @@
   "contextDescription": "选择唤醒 Anywhere 时可以使用的内容。",
   "windowsContextDescription": "当前应用可读取前台应用、资源管理器目录与选中文件、浏览器当前网页和焦点选区文本。",
   "finderSelection": "访达选中项",
+  "explorerSelection": "文件资源管理器选中项",
   "selectedFilesDescription": "选中的文件和文件夹",
   "selectedText": "选中文本",
   "selectedTextDescription": "当前应用中选中的文本",
@@ -277,6 +278,7 @@
   "clipboardPermissionHelp": "请在系统设置中允许访问剪贴板，然后重新唤醒 Anywhere。",
   "appChangedHelp": "原应用已退出或重启，请重新唤醒 Anywhere 以再次采集。",
   "tooManyItemsHelp": "请在访达中选择不超过 32 个项目，然后重新唤醒 Anywhere。",
+  "windowsTooManyItemsHelp": "请在文件资源管理器中选择不超过 64 个项目，然后重新唤醒 Anywhere。",
   "authorizeSearchDirectories": "授权搜索目录",
   "partialResults": "部分结果",
   "noMatchingFiles": "没有匹配的文件",
@@ -629,6 +631,8 @@
   "openingWebTool": "正在打开 Web 工具…",
   "actionCompleted": "操作已完成",
   "previewUnavailableWith": "无法预览：{error}",
+  "windowsQuickLookUnavailable": "Windows 版 QuickLook 当前不可用。请确认它已运行，然后重试。",
+  "windowsQuickLookExistingWindow": "请关闭另一个 QuickLook 窗口，然后重试预览。",
   "@previewUnavailableWith": {
     "placeholders": {
       "error": {

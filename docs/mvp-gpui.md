@@ -1,14 +1,14 @@
 # V0.14.1 GPUI 交付范围与验收状态
 
-最后核对：2026-11-24。当前源码面向 macOS 15+ 开发预览。已发布的
+最后核对：2026-11-26。当前源码提供 macOS 15+ 与 Windows 11 x64 开发预览。已发布的
 [`v0.14.1`](https://github.com/FantasyDream/Anywhere/releases/tag/v0.14.1) 是
 Apple Silicon 开发预览包；上一版
 [`v0.14.0`](https://github.com/FantasyDream/Anywhere/releases/tag/v0.14.0)
-继续保留为不可变历史。当前源码包含外观、页面操作、键盘 / 焦点和文件、剪贴板、
-应用历史、原生工具窗口与 Web 生命周期改动，JSON Workspace 示例为 0.7.3。
-复验当前功能时应从受测源码构建 App 和示例包，并记录源码差异及包摘要。
+继续保留为历史。Windows 预览构建使用独立 x64 ZIP，功能和已知缺陷维护于
+[Windows 功能进度](windows-progress.md)。复验时记录实际被测 App / EXE、
+示例包摘要和源码差异。
 
-## 交付范围
+## macOS 交付范围
 
 | 区域 | 源码已接入 | 分项用例 |
 | --- | --- | --- |
@@ -24,10 +24,10 @@ Apple Silicon 开发预览包；上一版
 
 ## 自动化证据
 
-2026-11-24 在当前源码上执行 `scripts/check-gpui.sh` 和 `scripts/check.sh`，
+2026-11-24 在 macOS `v0.14.1` 发布基线（`9188f58`）执行 `scripts/check-gpui.sh` 和 `scripts/check.sh`，
 均通过。GPUI 316 项通过；完整 Rust workspace、Web SDK 55 项和 JSON
 Workspace 33 项通过，严格 Clippy、原生菜单、生成物、文档和架构检查通过。
-这里记录命令级工程结果，逐用例执行由[完整验收清单](test-acceptance-checklist.md)记录。
+详见 [v0.14.1 发布记录](https://github.com/FantasyDream/Anywhere/releases/tag/v0.14.1)。
 
 并行 GPUI 门禁暴露了多个测试同时读取同一 `NSPasteboard` 时的 AppKit
 枚举变更异常。平台层现将原生剪贴板上下文操作串行化，并增加锁行为回归；
@@ -40,11 +40,12 @@ Workspace 33 项通过，严格 Clippy、原生菜单、生成物、文档和架
 
 ## 物理桌验矩阵
 
-[全量测试用例与验收清单](test-acceptance-checklist.md)统一维护 341 条用例、
-18 个应用历史来源和环境矩阵。本文更新时未重新构建或启动 App，当前源码的
-实机项目保持 **Pending**。按清单记录实际被测 App、设备、macOS、窗口与输入
-证据及缺失环境；18 个来源的真实打开分别记录。旧 App 的桌面证据与工程门禁
-结果不计入本轮实机用例。
+macOS 的目标构建桌验仍待执行。按 [macOS 桌面验收](test-acceptance-macos.md)
+逐项记录 IME、辅助技术、18 个应用历史来源和实际设备。
+
+Windows 已有 2026-11-26 单机抽测。其后 Windows 修复工作区的构建、MSVC 回归
+和依赖联调另有记录。按 [Windows 桌面验收](test-acceptance-windows.md)核对实际
+受测构建。[Windows 本机记录](archive/windows-desktop-smoke-2026-11-26.md)
 
 重点覆盖真实中文 IME、热键与状态栏、原生焦点和多屏 / Space、系统权限、Quick Look、
 登录项、WebKit 文档替换、外观与辅助技术。VoiceOver 有独立用例和正式分发门槛，
@@ -52,11 +53,11 @@ Workspace 33 项通过，严格 Clippy、原生菜单、生成物、文档和架
 
 ## 发行边界
 
-- Windows 11 x64 开发预览的功能和实机证据见 [Windows 指南](windows.md)。Linux 当前验证共享 Rust crates。
+- Linux 当前验证共享 Rust crates。
 - Developer ID 签名、公证、干净机器升级与自动更新仍待完成。
 - Web 后台使用进程内 QuickJS。第三方进程隔离、插件市场、浏览器历史 /
   书签 / Tab 管理和交互式 PTY 属于后续范围。
 - 测量按[性能指南](performance.md)记录构建和资源归属。
 
-开发预览交付按[发布检查](releasing.md)核对工程门禁、产物身份、签名和桌面
-范围。范围内的 P0 / P1、物理缺口、Blocked 和正式发行专项在验收报告中分别列出。
+macOS 交付按[发布检查](releasing.md)核对；Windows 按[构建与打包](windows.md#构建与打包)
+核对 x64 ZIP 和工程检查。各平台的桌面验收报告记录 P0 / P1、阻塞条件、实体设备覆盖和发行缺口。

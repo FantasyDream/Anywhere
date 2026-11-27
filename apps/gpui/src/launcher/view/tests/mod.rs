@@ -3161,6 +3161,51 @@ fn tasks_actions_stay_inside_the_page(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn tasks_details_hide_windows_verbatim_path_prefixes(cx: &mut TestAppContext) {
+    let (window, view) = open_view(cx);
+    let row = crate::host::ExecutionRow {
+        id: "task".to_owned(),
+        title: "npm Run · sample".to_owned(),
+        directory: r"\\?\C:\Users\fixture\project".to_owned(),
+        command: "npm run sample".to_owned(),
+        status: anywhere_protocol::ExecutionSessionStatus::Succeeded,
+        output_revision: 1,
+        exit_code: Some(0),
+        started_at_ms: 0,
+        finished_at_ms: Some(1),
+        output_truncated: false,
+        error: None,
+    };
+    cx.update(|cx| {
+        view.update(cx, |view, cx| {
+            view.screen = Screen::Tasks;
+            view.standalone_tasks = true;
+            view.tasks.apply_rows(vec![row.clone()]);
+            view.tasks.detail = Some(crate::host::ExecutionDetail {
+                row,
+                stdout: "ready".into(),
+                stderr: "".into(),
+            });
+            view.tasks.command_details_open = true;
+            cx.notify();
+        });
+    });
+    sync_test_viewport_to_desired(cx, window, &view);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(
+            window.find("task-detail-directory").label(),
+            Some(r"C:\Users\fixture\project")
+        );
+        assert_eq!(
+            window.find("task-command-directory").label(),
+            Some(r"C:\Users\fixture\project")
+        );
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn search_updates_rows_and_keyboard_selection_in_the_real_input(cx: &mut TestAppContext) {
     let (window, view) = open_view(cx);
     cx.update_window(window, |_, window, cx| {
@@ -3472,7 +3517,7 @@ fn settings_save_validation_error_stays_pinned_and_shows_in_close_prompt(cx: &mu
         view.update(cx, |view, cx| {
             view.open_settings(window, cx);
             view.settings_editor.model.selected = SettingsCategory::Search;
-            set_input_value(
+            set_textarea_value(
                 &view.settings_editor.file_roots_input,
                 String::new(),
                 window,

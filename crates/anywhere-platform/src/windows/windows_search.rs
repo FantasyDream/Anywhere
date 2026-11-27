@@ -1,6 +1,8 @@
 //! Native Windows Search (`SystemIndex`) backend via COM OLE DB (`Search.CollatorDSO`).
 use super::shell::Apartment;
-use crate::{FileIndexResults, FileSearchBackend, FileSearchEngine, FileSearchHit, FileSearchQuery};
+use crate::{
+    FileIndexResults, FileSearchBackend, FileSearchEngine, FileSearchHit, FileSearchQuery,
+};
 use anyhow::{bail, ensure, Result};
 use std::{
     borrow::Cow,
@@ -124,13 +126,7 @@ pub(super) fn search(
     ensure!(!cancelled(), "search cancelled");
     let mut rowset_unknown = None;
     unsafe {
-        command.Execute(
-            None,
-            &IRowset::IID,
-            None,
-            None,
-            Some(&mut rowset_unknown),
-        )?;
+        command.Execute(None, &IRowset::IID, None, None, Some(&mut rowset_unknown))?;
     }
     let Some(rowset_unknown) = rowset_unknown else {
         return Ok(FileIndexResults::default());
@@ -195,12 +191,7 @@ pub(super) fn search(
         let mut single_row = 0usize;
         let mut single_ptr: *mut usize = &mut single_row;
         let status = unsafe {
-            rowset.GetNextRows(
-                0,
-                0,
-                &mut obtained,
-                std::slice::from_mut(&mut single_ptr),
-            )
+            rowset.GetNextRows(0, 0, &mut obtained, std::slice::from_mut(&mut single_ptr))
         };
         if status.is_err() || obtained == 0 {
             break;
@@ -355,7 +346,9 @@ mod tests {
         let root = Path::new(r"\\?\C:\Users\O'Brien\Docs");
         let roots = [(root, normalized_scope_path(root))];
         let sql = build_query("report_100% [draft]", &roots, 64).unwrap();
-        assert!(sql.contains("SELECT TOP 64 System.ItemPathDisplay, System.FileAttributes FROM SystemIndex"));
+        assert!(sql.contains(
+            "SELECT TOP 64 System.ItemPathDisplay, System.FileAttributes FROM SystemIndex"
+        ));
         assert!(sql.contains("SCOPE='file:C:/Users/O''Brien/Docs'"));
         assert!(sql.contains("System.FileName LIKE '%report[_]100[%]%'"));
         assert!(sql.contains("System.FileName LIKE '%[[]draft]%'"));
@@ -388,13 +381,7 @@ mod tests {
             return;
         };
         let root = home.canonicalize().unwrap();
-        let result = search(
-            "desktop",
-            &[root],
-            16,
-            Duration::from_secs(3),
-            &|| false,
-        );
+        let result = search("desktop", &[root], 16, Duration::from_secs(3), &|| false);
         assert!(result.is_ok(), "Windows Search query failed: {result:?}");
     }
 }

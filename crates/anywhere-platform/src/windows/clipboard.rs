@@ -100,8 +100,8 @@ pub(super) fn write_payload(payload: &ClipboardPayload) -> Result<()> {
     for format in &payload.formats {
         match format.name.as_str() {
             TEXT => {
-                let text = std::str::from_utf8(&format.data)
-                    .map_err(|_| ContextReadError::Unavailable)?;
+                let text =
+                    std::str::from_utf8(&format.data).map_err(|_| ContextReadError::Unavailable)?;
                 let mut wide: Vec<u16> = text.encode_utf16().collect();
                 wide.push(0);
                 let mut bytes = Vec::with_capacity(wide.len() * 2);
@@ -248,7 +248,9 @@ fn read_open_raw(format_id: u32, capacity: usize) -> Result<Option<Vec<u8>>> {
         return Ok(None);
     }
     let _locked = LockedClipboard(handle);
-    Ok(Some(unsafe { std::slice::from_raw_parts(pointer, size) }.to_vec()))
+    Ok(Some(
+        unsafe { std::slice::from_raw_parts(pointer, size) }.to_vec(),
+    ))
 }
 
 fn wrap_dib_as_bmp(dib: &[u8]) -> Option<Vec<u8>> {

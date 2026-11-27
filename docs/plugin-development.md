@@ -2,7 +2,7 @@
 
 插件可以是 Web 界面，也可以是无需界面的后台 JavaScript。你只负责 TypeScript / JavaScript 业务；Anywhere 负责容器、默认样式、权限、Context 调度和资源释放。界面可使用普通 HTML，也可以使用 React、Vue、Svelte。
 
-**当前范围：macOS 本地开发预览。** 下述 API 描述当前源码；历史发布包不一定具备这些能力。SDK 尚未发布到 npm，使用导出的 `.tgz` 安装。开发需要 Node.js 22+ 和 Python 3.10+；插件运行时不需要 Node、Python 或 Rust。
+**当前范围为 macOS 与 Windows 可信本地包开发预览。** 下述 API 描述当前源码；历史发布包不一定具备这些能力。SDK 尚未发布到 npm，使用导出的 `.tgz` 安装。开发需要 Node.js 22+ 和 Python 3.10+；插件运行时不需要 Node、Python 或 Rust。
 
 ## 1. 从模板开始
 
@@ -62,7 +62,7 @@ my-tool/
 
 同一个插件在匹配和使用记录分数相同时，按 Manifest 的命令顺序排列，建议把默认入口放在第一项。
 
-`schemaVersion: 1`、`apiVersion: "1"`、`platforms: ["macos"]` 按模板保留。完整声明见 [最小模板](../packages/plugin-sdk/templates/minimal/manifest.json)。
+模板声明 `schemaVersion: 1`、`apiVersion: "1"` 和 `platforms: ["macos"]`。面向 Windows 时将 `windows` 加入实际支持的平台列表，并使用 WebView2 复验包。内置 JSON Workspace 声明两个平台，Text Pad 与 JSON Summary 示例保留 macOS 声明。见 [最小模板](../packages/plugin-sdk/templates/minimal/manifest.json)和 [Windows 桌面验收](test-acceptance-windows.md#webview2-与插件)。
 
 ## 4. 接收输入与调用宿主
 

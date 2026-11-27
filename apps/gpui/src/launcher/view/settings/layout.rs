@@ -23,6 +23,33 @@ impl LauncherView {
         )
     }
 
+    pub(super) fn settings_textarea_row(
+        &self,
+        title: impl Into<SharedString>,
+        subtitle: impl Into<SharedString>,
+        input: &Entity<TextareaState>,
+        id: &'static str,
+        placeholder: &'static str,
+    ) -> impl IntoElement {
+        self.settings_field_row(
+            title,
+            subtitle,
+            id,
+            div()
+                .id(id)
+                .w_full()
+                .test_support()
+                .child(
+                    Textarea::new(input)
+                        .appearance(true)
+                        .text_size(px(metrics::BODY_SIZE))
+                        .aria_label(placeholder)
+                        .h(px(72.))
+                        .max_h(px(120.)),
+                ),
+        )
+    }
+
     pub(super) fn settings_field_row(
         &self,
         title: impl Into<SharedString>,

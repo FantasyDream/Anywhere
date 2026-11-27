@@ -81,7 +81,7 @@ git diff --check
 
 Linux CI 编译和测试 `anywhere-core`、`anywhere-platform`、`anywhere-plugin`
 与 `anywhere-protocol`。macOS CI 负责完整工程检查和 macOS 打包。
-Windows CI 检查 GPUI 和平台 crate，并构建 Windows x64 ZIP。
+Windows CI 对 GPUI 和平台 crate 运行严格 Clippy，串行运行 Core、GPUI 和平台库测试及 MVP 集成测试，并构建 Windows x64 ZIP。
 
 ## 生成物
 
@@ -127,7 +127,7 @@ scripts/check-web-examples.sh
   Accessibility 和 VoiceOver。
 
 自动化通过不证明物理桌面行为。物理矩阵与当前状态见
-[完整验收清单](test-acceptance-checklist.md#3-环境执行矩阵)。
+[macOS 桌面验收](test-acceptance-macos.md#3-环境执行矩阵)和 [Windows 桌面验收](test-acceptance-windows.md)。
 
 ## 独立验收数据
 

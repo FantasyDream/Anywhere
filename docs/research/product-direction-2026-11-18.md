@@ -27,7 +27,7 @@
   [项目状态](../../README.md) · [GPUI 交付范围与证据](../mvp-gpui.md)
 - 当前证据包括自动化、开发签名本地包和部分桌面实测。近期窗口过渡与隐藏释放改动的实体键盘、
   减少动态效果和进程 footprint 需要按对应构建测量。V0.14 验收页明确 VoiceOver 不在本轮范围，
-  V1.0 路线图将其保留为发布条件。 [测试矩阵](../test-acceptance-checklist.md) · [性能方法](../performance.md) · [路线图](../roadmap.md)
+  V1.0 路线图将其保留为发布条件。 [测试矩阵](../test-acceptance-macos.md) · [性能方法](../performance.md) · [路线图](../roadmap.md)
 - [`v0.14.0`](https://github.com/FantasyDream/Anywhere/releases/tag/v0.14.0) 已于
   2026-11-18 作为 GPUI pre-release 发布，提供 macOS 15+ arm64 ZIP、校验和与 provenance；
   公开 Releases 的 `latest` 仍是 2026-09-18 的 V0.3 历史预览。正式分发所需的 Developer ID、
@@ -52,7 +52,7 @@
 
 | 优先级 | 交付 | 进入下一阶段的依据 |
 |---|---|---|
-| P0 · 建立可复现的 macOS 体验基线 | 固定一份候选构建，用实际热键和中文 IME 跑通唤醒、首键、Enter、Esc、权限拒绝与切换来源。覆盖空白/有查询两条隐藏路径、减少动态效果、Quick Look、Shelf 与 WebView。为状态栏入口和快捷键冲突提供可理解的恢复。 | 关键路径有对应构建、系统与架构的证据。无可复现的首键丢失、执行错对象、卡焦点或主流程崩溃。 [桌验清单](../test-acceptance-checklist.md) |
+| P0 · 建立可复现的 macOS 体验基线 | 固定一份候选构建，用实际热键和中文 IME 跑通唤醒、首键、Enter、Esc、权限拒绝与切换来源。覆盖空白/有查询两条隐藏路径、减少动态效果、Quick Look、Shelf 与 WebView。为状态栏入口和快捷键冲突提供可理解的恢复。 | 关键路径有对应构建、系统与架构的证据。无可复现的首键丢失、执行错对象、卡焦点或主流程崩溃。 [桌验清单](../test-acceptance-macos.md) |
 | P1 · 打通首次使用与试用安装 | 支持用户在授予可选权限前完成普通搜索。只在用户触发对应能力时说明权限及返回路径。沿现有发布流程生成带版本、校验值和已知限制的试用包，记录隔离数据与已有数据的安装、升级和回退。 | 正式对外分发使用 Developer ID、公证和经复验的包身份。对邀请试用用户按分发方式提供明确限制。三条任务的反馈可复现，重复使用信号达到首轮约定。 [发布检查](../releasing.md) |
 | P2 · 收窄 V0.15 插件开发体验 | 让外部作者从现有示例独立建包、导入、调试权限错误并升级。以 JSON Workspace、Text Pad、JSON Summary 覆盖混合、UI、后台路径，围绕实际阻塞完善 Host Mock、包校验和兼容矩阵。 | 至少一个外部作者能按文档完成完整链路。证明撤销、替换和失败升级时旧调用失效，明确快捷键、Usage 和 KV 的处置。 [插件开发](../plugin-development.md) · [插件设计](../web-plugin-design.md) |
 

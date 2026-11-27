@@ -236,7 +236,12 @@ async fn current_app_scope_searches_and_executes_domain_actions_without_menus() 
     assert_eq!(
         platform.calls.lock().unwrap().as_slice(),
         &[
-            ("copy".into(), root.to_string_lossy().into_owned()),
+            (
+                "copy".into(),
+                anywhere_platform::paths::display_path(&root)
+                    .to_string_lossy()
+                    .into_owned(),
+            ),
             ("git".into(), format!("status:{}", root.display())),
             ("url".into(), "https://example.com/".into()),
         ]

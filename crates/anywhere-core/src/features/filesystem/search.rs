@@ -10,8 +10,9 @@ use crate::core::{
     },
 };
 use anyhow::Result;
-use anywhere_platform::{FileSearchHit, FileSearchHost};
+use anywhere_platform::{paths::display_path, FileSearchHit, FileSearchHost};
 use anywhere_protocol::*;
+use std::path::Path;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
@@ -516,10 +517,13 @@ pub fn result_actions(
                 (&offer.presentation.command_id, context.value.path())
             {
                 let fingerprint = anywhere_platform::search_storage::path_fingerprint(path);
+                let display_path = display_path(Path::new(path)).to_string_lossy().into_owned();
                 offer.presentation.id = format!(
                     "file-action:{command}:{}:{fingerprint:016x}",
                     context.type_id
                 );
+                offer.presentation.subtitle = Some(display_path.clone());
+                offer.presentation.execution_target_label = Some(display_path);
             }
             offer.presentation.kind = CandidateKind::Action;
             offer.presentation.file_kind = file.presentation.file_kind;

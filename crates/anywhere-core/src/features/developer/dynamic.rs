@@ -10,7 +10,7 @@ use crate::core::{
 };
 use anyhow::{bail, Context, Result};
 use anywhere_platform::{
-    process::{find_executable, ProcessRequest},
+    process::{resolve_node_package_manager, ProcessRequest},
     Platform,
 };
 use std::collections::BTreeMap;
@@ -218,13 +218,14 @@ impl ActionHandler for Script {
             bail!("script or package manager changed; reopen the Launcher");
         }
         let manager = self.manager.as_str();
-        let (program, mut arguments) = if let Some(program) = find_executable(manager) {
-            (program, vec![])
-        } else if self.manager != super::node::PackageManager::Npm {
-            (tool("corepack")?, vec![manager.into()])
-        } else {
-            (tool("npm")?, vec![])
-        };
+        let (program, mut arguments) =
+            if let Some((program, arguments)) = resolve_node_package_manager(manager) {
+                (program, arguments)
+            } else if self.manager != super::node::PackageManager::Npm {
+                (tool("corepack")?, vec![manager.into()])
+            } else {
+                (tool("npm")?, vec![])
+            };
         arguments.extend(["run".into(), self.name.clone()]);
         Ok(ExecutionOutput::process(
             crate::features::host_services::for_feature(

@@ -462,19 +462,19 @@ impl LauncherView {
             .unwrap_or_default();
         settings.error = settings_error.clone();
 
-        set_input_value(
+        set_textarea_value(
             &self.settings_editor.excluded_apps_input,
             preferences.excluded_apps.join("\n"),
             window,
             cx,
         );
-        set_input_value(
+        set_textarea_value(
             &self.settings_editor.file_roots_input,
-            preferences.file_search_roots.join("\n"),
+            readable_search_roots(&preferences.file_search_roots).join("\n"),
             window,
             cx,
         );
-        set_input_value(
+        set_textarea_value(
             &self.settings_editor.file_exclusions_input,
             preferences.file_search_excluded_names.join("\n"),
             window,
@@ -2853,6 +2853,17 @@ enum PreviewReservation {
 }
 
 fn preview_error_message(locale: Locale, error: &anyhow::Error) -> String {
+    #[cfg(windows)]
+    if let Some(error) = error.downcast_ref::<crate::platform::WindowsPreviewError>() {
+        return match error {
+            crate::platform::WindowsPreviewError::NotRunning => {
+                l10n::windows_quick_look_unavailable(locale)
+            }
+            crate::platform::WindowsPreviewError::ExistingWindow => {
+                l10n::windows_quick_look_existing_window(locale)
+            }
+        };
+    }
     l10n::preview_unavailable_with(locale, &format!("{error:#}"))
 }
 

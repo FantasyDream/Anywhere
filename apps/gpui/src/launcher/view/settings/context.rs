@@ -2,6 +2,7 @@ use super::*;
 
 impl LauncherView {
     pub(in crate::launcher::view) fn context_settings(&mut self, cx: &mut Context<Self>) -> Div {
+        let file_selection_label = crate::platform::capabilities::file_selection_label(self.locale);
         div()
             .flex()
             .flex_col()
@@ -24,12 +25,12 @@ impl LauncherView {
                     page.child(self.settings_rows_card(vec![
                 self.context_capture_row(
                     ContextSource::FinderSelection,
-                    l10n::finder_selection(self.locale),
+                    file_selection_label.clone(),
                     l10n::selected_files_description(self.locale),
                     self.settings_editor.draft.capture_finder_selection,
                     Switch::new("capture-finder")
                         .checked(self.settings_editor.draft.capture_finder_selection)
-                        .accessibility_label(l10n::finder_selection(self.locale))
+                        .accessibility_label(file_selection_label)
                         .on_change(cx.listener(|this, checked, _, cx| {
                             this.settings_editor.draft.capture_finder_selection = *checked;
                             cx.notify();

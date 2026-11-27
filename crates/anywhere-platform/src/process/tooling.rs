@@ -9,6 +9,58 @@ pub fn find_executable(name: &str) -> Option<PathBuf> {
     find_executable_in(name, tool_directories())
 }
 
+/// Resolve a Node package-manager command without executing its Windows batch shim.
+///
+/// Standard Windows Node installs commonly expose only `npm.cmd`, `pnpm.cmd`, or
+/// `yarn.cmd`. The ProcessRequest contract cannot safely treat a batch file as an
+/// executable, so prefer the JavaScript entry point launched by the adjacent
+/// `node.exe`.
+pub fn resolve_node_package_manager(name: &str) -> Option<(PathBuf, Vec<String>)> {
+    resolve_node_package_manager_in(name, tool_directories())
+}
+
+fn resolve_node_package_manager_in(
+    name: &str,
+    directories: Vec<PathBuf>,
+) -> Option<(PathBuf, Vec<String>)> {
+    if let Some(program) = find_executable_in(name, directories.clone()) {
+        return Some((program, Vec::new()));
+    }
+
+    #[cfg(windows)]
+    {
+        let shim = find_command_script_in(name, directories)?;
+        let root = shim.parent()?;
+        let node = root.join("node.exe");
+        if !node.is_file() {
+            return None;
+        }
+        let candidates = match name {
+            "npm" => &[
+                "node_modules/npm/bin/npm-cli.js",
+                "node_modules/npm/bin/npm-cli.cjs",
+            ][..],
+            "pnpm" => &[
+                "node_modules/corepack/dist/pnpm.js",
+                "node_modules/pnpm/bin/pnpm.cjs",
+            ][..],
+            "yarn" => &[
+                "node_modules/corepack/dist/yarn.js",
+                "node_modules/yarn/bin/yarn.js",
+            ][..],
+            _ => return None,
+        };
+        let cli = candidates
+            .iter()
+            .map(|candidate| root.join(candidate))
+            .find(|candidate| candidate.is_file())?;
+        Some((node, vec![cli.to_string_lossy().into_owned()]))
+    }
+
+    #[cfg(not(windows))]
+    None
+}
+
 fn find_executable_in(name: &str, directories: Vec<PathBuf>) -> Option<PathBuf> {
     if name.is_empty()
         || name.contains(['/', '\\'])
@@ -31,6 +83,20 @@ fn find_executable_in(name: &str, directories: Vec<PathBuf>) -> Option<PathBuf> 
         // SDK directories containing PATH separators remain valid. Never let
         // PATHEXT add a batch script or a working-directory fallback.
         .find(|path| which::which_global(path).is_ok_and(|found| found == *path) && path.is_file())
+}
+
+#[cfg(windows)]
+fn find_command_script_in(name: &str, directories: Vec<PathBuf>) -> Option<PathBuf> {
+    if name.is_empty() || name.contains(['/', '\\']) {
+        return None;
+    }
+    directories
+        .into_iter()
+        .filter(|path| path.is_absolute())
+        .flat_map(|path| {
+            ["cmd", "bat"].map(move |extension| path.join(format!("{name}.{extension}")))
+        })
+        .find(|path| path.is_file())
 }
 
 fn executable_names(name: &str) -> Vec<String> {
@@ -319,5 +385,26 @@ mod windows_tests {
             assert!(find_executable_in(name, vec![root.path().into()]).is_none());
         }
         assert!(find_executable_in("tool", vec![root.path().into()]).is_none());
+    }
+
+    #[test]
+    fn node_package_manager_uses_adjacent_node_cli() {
+        let root = tempfile::tempdir().unwrap();
+        let node = root.path().join("node.exe");
+        let npm_shim = root.path().join("npm.cmd");
+        let npm_cli = root.path().join("node_modules/npm/bin/npm-cli.js");
+        std::fs::create_dir_all(npm_cli.parent().unwrap()).unwrap();
+        std::fs::write(&node, "").unwrap();
+        std::fs::write(&npm_shim, "@echo off\n").unwrap();
+        std::fs::write(&npm_cli, "").unwrap();
+
+        assert_eq!(
+            find_command_script_in("npm", vec![root.path().into()]),
+            Some(npm_shim)
+        );
+        assert_eq!(
+            resolve_node_package_manager_in("npm", vec![root.path().into()]),
+            Some((node, vec![npm_cli.to_string_lossy().into_owned()]))
+        );
     }
 }

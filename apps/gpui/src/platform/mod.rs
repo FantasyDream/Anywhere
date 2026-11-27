@@ -102,6 +102,8 @@ pub use material::{
     current_appearance as current_window_appearance, current_mode as current_window_material,
     uses_increase_contrast, uses_opaque_fallback, uses_reduce_motion, WindowAppearance,
 };
+#[cfg(windows)]
+pub(crate) use preview::WindowsPreviewError;
 pub use preview::{PreviewHost, PreviewPoll};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -251,9 +253,7 @@ pub fn require_supported_host() {
     }
 }
 
-pub(crate) fn apply_login_item(
-    desired: bool,
-) -> anyhow::Result<crate::host::LoginItemState> {
+pub(crate) fn apply_login_item(desired: bool) -> anyhow::Result<crate::host::LoginItemState> {
     #[cfg(target_os = "macos")]
     {
         macos::login_item::apply(desired)

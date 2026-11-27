@@ -625,6 +625,9 @@ impl LauncherView {
         match input.key {
             "down" => self.select_clipboard(1, cx),
             "up" => self.select_clipboard(-1, cx),
+            "enter" | "return" if self.screen == Screen::ClipboardShelf => {
+                self.copy_selected_clipboard_and_return(cx);
+            }
             "enter" | "return" => self.copy_selected_clipboard(cx),
             "space" if self.active_editor_focused(window, cx) => {
                 self.preview_selected_clipboard(cx);

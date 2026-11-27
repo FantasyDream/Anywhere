@@ -20,11 +20,24 @@ impl LauncherView {
         let row_subtitle = row.subtitle.clone().filter(|subtitle| {
             !subtitle.trim().is_empty() && subtitle.as_ref() != row.title.as_ref()
         });
-        let raw_subtitle_tooltip = row_subtitle.clone();
+        let readable_extended_subtitle = row_subtitle
+            .as_deref()
+            .and_then(crate::launcher::presentation::readable_extended_path);
+        let raw_subtitle_tooltip = if is_file {
+            row_subtitle.as_deref().map(|path| {
+                SharedString::from(crate::launcher::presentation::readable_file_path(path))
+            })
+        } else if let Some(path) = readable_extended_subtitle.as_deref() {
+            Some(SharedString::from(path))
+        } else {
+            row_subtitle.clone()
+        };
         let display_subtitle = if is_file {
             row_subtitle
                 .as_deref()
                 .map(|path| SharedString::from(format_path_middle_truncated(path)))
+        } else if let Some(path) = readable_extended_subtitle.as_deref() {
+            Some(SharedString::from(format_path_middle_truncated(path)))
         } else {
             row_subtitle
         };

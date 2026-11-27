@@ -589,6 +589,13 @@ pub fn finder_selection(locale: Locale) -> String {
     }
 }
 
+pub fn explorer_selection(locale: Locale) -> String {
+    match locale {
+        Locale::En => "File Explorer selection".to_string(),
+        Locale::Zh => "文件资源管理器选中项".to_string(),
+    }
+}
+
 pub fn selected_files_description(locale: Locale) -> String {
     match locale {
         Locale::En => "Selected files and folders".to_string(),
@@ -1790,6 +1797,15 @@ pub fn too_many_items_help(locale: Locale) -> String {
     match locale {
         Locale::En => "Select up to 32 items in Finder, then reopen Anywhere.".to_string(),
         Locale::Zh => "请在访达中选择不超过 32 个项目，然后重新唤醒 Anywhere。".to_string(),
+    }
+}
+
+pub fn windows_too_many_items_help(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Select up to 64 items in File Explorer, then reopen Anywhere.".to_string(),
+        Locale::Zh => {
+            "请在文件资源管理器中选择不超过 64 个项目，然后重新唤醒 Anywhere。".to_string()
+        }
     }
 }
 
@@ -3070,6 +3086,23 @@ pub fn preview_unavailable_with(locale: Locale, error: &str) -> String {
     }
 }
 
+pub fn windows_quick_look_unavailable(locale: Locale) -> String {
+    match locale {
+        Locale::En => {
+            "QuickLook for Windows is unavailable. Make sure it is running and try again."
+                .to_string()
+        }
+        Locale::Zh => "Windows 版 QuickLook 当前不可用。请确认它已运行，然后重试。".to_string(),
+    }
+}
+
+pub fn windows_quick_look_existing_window(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Close the other QuickLook window and try the preview again.".to_string(),
+        Locale::Zh => "请关闭另一个 QuickLook 窗口，然后重试预览。".to_string(),
+    }
+}
+
 pub fn could_not_activate_anywhere(locale: Locale, error: &str) -> String {
     let values = &[("error", error.to_string())];
     match locale {
@@ -3250,4 +3283,4 @@ pub fn search_directory_unavailable(locale: Locale) -> String {
 }
 
 /// Stable message count for generated-resource verification.
-pub const MESSAGE_COUNT: usize = 442;
+pub const MESSAGE_COUNT: usize = 446;

@@ -1,10 +1,10 @@
 # Git 与开发项目动作
 
-现行专题说明；文档整理：2026-10-23。目录、仓库、项目 Context 复用现有 Current App / 领域 Scope、Ranking、快捷键与执行，不创建 IDE 专用 Launcher。
+适用于 macOS 与 Windows 开发预览。目录、仓库、项目 Context 复用现有 Current App / 领域 Scope、Ranking、快捷键与执行，不创建 IDE 专用 Launcher。
 
 ## 目录来源
 
-Finder 当前目录与选中项、已存在的输入路径以及支持的 IDEA 项目窗口都可以产生 Directory。IDEA 仅在窗口标题明确包含真实目录且存在 `.idea` 时接受；绑定冻结的应用实例和聚焦窗口，前后检查，读取超时 / 标题长度有界。
+Finder / Explorer 当前目录与选中项、已存在的输入路径、macOS 上支持的 IDEA 项目窗口都可以产生 Directory。IDEA 仅在窗口标题明确包含真实目录且存在 `.idea` 时接受；绑定冻结的应用实例和聚焦窗口，前后检查，读取超时 / 标题长度有界。
 
 缺少路径、虚拟位置、不可读目录、窗口变化或旧 `.ipr` 形式不猜测项目根目录。IDEA / Community / EAP 在明确白名单内；VS Code、Cursor Agent 与 ChatGPT / Codex 当前聊天目录尚未实现可靠采集。
 
@@ -40,6 +40,15 @@ macOS 的 Git 动作在受限进程中运行固定 argv。系统限制阻止子�
 
 没有切分支、提交、拉取、推送等写入动作。成功记业务 Usage，失败不记；分支 / 哈希不持久保存。
 
+Windows 使用本机 Git 可执行文件与 Job Object 的活动进程限制执行固定的只读
+命令。macOS 的系统网络沙箱属于 macOS 适配。Windows 的实机 Git 和任务
+复验见 [Windows 桌面验收](test-acceptance-windows.md#应用历史git-与任务)。
+
+Windows 的 Node 包管理器解析先接受真实 `.exe` / `.com`，再检查相邻的
+`npm.cmd`、`pnpm.cmd` 或 `yarn.cmd`。确认同目录存在 `node.exe` 后，产品直接
+运行 npm CLI 或 Corepack 的 JavaScript 入口，不把脚本参数拼进 `cmd.exe`。
+这条路径保留批处理包装器的项目兼容性，同时避免额外的命令行参数插值。
+
 ## 项目动作
 
 | 类型 | 识别与动作 |
@@ -57,9 +66,9 @@ Provider 只做标记与有界元数据读取，动态 Action 工厂基于已识
 Cargo Run 在执行时重新读取目标清单，将 `required-features` 解析为字符串列表，再以 `--features` 启用这些 feature，保留 Cargo 默认 feature 行为；未声明时使用原有运行参数。
 
 开发任务进入 ExecutionSessionManager。启动成功后新建或复用 Running Tasks，
-并选中本次 `execution_session_id`；菜单栏入口查看状态、stdout / stderr、
+并选中本次 `execution_session_id`；菜单栏或 Windows 托盘的任务入口查看状态、stdout / stderr、
 退出码、停止和输出复制。关闭窗口或 Launcher 不停止已启动任务，退出应用会
-停止任务。当前只有进程会话，没有 PTY、交互式终端或应用重启后任务恢复。
+停止任务。Windows 可解析项目的 `.cmd` / `.bat` 包装器，并通过 Job Object 管理进程树。当前提供后台进程会话，PTY、交互式终端和应用重启后任务恢复尚未接入。
 
 ## 模块与验证
 

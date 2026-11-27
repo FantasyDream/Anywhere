@@ -164,12 +164,14 @@ Reduce Transparency、Increase Contrast 与 18 px 圆角；下层 AppKit adapter
 统一使用 `WindowGlassStyle::Regular`，映射为未着色的
 `NSGlassEffectViewStyle::Regular`。以 macOS 系统通知为视觉对照，玻璃浓度、
 折射、高光和轮廓由 AppKit 合成。
-Windows 在产品窗口中请求 DWM Desktop Acrylic。macOS 和 Windows 共用 GPUI 内容布局、
+Windows 在透明效果可用时使用 DWM 与 Windows Composition，按窗口类型设置
+原生背景。macOS 和 Windows 共用 GPUI 内容布局、
 控件配色和字体。两端在绘制前注册随应用分发的 Noto Sans SC 与 Fira Mono；字体覆盖范围
 以外的字符由系统补齐。Noto Sans SC 使用从 2.004 的可变 TTF 固定得到的四个字重（400、
 500、600、700），供 Core Text 和 DirectWrite 选择相同的字形。字体按 SIL OFL 随包发布。
-Windows 的 GPUI 内容铺满窗口，DWM 对内容和 Acrylic 一起裁切并绘制阴影。Acrylic
-启用后关闭 DWM 描边，外圆角沿用系统尺寸。
+Launcher 默认是无任务栏图标的工具浮窗。打开设置时使用可出现在任务栏的窗口。
+Launcher 的背景通过 `HostBackdropBrush` 和圆角几何裁切，关闭系统透明效果或无法
+创建背景时使用不透明主题色。高对比度和动画状态由 Windows 适配层读取。
 [Noto Sans SC 2.004](https://github.com/notofonts/noto-cjk/releases/tag/Sans2.004) · [Fira Mono](https://github.com/google/fonts/tree/4c89430f86c811a3522161890da7b63894e1117c/ofl/firamono)
 [Windows 指南](windows.md) · [Microsoft DWM 圆角说明](https://learn.microsoft.com/en-us/windows/apps/desktop/modernize/ui/apply-rounded-corners)
 
