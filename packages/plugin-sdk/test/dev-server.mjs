@@ -1,17 +1,26 @@
 import assert from 'node:assert/strict';
-import {spawn} from 'node:child_process';
+import {spawn, spawnSync} from 'node:child_process';
 import {once} from 'node:events';
 
-const child = spawn('npm', ['run', 'dev'], {
+const isWindows = process.platform === 'win32';
+const child = spawn(isWindows ? 'npm.cmd' : 'npm', ['run', 'dev'], {
   cwd: process.argv[2],
-  detached: true,
+  detached: !isWindows,
+  shell: isWindows,
   stdio: ['ignore', 'pipe', 'inherit'],
 });
 const done = once(child, 'exit');
 const controller = new AbortController();
 function stop() {
+  if (!child.pid) return;
   try {
-    process.kill(-child.pid, 'SIGTERM');
+    if (isWindows) {
+      spawnSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], {
+        stdio: 'ignore',
+      });
+    } else {
+      process.kill(-child.pid, 'SIGTERM');
+    }
   } catch (error) {
     if (error.code !== 'ESRCH') throw error;
   }

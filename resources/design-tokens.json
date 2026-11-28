@@ -148,6 +148,46 @@
   "onDarkDivider": "#1fffffff"
  },
  "metrics": {
+  "settingsSidebarWidth": {
+   "value": 172,
+   "unit": "px"
+  },
+  "tasksSidebarWidth": {
+   "value": 256,
+   "unit": "px"
+  },
+  "settingsRowMinHeight": {
+   "value": 58,
+   "unit": "px"
+  },
+  "searchFieldHeight": {
+   "value": 34,
+   "unit": "px"
+  },
+  "modalWidthCompact": {
+   "value": 360,
+   "unit": "px"
+  },
+  "modalWidthPicker": {
+   "value": 440,
+   "unit": "px"
+  },
+  "listPaddingX": {
+   "value": 10,
+   "unit": "px"
+  },
+  "taskCardHeight": {
+   "value": 76,
+   "unit": "px"
+  },
+  "selectionIndicatorWidth": {
+   "value": 3,
+   "unit": "px"
+  },
+  "draftIndicatorSize": {
+   "value": 6,
+   "unit": "px"
+  },
   "radius": {
    "value": 18,
    "unit": "px"

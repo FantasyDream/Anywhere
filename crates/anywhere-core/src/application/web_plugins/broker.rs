@@ -326,7 +326,33 @@ impl WebPluginService {
         request: &RequestTicket,
         value: WebResult<Value>,
     ) -> (String, bool) {
-        let result = request.control.check().and_then(|_| {
+        self.finish_call_inner(binding, source, request, value, false)
+    }
+
+    pub(super) fn finish_call_after_commit(
+        &mut self,
+        binding: &WebDocumentBinding,
+        source: &Source,
+        request: &RequestTicket,
+        value: WebResult<Value>,
+    ) -> (String, bool) {
+        self.finish_call_inner(binding, source, request, value, true)
+    }
+
+    fn finish_call_inner(
+        &mut self,
+        binding: &WebDocumentBinding,
+        source: &Source,
+        request: &RequestTicket,
+        value: WebResult<Value>,
+        allow_past_deadline: bool,
+    ) -> (String, bool) {
+        let gate = if allow_past_deadline {
+            Ok(())
+        } else {
+            request.control.check()
+        };
+        let result = gate.and_then(|_| {
             let rpc = self.rpc(binding, source.get())?;
             value.and_then(|value| rpc.pack(&request.id, &value))
         });

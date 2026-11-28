@@ -174,11 +174,7 @@ impl LauncherView {
         let owner_title = if self.screen == Screen::ClipboardShelf {
             crate::CLIPBOARD_SHELF_TITLE.into()
         } else if self.standalone_tool {
-            self.web_surface
-                .document
-                .as_ref()
-                .map(|document| document.title.clone())
-                .unwrap_or_else(|| crate::PRODUCT_NAME.into())
+            crate::platform::tool_window_owner_key(self.window_handle)
         } else {
             crate::PRODUCT_NAME.into()
         };
@@ -191,34 +187,35 @@ impl LauncherView {
                 .timer(std::time::Duration::from_millis(0))
                 .await;
             let (mut host, generation) = loop {
-                let reservation = this
-                    .update(cx, |this, cx| {
-                        if !this.preview_request_is_current(&request)
-                            || interaction
-                                .as_ref()
-                                .is_some_and(|interaction| !interaction.is_current())
-                        {
-                            return Ok(PreviewReservation::Stale);
-                        }
-                        if this.preview.busy {
-                            return Ok(PreviewReservation::Busy);
-                        }
-                        this.preview.busy = true;
-                        if this.preview.host.is_none() {
-                            this.preview.host = Some(PreviewHost::new()?);
-                        }
-                        let host = this.preview.host.take().ok_or_else(|| {
+                let reservation = this.update(cx, |this, cx| {
+                    if !this.preview_request_is_current(&request)
+                        || interaction
+                            .as_ref()
+                            .is_some_and(|interaction| !interaction.is_current())
+                    {
+                        return Ok(PreviewReservation::Stale);
+                    }
+                    if this.preview.busy {
+                        return Ok(PreviewReservation::Busy);
+                    }
+                    this.preview.busy = true;
+                    if this.preview.host.is_none() {
+                        this.preview.host = Some(PreviewHost::new()?);
+                    }
+                    let host =
+                        this.preview.host.take().ok_or_else(|| {
                             anyhow::anyhow!("Quick Look host was not initialized")
                         })?;
-                        this.preview.generation = this.preview.generation.wrapping_add(1);
-                        this.preview.open = false;
-                        cx.notify();
-                        Ok(PreviewReservation::Ready(host, this.preview.generation))
-                    })
-                    .and_then(|reservation| reservation);
+                    this.preview.generation = this.preview.generation.wrapping_add(1);
+                    this.preview.open = false;
+                    cx.notify();
+                    Ok(PreviewReservation::Ready(host, this.preview.generation))
+                });
                 match reservation {
-                    Ok(PreviewReservation::Ready(host, generation)) => break (host, generation),
-                    Ok(PreviewReservation::Stale) => {
+                    Ok(Ok(PreviewReservation::Ready(host, generation))) => {
+                        break (host, generation)
+                    }
+                    Ok(Ok(PreviewReservation::Stale)) => {
                         if let Some(interaction) = interaction {
                             interaction.respond(Err(WebErrorCode::Expired));
                         }
@@ -227,14 +224,23 @@ impl LauncherView {
                         }
                         return;
                     }
-                    Ok(PreviewReservation::Busy) => {
+                    Ok(Ok(PreviewReservation::Busy)) => {
                         cx.background_executor()
                             .timer(std::time::Duration::from_millis(1))
                             .await;
                     }
-                    Err(error) => {
+                    Err(_) => {
                         if let Some(interaction) = interaction {
-                            interaction.respond(Err(WebErrorCode::UnsupportedMethod));
+                            interaction.respond(Err(WebErrorCode::Inactive));
+                        }
+                        if let Some(live) = &live {
+                            let _ = live.release_preview(preview.id);
+                        }
+                        return;
+                    }
+                    Ok(Err(error)) => {
+                        if let Some(interaction) = interaction {
+                            interaction.respond(Err(web_preview_error(&error)));
                         }
                         if let Some(live) = &live {
                             let _ = live.release_preview(preview.id);
@@ -298,6 +304,8 @@ impl LauncherView {
                             this.preview.open = owns_panel;
                             if owns_panel {
                                 this.start_preview_monitor(generation, cx);
+                            } else {
+                                this.preview.web_owner = None;
                             }
                             this.set_notice(
                                 preview_error_message(this.locale, error),
@@ -315,13 +323,23 @@ impl LauncherView {
                     true
                 })
                 .unwrap_or(false);
+            let mut claim_failed = false;
             if let Some(interaction) = interaction {
                 let response = match (&result, applied) {
                     (Ok(_), true) => Ok(()),
                     (_, false) => Err(WebErrorCode::Expired),
                     (Err(error), true) => Err(web_preview_error(error)),
                 };
-                interaction.respond(response);
+                let ok_intended = response.is_ok();
+                let delivered = interaction.respond(response);
+                if ok_intended && !delivered {
+                    claim_failed = true;
+                }
+            }
+            if claim_failed {
+                let _ = this.update(cx, |this, cx| {
+                    this.close_preview(cx);
+                });
             }
             if result.is_err() {
                 if let Some(live) = &live {
@@ -502,6 +520,8 @@ impl LauncherView {
     fn restore_web_preview_focus(&self, handle: &str, cx: &Context<Self>) {
         if self.presence.presented
             && self.screen == Screen::WebTool
+            && !self.web_surface.actions_open
+            && self.web_surface.interaction.is_none()
             && event_handle_matches(self, handle)
         {
             if let Some(web_view) = &self.web_surface.view {

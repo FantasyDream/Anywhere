@@ -89,7 +89,25 @@ fn main() -> Result<(), Box<dyn Error>> {
         [arg] if arg == "--check" => true,
         _ => return Err("expected --check or no arguments".into()),
     };
-    let calls = serde_json::to_value(schemars::schema_for!(WebCall))?;
+    let mut calls = serde_json::to_value(schemars::schema_for!(WebCall))?;
+    if let Some(variants) = calls["oneOf"].as_array_mut() {
+        for variant in variants {
+            if let Some(props) = variant["properties"]["params"]["properties"].as_object_mut() {
+                for prop in props.values_mut() {
+                    let is_nullable = match prop.get("type") {
+                        Some(Value::String(kind)) => kind == "null",
+                        Some(Value::Array(kinds)) => kinds.iter().any(|k| k == "null"),
+                        _ => false,
+                    };
+                    if !is_nullable && prop.get("default") == Some(&Value::Null) {
+                        if let Some(map) = prop.as_object_mut() {
+                            map.remove("default");
+                        }
+                    }
+                }
+            }
+        }
+    }
     let codes = serde_json::to_value(schemars::schema_for!(WebErrorCode))?;
     let invocation = output_schema::<WebInvocation>()?;
     let app = output_schema::<WebCurrentApp>()?;
@@ -165,7 +183,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     ] {
         let path = root.join(path);
         if check {
-            if std::fs::read_to_string(&path)? != expected {
+            if std::fs::read_to_string(&path)?.replace("\r\n", "\n") != expected {
                 return Err("Web SDK contract drift; regenerate generate_web_sdk_contract".into());
             }
         } else {

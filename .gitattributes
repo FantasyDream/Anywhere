@@ -11,6 +11,9 @@
 *.woff2 binary
 plugins/examples/** text=auto eol=lf
 packages/plugin-sdk/templates/** text=auto eol=lf
+packages/plugin-sdk/src/contract.ts text eol=lf
+packages/plugin-sdk/tools/unicode-case-fold.json text eol=lf
+resources/web-plugin-*.schema.json text eol=lf
 *.awplugin binary
 
 **/*.g.swift linguist-generated=true

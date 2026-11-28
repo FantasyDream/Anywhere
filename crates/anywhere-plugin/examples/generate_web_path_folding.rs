@@ -19,7 +19,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let file = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../packages/plugin-sdk/tools/unicode-case-fold.json");
     if check {
-        if std::fs::read_to_string(&file)? != expected {
+        if std::fs::read_to_string(&file)?.replace("\r\n", "\n") != expected {
             return Err("Web CLI case folding table has drifted".into());
         }
     } else {

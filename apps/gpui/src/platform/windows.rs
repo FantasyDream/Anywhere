@@ -260,6 +260,17 @@ pub(super) fn refresh_window_appearance(title: &str) -> bool {
 
 pub(super) fn configure_tool_window(window: &Window) {
     if let Some(hwnd) = window_hwnd(window) {
+        let native = NativeWindow {
+            hwnd,
+            handle: window.window_handle(),
+            initial_placement_pending: false,
+        };
+        unsafe { SetPropW(hwnd, WINDOW_PROPERTY, native.identity()) };
+        let key = super::tool_window_owner_key(window.window_handle());
+        UI.with_borrow_mut(|ui| {
+            ui.windows.retain(|_, existing| existing.is_live());
+            ui.windows.insert(key, native);
+        });
         icon::apply_window_icons(hwnd);
         install_key_repeat_tracking(hwnd);
         let installed = install_backdrop(hwnd, window);

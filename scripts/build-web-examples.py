@@ -14,11 +14,16 @@ BUILTIN_WEB_PLUGINS = (ROOT /
 BUILTIN_IDS = {'dev.anywhere.json-workspace'}
 
 
+NPM = shutil.which('npm') or 'npm'
+
+
 def run(args, path):
+    if args and args[0] == 'npm':
+        args = [NPM, *args[1:]]
     subprocess.run(args, cwd=path, check=True)
 
 
-run(['python3', 'scripts/generate-design-tokens.py', '--check'], ROOT)
+run([sys.executable, 'scripts/generate-design-tokens.py', '--check'], ROOT)
 sdk = ROOT / 'packages/plugin-sdk'
 if '--sdk-ready' not in sys.argv:
     run([
@@ -54,7 +59,8 @@ run([
 run(['npm', 'run', 'check'], background_tool)
 run(['npm', 'run', 'build'], background_tool)
 for directory in [json_tool, text_tool, background_tool, issue_tool, csv_tool]:
-    manifest = json.loads((directory / 'manifest.json').read_text())
+    manifest = json.loads(
+        (directory / 'manifest.json').read_text(encoding='utf-8'))
     destination = OUT / (manifest['id'] + '.awplugin')
     run([
         'node', sdk / 'tools/anywhere-plugin.mjs', 'pack', directory,

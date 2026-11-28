@@ -13,11 +13,25 @@ const sdk = await realpath(
 const styles = await realpath(join(sdk, '../styles'));
 const palettes = new URL('mock-palettes.css', import.meta.url);
 const types = {
-  '.html': 'text/html',
-  '.js': 'text/javascript',
-  '.mjs': 'text/javascript',
-  '.css': 'text/css',
-  '.json': 'application/json',
+  '.html': 'text/html; charset=utf-8',
+  '.htm': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.txt': 'text/plain; charset=utf-8',
+  '.md': 'text/markdown; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.ico': 'image/x-icon',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.ttf': 'font/ttf',
+  '.otf': 'font/otf',
 };
 const mock = `
 import {createMock, mountMockPanel} from '/__sdk/mock.js';
@@ -52,7 +66,13 @@ const server = createServer(async (request, response) => {
         .end(mock);
       return;
     }
-    if (path === '/') path = '/' + manifest.entry.slice('dist/'.length);
+    if (path === '/') {
+      if (!manifest.entry?.startsWith('dist/')) {
+        response.writeHead(404).end('Missing dist/ Web entry');
+        return;
+      }
+      path = '/' + manifest.entry.slice('dist/'.length);
+    }
     const [root, prefix] = path.startsWith('/__sdk/')
       ? [sdk, '/__sdk/']
       : path.startsWith('/__styles/')
@@ -61,19 +81,15 @@ const server = createServer(async (request, response) => {
     const file = await realpath(join(root, path.slice(prefix.length)));
     if (!file.startsWith(root + sep))
       throw new Error('Path outside dev assets');
-    const extension = extname(file);
+    const extension = extname(file).toLowerCase();
     let body = await readFile(file);
-    if (extension === '.html') {
-      body = body
-        .toString('utf8')
-        .replace(
-          /<\/head>/i,
-          '<link rel="stylesheet" href="/__styles/tokens.css"><link rel="stylesheet" href="/__styles/controls.css"><link rel="stylesheet" href="/__mock-palettes.css">$&',
-        )
-        .replace(
-          /<body[^>]*>/i,
-          '$&<script type="module" src="/__mock.js"></script>',
-        );
+    if (extension === '.html' || extension === '.htm') {
+      const injectedHead =
+        '<script type="module" src="/__mock.js"></script><link rel="stylesheet" href="/__styles/tokens.css"><link rel="stylesheet" href="/__styles/controls.css"><link rel="stylesheet" href="/__mock-palettes.css">';
+      const html = body.toString('utf8');
+      body = /<head[^>]*>/i.test(html)
+        ? html.replace(/<head[^>]*>/i, `$&${injectedHead}`)
+        : injectedHead + html;
     }
     response
       .writeHead(200, {

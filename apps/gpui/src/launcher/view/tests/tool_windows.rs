@@ -329,7 +329,10 @@ fn tool_window_and_reopened_launcher_keep_independent_query_and_lifetime(cx: &mu
         .unwrap(),
     );
     let LiveEvent::WebReview(review) = live
-        .inspect_web_package(package_path.clone())
+        .inspect_web_package(
+            package_path.clone(),
+            Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        )
         .blocking_recv()
         .unwrap()
     else {

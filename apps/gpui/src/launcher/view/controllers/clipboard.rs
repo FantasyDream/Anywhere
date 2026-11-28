@@ -56,6 +56,65 @@ impl LauncherView {
         }));
     }
 
+    pub(super) fn sync_clipboard_inspector(&mut self, cx: &mut Context<Self>) {
+        let target = self
+            .clipboard
+            .selected_item()
+            .filter(|item| matches!(item.kind.as_str(), "text" | "rich_text"))
+            .filter(|_| self.presence.presented && !self.clipboard.loading)
+            .map(|item| item.id);
+        let (Some(item_id), Some(live)) = (target, self.live.as_ref()) else {
+            if !self.clipboard.loading || !self.presence.presented {
+                self.clipboard_inspector = None;
+            }
+            return;
+        };
+        let revision = self.clipboard_inspector_revision();
+        if self
+            .clipboard_inspector
+            .as_ref()
+            .is_some_and(|state| state.item_id == item_id && state.revision == revision)
+        {
+            return;
+        }
+        let mut receiver = live.clipboard_inspector(item_id);
+        self.scrolls
+            .clipboard_inspector
+            .set_offset(gpui_kit::point(px(0.), px(0.)));
+        self.clipboard_inspector = Some(state::ClipboardInspector {
+            item_id,
+            revision,
+            text: None,
+            pages: Vec::new(),
+            selected_page: 0,
+        });
+        cx.spawn(async move |this, cx| {
+            if let Some(LiveEvent::ClipboardInspector(text)) = receiver.recv().await {
+                let _ = this.update(cx, |this, cx| {
+                    if this.screen == Screen::Clipboard
+                        && this.presence.presented
+                        && this.clipboard.selected_id() == Some(item_id)
+                        && this.clipboard_inspector_revision() == revision
+                    {
+                        if let Some(state) = this.clipboard_inspector.as_mut() {
+                            state.set_text(text);
+                            cx.notify();
+                        }
+                    }
+                });
+            }
+        })
+        .detach();
+    }
+
+    fn clipboard_inspector_revision(&self) -> (u64, u64, u64) {
+        (
+            self.live_state.generation,
+            self.clipboard.query_generation,
+            self.clipboard.operation_generation,
+        )
+    }
+
     pub(super) fn request_clipboard_search(&mut self, cx: &mut Context<Self>) {
         if let Some(live) = self.live.as_ref() {
             let receiver = live.clipboard_snapshot(self.clipboard.query.clone());
@@ -161,9 +220,16 @@ impl LauncherView {
                         if copied_item.is_none() || copied_item == this.clipboard.selected_id() {
                             this.clipboard.copied_item = copied_item;
                             this.clear_notice();
-                            if copied_item.is_some() {
+                            let feedback = if copied_item.is_some() {
+                                Some(l10n::copied(this.locale))
+                            } else if matches!(failure, ClipboardOperationFailure::Delete) {
+                                Some(l10n::clipboard_entry_deleted(this.locale))
+                            } else {
+                                None
+                            };
+                            if let Some(feedback) = feedback {
                                 this.show_hud_toast(
-                                    l10n::copied(this.locale),
+                                    feedback,
                                     IconName::Check,
                                     components::NoticeKind::Success,
                                     cx,

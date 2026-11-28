@@ -506,13 +506,14 @@ impl LauncherView {
     }
 
     pub fn prepare_hide(&mut self, cx: &mut Context<Self>) {
-        self.drop_web_host_interaction();
+        self.presence.presented = false;
+        self.drop_web_host_interaction(cx);
         self.retire_package_review();
         self.cancel_activation_prefill();
         if self.standalone_shelf {
             crate::platform::remember_clipboard_shelf_position();
         }
-        self.presence.presented = false;
+        self.clipboard_inspector = None;
         self.pending_shortcut_execution = None;
         self.shortcuts.resolving = None;
         self.cancel_stream();

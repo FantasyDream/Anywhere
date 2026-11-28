@@ -133,10 +133,17 @@ pub fn validate_manifest(manifest: &WebPluginManifest) -> Result<()> {
             "command runtime has no entry resource"
         );
         ensure!(label(&command.title, 200), "invalid Web command title");
+        ensure!(
+            command.localized_titles.len() <= 32,
+            "too many localized Web titles"
+        );
+        let mut languages = BTreeSet::new();
         for (language, title) in &command.localized_titles {
             ensure!(
-                language_tag(language) && label(title, 200),
-                "invalid localized Web title"
+                language_tag(language)
+                    && languages.insert(language.to_ascii_lowercase())
+                    && label(title, 200),
+                "invalid or duplicate localized Web title"
             );
         }
         ensure!(

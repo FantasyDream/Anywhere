@@ -47,23 +47,9 @@ impl LauncherView {
             });
         }
         let locale = self.locale;
-        if self.tasks.tool_options_open
-            || (self.tasks.task_actions_open && self.tasks.detail.is_some())
-        {
-            let panel = self.render_tasks_candidates(locale, cx);
-            return self
-                .render_page_shell(
-                    l10n::running_tasks(locale).into(),
-                    SharedString::default(),
-                    None,
-                    panel,
-                    cx,
-                )
-                .id("tasks-surface")
-                .key_context("Tasks")
-                .track_focus(&self.surface_focus_handle)
-                .into_any_element();
-        }
+        let panel = (self.tasks.tool_options_open
+            || (self.tasks.task_actions_open && self.tasks.detail.is_some()))
+        .then(|| self.render_tasks_candidates(locale, cx));
         let indices = self.tasks.visible_indices();
         let visible_count = indices.len();
         let active_count = self
@@ -147,6 +133,7 @@ impl LauncherView {
         let toolbar = self.render_tasks_toolbar(locale, subtitle, cx);
         let find_shortcut = crate::platform::primary_shortcut_label("F");
         let stop_shortcut = crate::platform::primary_shortcut_label(".");
+        let footer = self.render_tasks_footer(locale, find_shortcut, stop_shortcut, cx);
         div()
             .id("tasks-surface")
             .key_context("Tasks")
@@ -178,49 +165,76 @@ impl LauncherView {
             })
             .child(div().h(px(metrics::DIVIDER_WIDTH)).bg(theme::divider()))
             .child(body)
-            .child(div().h(px(metrics::DIVIDER_WIDTH)).bg(theme::divider()))
-            .child(
-                div()
-                    .px(px(metrics::SPACE_XL))
-                    .py(px(metrics::SPACE_SM))
-                    .flex()
-                    .items_center()
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .truncate()
-                            .text_size(px(metrics::CAPTION_SIZE))
-                            .text_color(theme::muted())
-                            .child(l10n::tasks_keep_running_when_hidden(locale)),
-                    )
-                    .child(
-                        div()
-                            .flex_none()
-                            .flex()
-                            .items_center()
-                            .gap(px(metrics::SPACE_SM))
-                            .child(components::keycap(find_shortcut.clone()))
-                            .child(components::keycap(stop_shortcut.clone()))
-                            .child(
-                                Button::new("tasks-keyboard-help-footer")
-                                    .ghost()
-                                    .label(l10n::keyboard_help(locale))
-                                    .on_click(cx.listener(move |this, _, _, cx| {
-                                        this.set_notice(
-                                            l10n::task_keyboard_help(
-                                                this.locale,
-                                                &find_shortcut,
-                                                &stop_shortcut,
-                                            ),
-                                            components::NoticeKind::Info,
-                                        );
-                                        cx.notify();
-                                    })),
-                            ),
-                    ),
-            )
+            .child(footer)
+            .when_some(panel, |page, panel| {
+                page.child(self.render_action_overlay(panel, cx))
+            })
             .into_any_element()
+    }
+
+    fn render_tasks_footer(
+        &self,
+        locale: Locale,
+        find_shortcut: String,
+        stop_shortcut: String,
+        cx: &Context<Self>,
+    ) -> impl IntoElement {
+        let mut actions = Vec::new();
+        if !self.tasks.rows.is_empty() {
+            actions.push(
+                components::footer_action_button(
+                    "tasks-find-footer",
+                    l10n::find_atask(locale),
+                    find_shortcut.clone(),
+                    false,
+                )
+                .on_click(cx.listener(|this, _, window, cx| {
+                    this.tasks_filter_input.update(cx, |input, cx| {
+                        input.focus(window, cx);
+                        input.select_all(window, cx);
+                    });
+                }))
+                .into_any_element(),
+            );
+        }
+        if self
+            .tasks
+            .selected_row()
+            .is_some_and(|row| row.status == anywhere_protocol::ExecutionSessionStatus::Running)
+        {
+            actions.push(
+                components::footer_action_button(
+                    "tasks-stop-footer",
+                    l10n::stop(locale),
+                    stop_shortcut.clone(),
+                    true,
+                )
+                .on_click(cx.listener(|this, _, _, cx| this.stop_selected_execution(cx)))
+                .into_any_element(),
+            );
+        }
+        actions.push(
+            Button::new("tasks-keyboard-help-footer")
+                .ghost()
+                .label(l10n::keyboard_help(locale))
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.set_notice(
+                        l10n::task_keyboard_help(this.locale, &find_shortcut, &stop_shortcut),
+                        components::NoticeKind::Info,
+                    );
+                    cx.notify();
+                }))
+                .into_any_element(),
+        );
+        components::footer_bar(
+            "tasks-footer",
+            div()
+                .truncate()
+                .caption_text()
+                .text_color(theme::muted())
+                .child(l10n::tasks_keep_running_when_hidden(locale)),
+            actions,
+        )
     }
 
     fn render_tasks_sidebar(
@@ -230,7 +244,7 @@ impl LauncherView {
         sidebar_rows: impl IntoElement,
     ) -> Div {
         div()
-            .w(px(252.))
+            .w(px(metrics::TASKS_SIDEBAR_WIDTH))
             .h_full()
             .flex_none()
             .flex()
@@ -241,33 +255,11 @@ impl LauncherView {
                     .mx(px(metrics::CONTROL_PADDING_X))
                     .mt(px(metrics::SPACE_MD))
                     .mb(px(metrics::SPACE_SM))
-                    .h(px(34.))
-                    .px(px(metrics::SPACE_SM))
-                    .flex()
-                    .items_center()
-                    .gap(px(metrics::SPACE_XS))
-                    .rounded(px(metrics::CONTROL_RADIUS))
-                    .bg(theme::field())
-                    .border(px(metrics::FIELD_BORDER_WIDTH))
-                    .border_color(theme::border())
-                    .child(
-                        Icon::new(IconName::Search)
-                            .size(px(metrics::ICON_SIZE))
-                            .text_color(theme::muted()),
-                    )
-                    .child(
-                        div().flex_1().min_w_0().child(
-                            Input::new(&self.tasks_filter_input)
-                                .id("task-search")
-                                .aria_label(l10n::find_atask(locale))
-                                .appearance(false)
-                                .bordered(false)
-                                .focus_bordered(false)
-                                .cleanable(true)
-                                .text_size(px(metrics::BODY_SIZE))
-                                .w_full(),
-                        ),
-                    ),
+                    .child(components::search_field(
+                        "task-search",
+                        &self.tasks_filter_input,
+                        l10n::find_atask(locale),
+                    )),
             )
             .child(
                 div()
@@ -474,14 +466,14 @@ impl LauncherView {
                             metrics::PREVIEW_CODE_SIZE * metrics::PREVIEW_CODE_LINE_HEIGHT
                         ))
                         .text_color(theme::secondary())
-                        .child(row.command.clone())
-                        .child(
-                            div()
-                                .id("task-command-directory")
-                                .aria_label(readable_directory.clone())
-                                .test_support()
-                                .child(readable_directory.clone()),
-                        ),
+                        .child(self.task_detail_copy_row(
+                            "task-command-text", row.command.clone(), l10n::copy_command(locale),
+                            None, cx,
+                        ))
+                        .child(self.task_detail_copy_row(
+                            "task-command-directory", readable_directory.clone(),
+                            l10n::copy_directory(locale), Some(row.id.clone()), cx,
+                        )),
                 )
             })
             .when_some(row.error.clone(), |element, error| {
@@ -492,6 +484,57 @@ impl LauncherView {
                     l10n::showing_the_latest_output128_ki_bper(locale),
                     components::NoticeKind::Info,
                 ))
+            })
+    }
+
+    fn task_detail_copy_row(
+        &self,
+        id: &'static str,
+        value: String,
+        copy: String,
+        directory_task: Option<String>,
+        cx: &Context<Self>,
+    ) -> Div {
+        let copied = value.clone();
+        div()
+            .flex()
+            .items_center()
+            .gap(px(metrics::SPACE_XS))
+            .child(
+                div()
+                    .id(id)
+                    .aria_label(value.clone())
+                    .test_support()
+                    .flex_1()
+                    .min_w_0()
+                    .whitespace_normal()
+                    .child(value),
+            )
+            .child(
+                Button::new(SharedString::from(format!("{id}-copy")))
+                    .ghost()
+                    .icon(IconName::Copy)
+                    .accessibility_label(copy.clone())
+                    .tooltip(copy)
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.copy_text_with_feedback(copied.clone(), cx);
+                    })),
+            )
+            .when_some(directory_task, |row, task_id| {
+                let label = l10n::open_working_directory(self.locale);
+                row.child(
+                    Button::new("task-open-working-directory")
+                        .ghost()
+                        .icon(IconName::FolderOpen)
+                        .accessibility_label(label.clone())
+                        .tooltip(label)
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            if let Some(live) = this.live.as_ref() {
+                                let receiver = live.open_execution_directory(task_id.clone());
+                                this.poll(receiver, this.live_state.generation, cx);
+                            }
+                        })),
+                )
             })
     }
 
@@ -624,7 +667,7 @@ impl LauncherView {
                 ),
             ]
         };
-        components::action_candidates(
+        components::action_popover(
             "task-action-candidates",
             if options {
                 l10n::tool_options(locale)
@@ -653,15 +696,14 @@ impl LauncherView {
                             .is_some_and(|detail| !detail.row.status.is_active())
                 })
                 .map(|(index, (id, icon, label))| {
-                    components::action_candidate(id, label, icon, selected == index, true).on_click(
-                        cx.listener(move |this, _, _, cx| {
+                    components::action_popover_row(id, label, icon, selected == index, true, None)
+                        .on_click(cx.listener(move |this, _, _, cx| {
                             if options {
                                 this.execute_tool_option(index, cx)
                             } else {
                                 this.execute_task_action(index, cx)
                             }
-                        }),
-                    )
+                        }))
                 }),
         )
         .into_any_element()
@@ -709,9 +751,9 @@ impl LauncherView {
             .role(gpui_kit::Role::ListBoxOption)
             .aria_label(row.title.clone())
             .aria_selected(selected)
-            .h(px(86.))
+            .h(px(metrics::TASK_CARD_HEIGHT))
             .flex_shrink_0()
-            .pb(px(4.))
+            .pb(px(metrics::SPACE_XS))
             .cursor_pointer()
             .on_click(
                 cx.listener(move |this, _, window, cx| this.select_task_row(index, window, cx)),
@@ -724,6 +766,18 @@ impl LauncherView {
                     .flex()
                     .items_center()
                     .result_surface(selected)
+                    .relative()
+                    .when(selected, |card| {
+                        card.child(
+                            div()
+                                .absolute()
+                                .left(px(metrics::SPACE_XS))
+                                .w(px(metrics::SELECTION_INDICATOR_WIDTH))
+                                .h(px(metrics::ROW_ACCENT_INDICATOR_HEIGHT))
+                                .rounded(px(metrics::SELECTION_INDICATOR_WIDTH))
+                                .bg(status_color),
+                        )
+                    })
                     .child(
                         div()
                             .flex_1()
@@ -804,6 +858,7 @@ impl LauncherView {
     ) -> Div {
         let tool_options = div()
             .id("tasks-tool-options")
+            .test_support()
             .role(gpui_kit::Role::Button)
             .aria_label(l10n::tool_options(locale))
             .h(px(metrics::ICON_BUTTON_SIZE))
@@ -879,73 +934,36 @@ impl LauncherView {
             .flex()
             .items_center()
             .child(
-                div()
-                    .id("task-output-tab")
-                    .role(gpui_kit::Role::Button)
-                    .aria_selected(!self.tasks.diagnostics)
-                    .h(px(32.))
-                    .px(px(metrics::SPACE_SM))
-                    .flex()
-                    .items_center()
-                    .rounded(px(metrics::TOOLTIP_RADIUS))
-                    .text_size(px(11.5))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(if self.tasks.diagnostics {
-                        theme::muted()
-                    } else {
-                        theme::primary()
-                    })
-                    .when(!self.tasks.diagnostics, |element| {
-                        element.bg(theme::sidebar_selection())
-                    })
-                    .hover(|style| style.bg(theme::hover()))
-                    .active(|style| style.bg(theme::selected()))
-                    .cursor_pointer()
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.tasks.diagnostics = false;
-                        this.tasks.request_follow_output();
-                        cx.notify();
-                    }))
-                    .child(l10n::output(locale)),
+                components::filter_chip(
+                    "task-output-tab",
+                    l10n::output(locale),
+                    !self.tasks.diagnostics,
+                )
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.tasks.diagnostics = false;
+                    this.tasks.request_follow_output();
+                    cx.notify();
+                })),
             )
             .child(
-                div()
-                    .id("task-diagnostics-tab")
-                    .role(gpui_kit::Role::Button)
-                    .aria_selected(self.tasks.diagnostics)
-                    .h(px(32.))
-                    .px(px(metrics::SPACE_SM))
-                    .flex()
-                    .items_center()
-                    .gap(px(metrics::SPACE_XS))
-                    .rounded(px(metrics::TOOLTIP_RADIUS))
-                    .text_size(px(11.5))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(if self.tasks.diagnostics {
-                        theme::primary()
-                    } else {
-                        theme::muted()
-                    })
-                    .when(self.tasks.diagnostics, |element| {
-                        element.bg(theme::sidebar_selection())
-                    })
-                    .hover(|style| style.bg(theme::hover()))
-                    .active(|style| style.bg(theme::selected()))
-                    .cursor_pointer()
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.tasks.diagnostics = true;
-                        this.tasks.request_follow_output();
-                        cx.notify();
-                    }))
-                    .child(l10n::diagnostics(locale))
-                    .when(has_stderr && !self.tasks.diagnostics, |element| {
-                        element.child(
-                            div()
-                                .size(px(metrics::SPACE_XS))
-                                .rounded(px(metrics::SPACE_XS))
-                                .bg(theme::warning()),
-                        )
-                    }),
+                components::filter_chip(
+                    "task-diagnostics-tab",
+                    l10n::diagnostics(locale),
+                    self.tasks.diagnostics,
+                )
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.tasks.diagnostics = true;
+                    this.tasks.request_follow_output();
+                    cx.notify();
+                }))
+                .when(has_stderr && !self.tasks.diagnostics, |element| {
+                    element.child(
+                        div()
+                            .size(px(metrics::SPACE_XS))
+                            .rounded(px(metrics::SPACE_XS))
+                            .bg(theme::warning()),
+                    )
+                }),
             )
             .child(div().flex_1())
             .child(

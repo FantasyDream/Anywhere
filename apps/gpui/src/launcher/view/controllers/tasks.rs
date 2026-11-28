@@ -156,6 +156,9 @@ impl LauncherView {
     }
 
     pub(super) fn open_tool_options(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.page_actions_visible() {
+            self.tasks_actions_return_focus = window.focused(cx);
+        }
         self.tasks.tool_options_open = true;
         self.tasks.tool_option_selected = 0;
         self.tasks.task_actions_open = false;
@@ -198,6 +201,9 @@ impl LauncherView {
                 .tasks
                 .task_action_selected
                 .min(Self::task_action_count(detail.row.status) - 1);
+        }
+        if !self.page_actions_visible() {
+            self.tasks_actions_return_focus = window.focused(cx);
         }
         self.tasks.task_actions_open = true;
         self.tasks.tool_options_open = false;

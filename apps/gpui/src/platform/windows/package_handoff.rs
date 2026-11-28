@@ -53,9 +53,10 @@ pub(super) fn send(path: &Path) -> bool {
     loop {
         match OpenOptions::new().write(true).open(&pipe) {
             Ok(mut file) => {
+                super::tray::allow_existing_foreground();
                 return file
                     .write(&message)
-                    .is_ok_and(|count| count == message.len())
+                    .is_ok_and(|count| count == message.len());
             }
             Err(_) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(25)),
             Err(_) => return false,
@@ -88,7 +89,9 @@ pub(super) fn listen(sender: mpsc::Sender<PathBuf>) {
                 };
                 if connected {
                     if let Some(path) = read_path(&mut pipe) {
-                        let _ = sender.try_send(path);
+                        if sender.try_send(path).is_err() {
+                            tracing::warn!("plugin_handoff_queue_full");
+                        }
                     }
                 }
                 // SAFETY: the listening instance remains owned by this thread throughout.

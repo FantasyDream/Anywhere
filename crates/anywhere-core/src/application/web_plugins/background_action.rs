@@ -233,7 +233,7 @@ impl Application {
             let code = String::from_utf8(file.read()?)?;
             Ok(
                 background_runtime::run(&code, &entrypoint, &input, invoke, current)
-                    .inspect_err(|&error| diagnostics.record(&package, &entrypoint, error))?,
+                    .inspect_err(|error| diagnostics.record_error(&package, &entrypoint, error))?,
             )
         });
         let mut sequence = 0u64;

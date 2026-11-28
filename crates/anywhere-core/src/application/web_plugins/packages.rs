@@ -321,7 +321,15 @@ impl WebPackageStore {
                 .context("restoring Web receipts")?;
             return Err(error);
         }
+        let invalidate_pending = self.pending.as_ref().is_some_and(|pending| {
+            let id = &pending.package.manifest().id;
+            self.receipts.get(id).map(|r| (&r.digest, r.enabled))
+                != next.get(id).map(|r| (&r.digest, r.enabled))
+        });
         self.receipts = next;
+        if invalidate_pending {
+            self.pending = None;
+        }
         self.repository.collect_unused(&self.receipts);
         Ok(())
     }

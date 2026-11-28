@@ -580,7 +580,11 @@ pub fn bind_window_identity(window: &gpui_kit::Window, title: &str) -> bool {
 }
 
 #[cfg(target_os = "macos")]
-pub(in crate::platform) const TOOL_WINDOW_IDENTITY: &str = "dev.anywhere.window.tool";
+pub(in crate::platform) const TOOL_WINDOW_IDENTITY_PREFIX: &str = "dev.anywhere.window.tool.";
+
+pub fn tool_window_owner_key(window: gpui_kit::AnyWindowHandle) -> String {
+    format!("dev.anywhere.window.tool.{}", window.window_id().as_u64())
+}
 
 #[cfg(target_os = "macos")]
 fn window_identity(title: &str) -> Option<&'static str> {
@@ -603,12 +607,11 @@ pub fn configure_tool_window(window: &gpui_kit::Window) {
         let RawWindowHandle::AppKit(handle) = handle.as_raw() else {
             return;
         };
+        let owner_key = tool_window_owner_key(window.window_handle());
         // SAFETY: GPUI owns this live AppKit view for the borrowed window.
         let view = unsafe { &*handle.ns_view.as_ptr().cast::<objc2_app_kit::NSView>() };
         if let Some(native) = view.window() {
-            native.setIdentifier(Some(&objc2_foundation::NSString::from_str(
-                TOOL_WINDOW_IDENTITY,
-            )));
+            native.setIdentifier(Some(&objc2_foundation::NSString::from_str(&owner_key)));
             let number = native.windowNumber();
             dispatch2::DispatchQueue::main().exec_async(move || {
                 macos::configure_tool_window_number(number);
@@ -627,6 +630,11 @@ pub(in crate::platform) fn window_matches_title(
     title: &str,
 ) -> bool {
     use objc2_app_kit::NSUserInterfaceItemIdentification as _;
+    if title.starts_with(TOOL_WINDOW_IDENTITY_PREFIX) {
+        return window
+            .identifier()
+            .is_some_and(|current| current.to_string() == title);
+    }
     if let Some(identity) = window_identity(title) {
         if let Some(current) = window.identifier() {
             return current.to_string() == identity;
@@ -639,12 +647,11 @@ pub(in crate::platform) fn window_matches_title(
 pub(in crate::platform) fn is_auxiliary_product_window(window: &objc2_app_kit::NSWindow) -> bool {
     use objc2_app_kit::NSUserInterfaceItemIdentification as _;
     window.identifier().is_some_and(|current| {
+        let current = current.to_string();
         matches!(
-            current.to_string().as_str(),
-            "dev.anywhere.window.clipboard-shelf"
-                | "dev.anywhere.window.tasks"
-                | TOOL_WINDOW_IDENTITY
-        )
+            current.as_str(),
+            "dev.anywhere.window.clipboard-shelf" | "dev.anywhere.window.tasks"
+        ) || current.starts_with(TOOL_WINDOW_IDENTITY_PREFIX)
     })
 }
 

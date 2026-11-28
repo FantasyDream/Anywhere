@@ -8,6 +8,7 @@ export interface BackgroundMockOptions {
   invocation?: WebInvocation | null;
   permissions: string[];
   methods: Record<string, {roles: string[]; permission: string | null}>;
+  urlOpen?: 'allow' | 'cancel';
 }
 
 export function runBackgroundMock(

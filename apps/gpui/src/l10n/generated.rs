@@ -3454,5 +3454,148 @@ pub fn search_directory_unavailable(locale: Locale) -> String {
     }
 }
 
+pub fn clear_search_esc(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Clear search · Esc".to_string(),
+        Locale::Zh => "清空搜索 · Esc".to_string(),
+    }
+}
+
+pub fn hide_window_esc(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Hide window · Esc".to_string(),
+        Locale::Zh => "隐藏窗口 · Esc".to_string(),
+    }
+}
+
+pub fn search_files_for(locale: Locale, query: &str) -> String {
+    let values = &[("query", query.to_string())];
+    match locale {
+        Locale::En => fill("Search files for “{query}”", values),
+        Locale::Zh => fill("在文件中搜索「{query}」", values),
+    }
+}
+
+pub fn search_all_scopes(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Search all scopes".to_string(),
+        Locale::Zh => "切换到全部范围搜索".to_string(),
+    }
+}
+
+pub fn settings_saved(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Settings saved".to_string(),
+        Locale::Zh => "已保存设置".to_string(),
+    }
+}
+
+pub fn discard_changes(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Discard changes".to_string(),
+        Locale::Zh => "放弃更改".to_string(),
+    }
+}
+
+pub fn bulk_text_editing(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Bulk text editing".to_string(),
+        Locale::Zh => "批量文本编辑".to_string(),
+    }
+}
+
+pub fn reset_shortcut(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Restore default shortcut".to_string(),
+        Locale::Zh => "恢复默认快捷键".to_string(),
+    }
+}
+
+pub fn cancel_recording_esc(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Press Esc to cancel".to_string(),
+        Locale::Zh => "按 Esc 取消".to_string(),
+    }
+}
+
+pub fn plugin_removal_title(locale: Locale, name: &str) -> String {
+    let values = &[("name", name.to_string())];
+    match locale {
+        Locale::En => fill("Remove {name}?", values),
+        Locale::Zh => fill("移除「{name}」？", values),
+    }
+}
+
+pub fn plugin_removal_detail(locale: Locale) -> String {
+    match locale {
+        Locale::En => "This removes the installed plugin and its permissions.".to_string(),
+        Locale::Zh => "将移除已安装的插件及其权限。".to_string(),
+    }
+}
+
+pub fn clipboard_entry_deleted(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Clipboard entry deleted".to_string(),
+        Locale::Zh => "已删除剪贴板条目".to_string(),
+    }
+}
+
+pub fn copy_directory(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Copy directory".to_string(),
+        Locale::Zh => "复制目录".to_string(),
+    }
+}
+
+pub fn open_working_directory(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Open working directory".to_string(),
+        Locale::Zh => "打开工作目录".to_string(),
+    }
+}
+
+pub fn clipboard_preview_page(locale: Locale, page: i64) -> String {
+    let values = &[("page", page.to_string())];
+    match locale {
+        Locale::En => fill("Preview page {page}", values),
+        Locale::Zh => fill("预览第 {page} 页", values),
+    }
+}
+
+pub fn quick_add(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Add an item".to_string(),
+        Locale::Zh => "添加条目".to_string(),
+    }
+}
+
+pub fn source_mode_automatic(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Automatic".to_string(),
+        Locale::Zh => "自动".to_string(),
+    }
+}
+
+pub fn source_mode_custom(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Custom".to_string(),
+        Locale::Zh => "自定义".to_string(),
+    }
+}
+
+pub fn source_mode_disabled(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Disabled".to_string(),
+        Locale::Zh => "停用".to_string(),
+    }
+}
+
+pub fn shortcut_already_used(locale: Locale) -> String {
+    match locale {
+        Locale::En => "This shortcut is already in use.".to_string(),
+        Locale::Zh => "此快捷键已被占用。".to_string(),
+    }
+}
+
 /// Stable message count for generated-resource verification.
-pub const MESSAGE_COUNT: usize = 468;
+pub const MESSAGE_COUNT: usize = 488;

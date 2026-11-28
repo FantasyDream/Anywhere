@@ -112,6 +112,7 @@ impl PreviewStore {
         self.insert(vec![path], title, Some(directory))
     }
     pub(crate) fn web_snapshot(&mut self, name: &str, bytes: &[u8]) -> Result<PreviewResource> {
+        ensure!(bytes.len() <= 16 * 1024 * 1024, "preview is too large");
         let name = name
             .chars()
             .map(|ch| {
@@ -132,9 +133,11 @@ impl PreviewStore {
             .file_stem()
             .and_then(|value| value.to_str())
             .unwrap_or("File");
-        let extension = &extension[..extension.floor_char_boundary(64)];
-        let stem_limit = 230 - extension.len() - usize::from(!extension.is_empty());
-        let stem = &stem[..stem.floor_char_boundary(stem_limit)];
+        let extension = extension[..extension.floor_char_boundary(32)].trim_matches(['.', ' ']);
+        let stem_limit =
+            112usize.saturating_sub(extension.len() + usize::from(!extension.is_empty()));
+        let stem = stem[..stem.floor_char_boundary(stem_limit)].trim_matches(['.', ' ']);
+        let stem = if stem.is_empty() { "File" } else { stem };
         let path_name = if extension.is_empty() {
             format!("Preview-{stem}")
         } else {
@@ -167,6 +170,8 @@ impl PreviewStore {
                     if entry.file_name().to_string_lossy().starts_with("preview-")
                         && entry.file_type()?.is_dir()
                     {
+                        #[cfg(windows)]
+                        clear_readonly_files(&entry.path());
                         let _ = std::fs::remove_dir_all(entry.path());
                     }
                 }
@@ -246,6 +251,29 @@ impl PreviewStore {
     }
     pub fn release(&mut self, id: &str) {
         self.leases.remove(id);
+    }
+}
+
+#[cfg(windows)]
+#[expect(
+    clippy::permissions_set_readonly_false,
+    reason = "Windows clears an attribute so stale private snapshots can be deleted"
+)]
+fn clear_readonly_files(dir: &Path) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if let Ok(metadata) = std::fs::symlink_metadata(&path) {
+            if metadata.is_file() {
+                let mut permissions = metadata.permissions();
+                if permissions.readonly() {
+                    permissions.set_readonly(false);
+                    let _ = std::fs::set_permissions(&path, permissions);
+                }
+            }
+        }
     }
 }
 

@@ -11,6 +11,7 @@
           },
           "params": {
             "additionalProperties": false,
+            "properties": null,
             "type": "object"
           }
         },
@@ -29,6 +30,7 @@
           },
           "params": {
             "additionalProperties": false,
+            "properties": null,
             "type": "object"
           }
         },
@@ -47,6 +49,7 @@
           },
           "params": {
             "additionalProperties": false,
+            "properties": null,
             "type": "object"
           }
         },
@@ -65,6 +68,7 @@
           },
           "params": {
             "additionalProperties": false,
+            "properties": null,
             "type": "object"
           }
         },
@@ -83,6 +87,7 @@
           },
           "params": {
             "additionalProperties": false,
+            "properties": null,
             "type": "object"
           }
         },
@@ -101,6 +106,7 @@
           },
           "params": {
             "additionalProperties": false,
+            "properties": null,
             "type": "object"
           }
         },
@@ -145,6 +151,7 @@
           },
           "params": {
             "additionalProperties": false,
+            "properties": null,
             "type": "object"
           }
         },
@@ -163,6 +170,7 @@
           },
           "params": {
             "additionalProperties": false,
+            "properties": null,
             "type": "object"
           }
         },
@@ -181,6 +189,7 @@
           },
           "params": {
             "additionalProperties": false,
+            "properties": null,
             "type": "object"
           }
         },
@@ -479,6 +488,7 @@
           },
           "params": {
             "additionalProperties": false,
+            "properties": null,
             "type": "object"
           }
         },
@@ -497,6 +507,7 @@
           },
           "params": {
             "additionalProperties": false,
+            "properties": null,
             "type": "object"
           }
         },
@@ -572,7 +583,6 @@
                 "type": "string"
               },
               "maxBytes": {
-                "default": null,
                 "format": "uint",
                 "minimum": 0,
                 "type": "integer"

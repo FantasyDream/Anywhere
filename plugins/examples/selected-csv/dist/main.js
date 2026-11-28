@@ -29,7 +29,9 @@ read.addEventListener('click', async () => {
       selected.handle,
     );
     status.textContent =
-      metadata.bytes === undefined ? '' : `${metadata.bytes} bytes`;
+      metadata.bytes === undefined || metadata.bytes === null
+        ? ''
+        : `${metadata.bytes} bytes`;
   } catch (error) {
     status.textContent = `Could not read the selected file (${error.code ?? 'TOOL_ERROR'}).`;
   } finally {

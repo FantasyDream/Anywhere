@@ -587,7 +587,15 @@ fn spawn_package_open_loop(
                     .unwrap_or(false)
             });
             match opened {
-                Ok(true) => crate::platform::show_main_window(),
+                Ok(true) => {
+                    cx.background_executor()
+                        .timer(std::time::Duration::from_millis(80))
+                        .await;
+                    if !crate::platform::configure_settings_window(PRODUCT_NAME) {
+                        tracing::warn!("settings_window_configuration_failed");
+                    }
+                    crate::platform::show_main_window();
+                }
                 Ok(false) => {}
                 Err(_) => break,
             }
@@ -1349,9 +1357,10 @@ mod tests {
                 });
             });
             window.render_frame(cx);
-            window.click("settings-category-general", cx);
+            window.click("settings-category-shortcuts", cx);
             window.render_frame(cx);
-            window.click("open-at-login", cx);
+            window.click("current-shortcut-record", cx);
+            window.press("ctrl-alt-m", cx);
             window.render_frame(cx);
         })
         .unwrap();

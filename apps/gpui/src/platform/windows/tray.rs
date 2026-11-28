@@ -32,6 +32,15 @@ const CLASS: windows_sys::core::PCWSTR = w!("Anywhere.Tray");
 const NORMAL_INSTANCE: windows_sys::core::PCWSTR = w!("Anywhere.Tray.Default");
 const KEY_SELECT: u32 = NIN_SELECT | 1;
 
+pub(super) fn allow_existing_foreground() {
+    let window = unsafe { FindWindowW(CLASS, NORMAL_INSTANCE) };
+    if let Some(pid) = super::process_id(window) {
+        unsafe {
+            AllowSetForegroundWindow(pid);
+        }
+    }
+}
+
 pub(super) fn restore_existing() -> bool {
     let window = unsafe { FindWindowW(CLASS, NORMAL_INSTANCE) };
     let Some(pid) = super::process_id(window) else {

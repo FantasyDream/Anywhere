@@ -10,7 +10,7 @@ const bridge = new URL(
   import.meta.url,
 );
 
-function sample(types = []) {
+function sample(types = [], readable = false) {
   if (!types.length) return {kind: 'empty', reason: 'no_object'};
   if (types.includes('core.text'))
     return {kind: 'text', source: 'selected_text', text: '{"sample":true}'};
@@ -29,7 +29,7 @@ function sample(types = []) {
           handle: 'mock-file',
           name: 'sample.csv',
           kind: 'file',
-          readable: false,
+          readable,
           previewable: false,
         },
       ],
@@ -81,12 +81,15 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     });
     const methods = JSON.parse(schema).methods;
     const permissions = manifest.permissions.map(permission => permission.name);
-    const resolve = (definition, role) =>
-      runBackgroundMock({
+    const resolve = (definition, role) => {
+      const canReadFile =
+        role !== 'resolver' && permissions.includes('resources.read');
+      const context = sample(definition.accepts, canReadFile);
+      return runBackgroundMock({
         source,
         entrypoint: definition.entrypoint,
         role,
-        context: sample(definition.accepts),
+        context,
         invocation:
           role === 'resolver'
             ? null
@@ -94,7 +97,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
                 pluginId: manifest.id,
                 commandId: definition.id,
                 entrypoint: definition.entrypoint,
-                input: sample(definition.accepts),
+                input: context,
                 capabilities: {
                   urlOpen: permissions.includes('url.open'),
                   resourceRead:
@@ -107,6 +110,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
         permissions,
         methods,
       });
+    };
     for (const resolver of manifest.background.resolvers ?? []) {
       const {value, denied} = await resolve(resolver, 'resolver');
       check(

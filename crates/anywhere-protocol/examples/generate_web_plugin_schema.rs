@@ -15,6 +15,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     schema["properties"]["schemaVersion"]["const"] = SCHEMA_VERSION.into();
     schema["properties"]["apiVersion"]["const"] = API_VERSION.into();
     schema["properties"]["permissions"]["maxItems"] = MAX_PERMISSIONS.into();
+    if let Some(titles) =
+        schema["$defs"]["WebCommand"]["properties"]["localizedTitles"].as_object_mut()
+    {
+        titles.insert("maxProperties".into(), 32.into());
+    }
     schema["x-anywhere-commandIcons"] = serde_json::to_value(COMMAND_ICONS)?;
     let mut editor = schema.clone();
     editor["properties"]["$schema"] = serde_json::json!({ "type": "string" });
@@ -26,7 +31,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         let path = resources.join(name);
         let value = serde_json::to_string_pretty(&schema)? + "\n";
         if check {
-            if std::fs::read_to_string(&path)? != value {
+            if std::fs::read_to_string(&path)?.replace("\r\n", "\n") != value {
                 return Err(format!("{name} drift; run generate_web_plugin_schema").into());
             }
         } else {

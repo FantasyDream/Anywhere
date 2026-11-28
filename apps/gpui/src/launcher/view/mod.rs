@@ -304,6 +304,8 @@ pub struct LauncherView {
     model: LauncherModel,
     file_search: FileSearchPageModel,
     clipboard: ClipboardPageModel,
+    clipboard_inspector: Option<state::ClipboardInspector>,
+    tasks_actions_return_focus: Option<FocusHandle>,
     app_history: AppHistoryPageModel,
     tasks: TasksPageModel,
     web: WebPageModel,
@@ -641,6 +643,8 @@ impl LauncherView {
             model,
             file_search: FileSearchPageModel::default(),
             clipboard: ClipboardPageModel::default(),
+            clipboard_inspector: None,
+            tasks_actions_return_focus: None,
             app_history: AppHistoryPageModel::default(),
             tasks: TasksPageModel::default(),
             web: WebPageModel::default(),
@@ -924,6 +928,10 @@ impl LauncherView {
         cx: &mut Context<Self>,
     ) {
         if self.window_handle != window.window_handle() {
+            return;
+        }
+        if self.web_surface.interaction.is_some() {
+            self.intercept_web_interaction_keystroke(event, modifiers, repeated, window, cx);
             return;
         }
         if self.settings_modal_active() {
@@ -1472,6 +1480,9 @@ impl LauncherView {
     }
 
     fn toggle_screen(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.screen == Screen::WebPackages {
+            self.retire_package_review();
+        }
         let leaving_settings = self.is_settings_surface();
         self.screen = if self.screen == Screen::Launcher {
             Screen::Settings
@@ -1575,7 +1586,10 @@ impl LauncherView {
             + heading_height
             + notice_height)
             + if has_panel { rows_height } else { 0.0 };
-        let height = height.clamp(self.launcher_input_height(), 520.0);
+        let mut height = height.clamp(self.launcher_input_height(), 520.0);
+        if self.web_surface.interaction.is_some() {
+            height = height.max(300.0);
+        }
         gpui_kit::size(px(LAUNCHER_WIDTH), px(height))
     }
 
@@ -1617,6 +1631,16 @@ impl LauncherView {
     fn clear_notice(&mut self) {
         self.notice = None;
         self.notice_kind = components::NoticeKind::Warning;
+    }
+
+    pub(super) fn copy_text_with_feedback(&mut self, text: String, cx: &mut Context<Self>) {
+        cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(text));
+        self.show_hud_toast(
+            l10n::copied(self.locale),
+            IconName::Check,
+            components::NoticeKind::Success,
+            cx,
+        );
     }
 
     pub(super) fn show_hud_toast(
@@ -2440,6 +2464,43 @@ impl LauncherView {
             .into_any_element()
     }
 
+    fn launcher_empty_action(&self) -> Option<LauncherEmptyAction> {
+        if self.input_mode != InputMode::Search
+            || self.model.query.trim().is_empty()
+            || self.model.menu_path().is_some()
+            || self.model.object_actions_active
+            || self.model.loading
+            || !self.model.rows.is_empty()
+        {
+            return None;
+        }
+        if self.model.selected_scope.is_some() {
+            Some(LauncherEmptyAction::SearchAllScopes)
+        } else if self.preferences.file_search_enabled && self.live.is_some() {
+            Some(LauncherEmptyAction::SearchFiles)
+        } else {
+            None
+        }
+    }
+
+    fn use_launcher_empty_action(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        match self.launcher_empty_action() {
+            Some(LauncherEmptyAction::SearchFiles) => {
+                self.open_screen(Screen::FileSearch, window, cx);
+            }
+            Some(LauncherEmptyAction::SearchAllScopes) => {
+                self.mark_scope_user_controlled();
+                self.model.select_scope(None);
+                self.reveal_selected_scope();
+                self.request_live_update(cx);
+                self.clear_notice();
+                self.resize_current_window(cx);
+            }
+            None => return,
+        }
+        cx.notify();
+    }
+
     fn render_launcher_rows(&mut self, cx: &mut Context<Self>) -> AnyElement {
         if self.model.loading {
             div()
@@ -2455,7 +2516,9 @@ impl LauncherView {
                 .into_any_element()
         } else if self.model.rows.is_empty() {
             div()
-                .h(px(64.))
+                .h(px(metrics::PAGE_HEADER_HEIGHT))
+                .flex_col()
+                .gap(px(metrics::SPACE_XS))
                 .flex()
                 .items_center()
                 .justify_center()
@@ -2467,6 +2530,27 @@ impl LauncherView {
                         .truncate()
                         .child(self.launcher_empty_message()),
                 )
+                .when_some(self.launcher_empty_action(), |row, action| {
+                    row.child(
+                        Button::new("launcher-empty-recovery")
+                            .ghost()
+                            .label(if action == LauncherEmptyAction::SearchFiles {
+                                l10n::search_files_for(self.locale, self.model.query.trim())
+                            } else {
+                                l10n::search_all_scopes(self.locale)
+                            })
+                            .child(components::keycap(
+                                if action == LauncherEmptyAction::SearchFiles {
+                                    "↵"
+                                } else {
+                                    "Tab"
+                                },
+                            ))
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.use_launcher_empty_action(window, cx);
+                            })),
+                    )
+                })
                 .into_any_element()
         } else {
             div()
@@ -2486,7 +2570,7 @@ impl LauncherView {
                         }),
                     )
                     .size_full()
-                    .px(px(metrics::ROW_PADDING_X))
+                    .px(px(metrics::LIST_PADDING_X))
                     .py(px(metrics::SPACE_XS))
                     .track_scroll(&self.scrolls.tool_lists.launcher),
                 )
@@ -2549,8 +2633,10 @@ impl LauncherView {
                 .justify_center()
                 .gap(px(3.))
                 .rounded(px(metrics::CONTROL_RADIUS))
-                .tooltip(components::text_tooltip(l10n::navigation_modes(
+                .tooltip(components::text_tooltip(l10n::shortcut_hint(
                     self.locale,
+                    &l10n::navigation_modes(self.locale),
+                    &crate::platform::primary_shortcut_label("Enter"),
                 )))
                 .when(!self.model.loading, |element| {
                     element
@@ -2575,6 +2661,16 @@ impl LauncherView {
                 )
                 .into_any_element()
         };
+        let escape_label =
+            if self.root_navigation_open || browsing || self.input_mode == InputMode::Content {
+                l10n::back_esc(self.locale)
+            } else if !self.model.query.is_empty() {
+                l10n::clear_search_esc(self.locale)
+            } else if self.input_mode == InputMode::Environment {
+                l10n::back_to_search(self.locale)
+            } else {
+                l10n::hide_window_esc(self.locale)
+            };
         let launcher_editor = if self.input_mode == InputMode::Content {
             Textarea::new(&self.content_input)
                 .accessibility_id("launcher-search-input")
@@ -2593,7 +2689,7 @@ impl LauncherView {
                 .appearance(false)
                 .bordered(false)
                 .focus_bordered(false)
-                .cleanable(false)
+                .cleanable(true)
                 .text_size(px(metrics::PAGE_HEADING_SIZE))
                 .line_height(px(metrics::PAGE_HEADING_SIZE * metrics::BODY_LINE_HEIGHT))
                 .p(px(0.))
@@ -2668,7 +2764,18 @@ impl LauncherView {
                     .child(Spinner::new().xsmall().color(theme::secondary()))
                     .into_any_element()
             } else {
-                self.keycap("esc").into_any_element()
+                div()
+                    .id("launcher-escape")
+                    .test_support()
+                    .role(gpui_kit::Role::Button)
+                    .aria_label(escape_label.clone())
+                    .cursor_pointer()
+                    .tooltip(components::text_tooltip(escape_label))
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.handle_key("escape", KeyModifiers::default(), window, cx);
+                    }))
+                    .child(self.keycap("esc"))
+                    .into_any_element()
             })
             .into_any_element()
     }
@@ -2678,10 +2785,35 @@ impl LauncherView {
     }
 }
 
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum LauncherEmptyAction {
+    SearchAllScopes,
+    SearchFiles,
+}
+
 impl Render for LauncherView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.sync_search_placeholder(window, cx);
         self.sync_launcher_window_after_render(window, cx);
+        if matches!(self.screen, Screen::Clipboard | Screen::ApplicationHistory)
+            && self.page_actions_visible()
+            && self.active_editor_focused(window, cx)
+        {
+            cx.defer_in(window, |this, window, cx| {
+                if matches!(this.screen, Screen::Clipboard | Screen::ApplicationHistory)
+                    && this.page_actions_visible()
+                {
+                    this.surface_focus_handle.focus(window, cx);
+                }
+            });
+        }
+        if self.screen != Screen::Clipboard || !self.presence.presented {
+            self.clipboard_inspector = None;
+        }
+        if self.screen != Screen::WebPackages {
+            self.web_surface.uninstall_target = None;
+            self.web_surface.uninstall_return_focus = None;
+        }
         let content = match self.screen {
             Screen::Launcher => self.render_launcher(cx),
             Screen::FileSearch => self.render_file_search(cx),
@@ -2741,17 +2873,20 @@ impl Render for LauncherView {
                 }),
             )
             .child(content)
-            .when(self.is_settings_surface(), |root| {
-                root.on_drop(
-                    cx.listener(|this, paths: &gpui_kit::ExternalPaths, window, cx| {
-                        if let [path] = paths.paths() {
-                            if crate::plugin_open::is_local_package(path) {
-                                this.open_package_review(path.clone(), window, cx);
+            .when(
+                self.is_settings_surface() && !self.settings_modal_active(),
+                |root| {
+                    root.on_drop(cx.listener(
+                        |this, paths: &gpui_kit::ExternalPaths, window, cx| {
+                            if let [path] = paths.paths() {
+                                if crate::plugin_open::is_local_package(path) {
+                                    this.open_package_review(path.clone(), window, cx);
+                                }
                             }
-                        }
-                    }),
-                )
-            })
+                        },
+                    ))
+                },
+            )
             .children(self.render_web_host_interaction(cx))
             .when(
                 self.is_settings_surface() && self.settings_editor.close_pending,

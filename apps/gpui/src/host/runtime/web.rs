@@ -6,10 +6,21 @@ impl LiveLauncher {
         self.spawn_blocking(move || Ok(LiveEvent::WebPackages(web_packages_from(&application)?)))
     }
 
-    pub fn inspect_web_package(&self, path: std::path::PathBuf) -> Receiver<LiveEvent> {
+    pub fn inspect_web_package(
+        &self,
+        path: std::path::PathBuf,
+        cancelled: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    ) -> Receiver<LiveEvent> {
         let application = self.application.clone();
         self.spawn_blocking(move || {
+            if cancelled.load(std::sync::atomic::Ordering::Acquire) {
+                return Ok(LiveEvent::Ignored);
+            }
             let review = application.inspect_web_package(&path)?;
+            if cancelled.load(std::sync::atomic::Ordering::Acquire) {
+                let _ = application.cancel_web_review(&review.token);
+                return Ok(LiveEvent::Ignored);
+            }
             use anywhere_protocol::web_plugin::WebPermission;
             let origins = review.permissions.iter().find_map(|permission| {
                 if let WebPermission::UrlOpen { origins } = permission {
@@ -77,12 +88,8 @@ impl LiveLauncher {
         })
     }
 
-    pub fn cancel_web_review(&self, token: String) -> Receiver<LiveEvent> {
-        let application = self.application.clone();
-        self.spawn_blocking(move || {
-            application.cancel_web_review(&token)?;
-            Ok(LiveEvent::Ignored)
-        })
+    pub fn cancel_web_review(&self, token: String) {
+        let _ = self.application.cancel_web_review(&token);
     }
 
     pub fn approve_web_package(&self, token: String) -> Receiver<LiveEvent> {

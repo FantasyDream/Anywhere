@@ -14,6 +14,17 @@ impl LiveLauncher {
         })
     }
 
+    pub fn clipboard_inspector(&self, id: i64) -> Receiver<LiveEvent> {
+        let application = self.application.clone();
+        self.spawn_blocking(move || {
+            let settings = application.settings().map_err(anyhow::Error::new)?;
+            let text = settings
+                .clipboard()
+                .inspect_payload(id, |_, payload| Ok(payload.plain_text().map(str::to_owned)))?;
+            Ok(LiveEvent::ClipboardInspector(text.flatten()))
+        })
+    }
+
     pub fn copy_clipboard(&self, id: i64, query: String) -> Receiver<LiveEvent> {
         let application = self.application.clone();
         self.spawn_blocking(move || {

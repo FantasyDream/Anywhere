@@ -552,4 +552,22 @@ export const host = {
     remove: (key: string, options?: CallOptions) =>
       injected().storage.remove(key, options),
   },
+  url: {
+    open: (url: string, options?: CallOptions) =>
+      injected().url.open(url, options),
+  },
+  resources: {
+    stat: (handle: string, options?: CallOptions) =>
+      injected().resources.stat(handle, options),
+    readText: (handle: string, options?: ReadTextOptions) =>
+      injected().resources.readText(handle, options),
+  },
+  window: {
+    back: (options?: CallOptions) => injected().window.back(options),
+    close: (options?: CallOptions) => injected().window.close(options),
+  },
+  preview: {
+    open: (handle: string, options?: CallOptions) =>
+      injected().preview.open(handle, options),
+  },
 };

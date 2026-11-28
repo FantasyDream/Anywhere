@@ -43,6 +43,9 @@ test('platform formatting and exact matching share the same shortcut', () => {
       ),
     );
     assert.ok(!environment.matchesShortcut(key, 'Mod+Shift+C'));
+    assert.throws(() => environment.formatShortcut('Mod+Ctrl+K'), TypeError);
+    assert.throws(() => environment.formatShortcut('Mod+Meta+K'), TypeError);
+    assert.equal(environment.matchesShortcut({}, 'Mod+Shift+C'), false);
   } finally {
     delete globalThis.__anywherePlatform;
   }
@@ -59,6 +62,15 @@ test('browser mock exercises the same resource and URL calls through the SDK', a
     assert.match(await client.resources.readText(handle), /name,age/);
     await assert.rejects(client.resources.readText(handle, {maxBytes: 3}), {
       code: 'TOO_LARGE',
+    });
+    await assert.rejects(client.resources.readText(handle, {maxBytes: 0}), {
+      code: 'INVALID_REQUEST',
+    });
+    const large = 'x'.repeat(70_000);
+    mock.setClipboard(large);
+    assert.equal(await client.clipboard.readText(), large);
+    await assert.rejects(client.url.open('javascript:alert(1)'), {
+      code: 'INVALID_REQUEST',
     });
     mock.setScenario('cancel-confirmation');
     await assert.rejects(client.url.open('https://example.test/record'), {

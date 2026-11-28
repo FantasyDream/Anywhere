@@ -160,7 +160,13 @@ impl BackgroundProvider {
         budget: std::time::Duration,
     ) -> Result<Vec<ResolvedContext>> {
         let input = input.clone();
-        let projected = projection::build_with_resources(&input, &self.permissions)?.0;
+        let mut projected = projection::build_with_resources(&input, &self.permissions)?.0;
+        if let WebInput::Resources { items, .. } = &mut projected {
+            for item in items {
+                item.readable = false;
+                item.previewable = false;
+            }
+        }
         let permissions = self.permissions.clone();
         let (source_app, session_query) = self
             .session
@@ -234,9 +240,12 @@ impl BackgroundProvider {
             current,
             budget,
         )
-        .inspect_err(|&error| {
-            self.diagnostics
-                .record(&self.package, &self.entrypoint, error);
+        .inspect_err(|error| {
+            // Do not flood the diagnostic ring buffer with routine typing supersession.
+            if error.failure != BackgroundFailure::Cancelled || check() {
+                self.diagnostics
+                    .record_error(&self.package, &self.entrypoint, error);
+            }
         })?;
         ensure!(check(), "resolver expired");
         let output: Vec<Derived> = serde_json::from_value(output).map_err(|_| {
@@ -245,14 +254,21 @@ impl BackgroundProvider {
                 .record(&self.package, &self.entrypoint, error);
             error
         })?;
-        ensure!(output.len() <= 16, "too many derived contexts");
+        if output.len() > 16 {
+            let error = BackgroundFailure::InvalidReturn;
+            self.diagnostics
+                .record(&self.package, &self.entrypoint, error);
+            anyhow::bail!("too many derived contexts");
+        }
         output
             .into_iter()
             .map(|derived| {
-                ensure!(
-                    self.descriptor.produces.contains(&derived.type_id),
-                    "resolver returned undeclared context type"
-                );
+                if !self.descriptor.produces.contains(&derived.type_id) {
+                    let error = BackgroundFailure::InvalidReturn;
+                    self.diagnostics
+                        .record(&self.package, &self.entrypoint, error);
+                    anyhow::bail!("resolver returned undeclared context type");
+                }
                 Ok(ResolvedContext::new(
                     &derived.type_id,
                     ContextValue::Extension(serde_json::to_string(&derived.value)?.into()),

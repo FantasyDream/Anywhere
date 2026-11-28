@@ -51,6 +51,7 @@ pub enum LiveEvent {
         host_error: Option<String>,
     },
     Clipboard(ClipboardSnapshot),
+    ClipboardInspector(Option<String>),
     AppHistory(AppHistorySnapshot),
     AppHistoryAction {
         item_id: String,

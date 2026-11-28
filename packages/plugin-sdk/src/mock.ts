@@ -8,6 +8,7 @@ import type {
 } from './contract.js';
 import {limits, protocol} from './contract.js';
 import type {Language, Platform} from './environment.js';
+import {environment} from './environment.js';
 
 const encoder = new TextEncoder();
 type Scenario = 'normal' | 'revoked' | 'too-large' | 'cancel-confirmation';
@@ -88,7 +89,7 @@ export function createMock(initial: Partial<WebInvocation> = {}) {
           }
         }
         if (part.length) parts.push(part.join(''));
-        const name = `download_${++ticket}`;
+        const name = (++ticket).toString(16).padStart(64, '0');
         download.set(name, parts);
         emit({requestId, result: {transfer: {ticket: name, bytes}}});
       };
@@ -105,9 +106,10 @@ export function createMock(initial: Partial<WebInvocation> = {}) {
       const key = String(params.key);
       const handle = String(params.handle);
       const text = String(params.text ?? '');
-      const access =
-        state.context.kind === 'resources' &&
-        state.context.items.some(item => item.handle === handle);
+      const selectedItem =
+        state.context.kind === 'resources'
+          ? state.context.items.find(item => item.handle === handle)
+          : undefined;
       switch (method) {
         case 'lifecycle.ready':
           return reply(null);
@@ -157,7 +159,7 @@ export function createMock(initial: Partial<WebInvocation> = {}) {
           if (!Number.isSafeInteger(bytes) || bytes < 0)
             return fail('INVALID_REQUEST');
           if (bytes > limits.textBytes) return fail('TOO_LARGE');
-          const name = `upload_${++ticket}`;
+          const name = (++ticket).toString(16).padStart(64, '0');
           upload.set(name, {bytes, sequence: 0, text: ''});
           return reply({ticket: name});
         }
@@ -199,24 +201,60 @@ export function createMock(initial: Partial<WebInvocation> = {}) {
           upload.delete(String(params.ticket));
           download.delete(String(params.ticket));
           return reply(null);
-        case 'url.open':
+        case 'url.open': {
+          const rawUrl = String(params.url ?? '');
+          if (
+            !rawUrl ||
+            encoder.encode(rawUrl).length > 8192 ||
+            /[\p{Cc}\p{Cs}\s\\]/u.test(rawUrl)
+          )
+            return fail('INVALID_REQUEST');
+          let parsed: URL;
+          try {
+            parsed = new URL(rawUrl);
+          } catch {
+            return fail('INVALID_REQUEST');
+          }
+          if (
+            (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') ||
+            parsed.username ||
+            parsed.password ||
+            encoder.encode(parsed.href).length > 8192
+          )
+            return fail('INVALID_REQUEST');
           return scenario === 'cancel-confirmation'
             ? fail('USER_CANCELLED')
             : reply(null);
+        }
         case 'resources.stat':
-          return access
-            ? reply({handle, name: 'sample.csv', kind: 'file', bytes: 14})
-            : fail('EXPIRED');
+          if (!selectedItem) return fail('EXPIRED');
+          if (!selectedItem.readable) return fail('PERMISSION_DENIED');
+          return reply({
+            handle,
+            name: selectedItem.name,
+            kind: selectedItem.kind,
+            bytes: 14,
+          });
         case 'resources.readText': {
-          if (!access) return fail('EXPIRED');
+          if (!selectedItem) return fail('EXPIRED');
+          if (!selectedItem.readable) return fail('PERMISSION_DENIED');
+          const limit =
+            params.maxBytes === undefined ? limits.textBytes : Number(params.maxBytes);
+          if (
+            !Number.isSafeInteger(limit) ||
+            limit < 1 ||
+            limit > limits.textBytes
+          )
+            return fail('INVALID_REQUEST');
           const csv = 'name,age\nLin,4';
-          return Number(params.maxBytes ?? limits.textBytes) <
-            encoder.encode(csv).length
+          return limit < encoder.encode(csv).length
             ? fail('TOO_LARGE')
             : reply(csv);
         }
         case 'preview.open':
-          return access ? reply(null) : fail('EXPIRED');
+          if (!selectedItem) return fail('EXPIRED');
+          if (!selectedItem.previewable) return fail('PERMISSION_DENIED');
+          return reply(null);
         case 'window.back':
         case 'window.close':
           return reply(null);
@@ -285,35 +323,49 @@ export function mountMockPanel(mock: ReturnType<typeof createMock>) {
   function select<T extends string>(
     label: string,
     values: readonly T[],
+    initial: T,
     change: (value: T) => void,
   ) {
     const field = document.createElement('label');
     field.append(label + ' ');
     const input = document.createElement('select');
     for (const value of values) input.add(new Option(value, value));
+    input.value = initial;
     input.addEventListener('change', () => change(input.value as T));
     field.append(input);
     panel.append(field, ' ');
   }
-  select('Platform', ['macos', 'windows'], mock.setPlatform);
-  select('Language', ['en', 'zh'], mock.setLanguage);
+  const initialPlatform = environment.platform;
+  mock.setPlatform(initialPlatform);
+  select('Platform', ['macos', 'windows'], initialPlatform, mock.setPlatform);
+  select('Language', ['en', 'zh'], environment.language, mock.setLanguage);
   mock.setTheme('dark');
-  select('Theme', ['dark', 'light'], mock.setTheme);
+  select('Theme', ['dark', 'light'], 'dark', mock.setTheme);
   select(
     'Scenario',
     ['normal', 'revoked', 'too-large', 'cancel-confirmation'],
+    'normal',
     mock.setScenario,
   );
-  select('Visibility', ['visible', 'hidden'], value =>
+  select('Visibility', ['visible', 'hidden'], 'visible', value =>
     mock.setVisible(value === 'visible'),
   );
-  select('Selection', ['text', 'file'], value =>
+  select('Selection', ['text', 'file', 'empty'], 'text', value =>
     mock.setContext(
       value === 'file'
         ? mockFile
-        : {kind: 'text', source: 'selected_text', text: 'Sample selection'},
+        : value === 'empty'
+          ? {kind: 'empty', reason: 'no_object'}
+          : {kind: 'text', source: 'selected_text', text: 'Sample selection'},
     ),
   );
-  document.body.prepend(panel);
+  const attach = () => {
+    document.body?.prepend(panel);
+  };
+  if (document.body) {
+    attach();
+  } else {
+    globalThis.addEventListener?.('DOMContentLoaded', attach, {once: true});
+  }
   return () => panel.remove();
 }

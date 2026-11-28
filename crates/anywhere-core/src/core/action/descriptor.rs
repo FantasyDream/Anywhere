@@ -97,8 +97,11 @@ pub struct ActionDescriptor {
 
 impl ActionDescriptor {
     fn from_definition(mut definition: ActionDefinition) -> Self {
+        let mut seen: std::collections::HashSet<String> =
+            definition.aliases.iter().cloned().collect();
+        seen.insert(definition.title.clone());
         for title in definition.localized_titles.values() {
-            if title != &definition.title && !definition.aliases.contains(title) {
+            if seen.insert(title.clone()) {
                 definition.aliases.push(title.clone());
             }
         }

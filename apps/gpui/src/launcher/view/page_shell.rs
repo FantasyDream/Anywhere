@@ -182,7 +182,7 @@ impl LauncherView {
         cx: &mut Context<Self>,
     ) -> Div {
         let title_area = if let Some((input, id, placeholder)) =
-            search.filter(|_| !self.page_actions_visible())
+            search.filter(|_| !(self.screen == Screen::FileSearch && self.page_actions_visible()))
         {
             self.page_search_title(title, input, id, placeholder)
         } else {
@@ -249,6 +249,51 @@ impl LauncherView {
             )
     }
 
+    pub(super) fn render_action_overlay(&self, panel: AnyElement, cx: &Context<Self>) -> Div {
+        let titlebar = if self.standalone_tasks || self.standalone_tool {
+            metrics::TITLE_BAR_INSET
+        } else {
+            0.
+        };
+        div()
+            .absolute()
+            .inset_0()
+            .child(
+                div()
+                    .id("page-action-dismiss")
+                    .test_support()
+                    .absolute()
+                    .inset_0()
+                    .occlude()
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(|this, _, window, cx| {
+                            window.prevent_default();
+                            cx.stop_propagation();
+                            this.handle_key("escape", KeyModifiers::default(), window, cx);
+                        }),
+                    )
+                    .on_mouse_down(
+                        MouseButton::Right,
+                        cx.listener(|this, _, window, cx| {
+                            window.prevent_default();
+                            cx.stop_propagation();
+                            this.handle_key("escape", KeyModifiers::default(), window, cx);
+                        }),
+                    ),
+            )
+            .child(
+                div()
+                    .absolute()
+                    .top(px(titlebar
+                        + metrics::PAGE_HEADER_HEIGHT
+                        + metrics::SPACE_XS))
+                    .right(px(metrics::SPACE_XL))
+                    .max_w_full()
+                    .child(panel),
+            )
+    }
+
     pub(super) fn render_window_titlebar(&self, cx: &Context<Self>) -> impl IntoElement {
         WindowTitlebar {
             view: cx.entity(),
@@ -294,7 +339,7 @@ impl LauncherView {
                     .appearance(false)
                     .bordered(false)
                     .focus_bordered(false)
-                    .cleanable(!file_search)
+                    .cleanable(true)
                     .text_size(px(metrics::PAGE_HEADING_SIZE))
                     .line_height(px(metrics::PAGE_HEADING_SIZE * metrics::BODY_LINE_HEIGHT))
                     .p(px(0.))
@@ -308,9 +353,8 @@ impl LauncherView {
         trailing: Option<AnyElement>,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let standalone = (self.standalone_tasks || self.standalone_shelf || self.standalone_tool)
-            && !self.page_actions_visible();
-        let frameless_tool = self.standalone_tool && !self.page_actions_visible();
+        let standalone = self.standalone_tasks || self.standalone_shelf || self.standalone_tool;
+        let frameless_tool = self.standalone_tool;
         let file_search = self.screen == Screen::FileSearch;
         let back_label = if standalone {
             l10n::close(self.locale)
@@ -440,37 +484,8 @@ impl LauncherView {
             )
         };
         let id = SharedString::from(format!("scope-{}", scope.as_deref().unwrap_or("all")));
-        div()
-            .id(id)
-            .test_support()
-            .role(gpui_kit::Role::Button)
-            .aria_label(label.clone())
-            .aria_selected(selected)
-            .h(px(metrics::FILTER_HEIGHT))
-            .px(px(metrics::SPACE_MD))
-            .mx(px(3.))
-            .flex_none()
-            .flex()
-            .items_center()
-            .justify_center()
-            .rounded(px(metrics::FILTER_RADIUS))
-            .text_size(px(metrics::FILTER_SIZE))
-            .line_height(px(metrics::FILTER_SIZE * metrics::BODY_LINE_HEIGHT))
-            .font_weight(if selected {
-                FontWeight::SEMIBOLD
-            } else {
-                FontWeight::NORMAL
-            })
-            .text_color(if selected {
-                theme::primary()
-            } else {
-                theme::secondary()
-            })
-            .when(selected, |element| element.selected_surface())
-            .when(!selected, |element| {
-                element.hover(|style| style.bg(theme::hover()))
-            })
-            .cursor_pointer()
+        components::filter_chip(id, label, selected)
+            .mx(px(metrics::ROW_INSET_Y_COMPACT))
             .tooltip(components::text_tooltip(tooltip))
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.mark_scope_user_controlled();
@@ -481,7 +496,6 @@ impl LauncherView {
                 this.resize_current_window(cx);
                 cx.notify();
             }))
-            .child(label)
     }
 
     pub(super) fn file_filter_button(
@@ -491,46 +505,17 @@ impl LauncherView {
         selected: bool,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        div()
-            .id(SharedString::from(format!(
-                "file-filter-{}",
-                file_filter_id(filter)
-            )))
-            .test_support()
-            .role(gpui_kit::Role::Button)
-            .aria_label(label.clone())
-            .aria_selected(selected)
-            .h(px(metrics::FILTER_HEIGHT))
-            .px(px(metrics::SPACE_MD))
-            .mx(px(3.))
-            .flex_none()
-            .flex()
-            .items_center()
-            .justify_center()
-            .rounded(px(metrics::FILTER_RADIUS))
-            .text_size(px(metrics::FILTER_SIZE))
-            .line_height(px(metrics::FILTER_SIZE * metrics::BODY_LINE_HEIGHT))
-            .font_weight(if selected {
-                FontWeight::SEMIBOLD
-            } else {
-                FontWeight::NORMAL
-            })
-            .text_color(if selected {
-                theme::primary()
-            } else {
-                theme::secondary()
-            })
-            .when(selected, |element| element.selected_surface())
-            .when(!selected, |element| {
-                element.hover(|style| style.bg(theme::hover()))
-            })
-            .cursor_pointer()
-            .tooltip(components::text_tooltip(l10n::search_this_file_type(
-                self.locale,
-            )))
-            .on_click(cx.listener(move |this, _, _, cx| {
-                this.select_file_filter(filter, cx);
-            }))
-            .child(label)
+        components::filter_chip(
+            SharedString::from(format!("file-filter-{}", file_filter_id(filter))),
+            label,
+            selected,
+        )
+        .mx(px(metrics::ROW_INSET_Y_COMPACT))
+        .tooltip(components::text_tooltip(l10n::search_this_file_type(
+            self.locale,
+        )))
+        .on_click(cx.listener(move |this, _, _, cx| {
+            this.select_file_filter(filter, cx);
+        }))
     }
 }

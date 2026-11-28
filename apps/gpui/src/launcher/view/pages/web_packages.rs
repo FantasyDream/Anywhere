@@ -15,8 +15,9 @@ impl LauncherView {
                 .min_h(px(0.))
                 .flex()
                 .flex_col()
-                .gap(px(2.0))
-                .p(px(6.))
+                .gap(px(metrics::ROW_INSET_Y_COMPACT))
+                .px(px(metrics::LIST_PADDING_X))
+                .py(px(metrics::SPACE_XS))
                 .track_scroll(&self.scrolls.web_packages)
                 .overflow_y_scroll();
             for index in 0..self.web.packages.len() {
@@ -27,18 +28,13 @@ impl LauncherView {
                 let package_available = package.available;
                 let package_enabled = package.enabled;
                 let package_details = if package.available {
-                    let summary = format!(
+                    format!(
                         "{} {} · {} {}",
                         package.version,
                         package.entry,
                         package.permission_count,
                         l10n::permissions(self.locale)
-                    );
-                    if package.builtin {
-                        format!("{} · {summary}", l10n::built_in(self.locale))
-                    } else {
-                        summary
-                    }
+                    )
                 } else {
                     l10n::web_package_damaged(self.locale)
                 };
@@ -60,6 +56,26 @@ impl LauncherView {
                         } else {
                             theme::warning()
                         })
+                        .trailing(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(metrics::SPACE_XS))
+                                .when(package.builtin, |row| {
+                                    row.child(components::status_badge(
+                                        l10n::built_in(self.locale),
+                                        theme::secondary(),
+                                        IconName::Puzzle,
+                                    ))
+                                })
+                                .when(package_enabled, |row| {
+                                    row.child(components::status_badge(
+                                        l10n::enabled(self.locale),
+                                        theme::success(),
+                                        IconName::Check,
+                                    ))
+                                }),
+                        )
                         .trailing(
                             div()
                                 .id(SharedString::from(format!("web-toggle-slot-{package_id}")))
@@ -106,7 +122,16 @@ impl LauncherView {
             .filter(|package| !package.diagnostics.is_empty())
             .map(|package| {
                 div()
-                    .p(px(metrics::SPACE_SM))
+                    .id("web-package-diagnostics")
+                    .test_support()
+                    .flex_shrink_0()
+                    .max_h(px(120.))
+                    .border_t(px(metrics::DIVIDER_WIDTH))
+                    .border_color(theme::divider())
+                    .px(px(metrics::SPACE_MD))
+                    .py(px(metrics::SPACE_SM))
+                    .overflow_y_scrollbar()
+                    .font_family(fonts::FONT_MONO)
                     .text_size(px(metrics::CAPTION_SIZE))
                     .text_color(theme::secondary())
                     .child(package.diagnostics.join("\n"))
@@ -147,17 +172,64 @@ impl LauncherView {
                 .children(diagnostics)
                 .child(footer)
         };
-        self.render_page_shell(
+        let page = self.render_page_shell(
             SharedString::from(l10n::web_tools(self.locale)),
             SharedString::from(l10n::installed_packages_and_permissions(self.locale)),
             None,
             page.into_any_element(),
             cx,
-        )
-        .id("web-packages-surface")
-        .key_context("WebPackages")
-        .track_focus(&self.surface_focus_handle)
-        .into_any_element()
+        );
+        let confirmation = self.render_uninstall_confirmation(cx);
+        div()
+            .id("web-packages-surface")
+            .size_full()
+            .relative()
+            .child(page)
+            .children(confirmation)
+            .key_context("WebPackages")
+            .track_focus(&self.surface_focus_handle)
+            .into_any_element()
+    }
+
+    fn render_uninstall_confirmation(&self, cx: &Context<Self>) -> Option<AnyElement> {
+        let id = self.web_surface.uninstall_target.as_deref()?;
+        let package = self
+            .web
+            .packages
+            .iter()
+            .find(|package| package.id == id && !package.builtin)?;
+        let id = package.id.clone();
+        Some(components::modal_shell(
+            "web-uninstall-confirmation",
+            IconName::Trash,
+            theme::danger(),
+            l10n::plugin_removal_title(self.locale, &package.name),
+            l10n::plugin_removal_detail(self.locale),
+            None,
+            div()
+                .p(px(metrics::SPACE_LG))
+                .flex()
+                .justify_end()
+                .gap(px(metrics::SPACE_SM))
+                .child(
+                    Button::new("web-uninstall-cancel")
+                        .secondary()
+                        .track_focus(&self.settings_editor.confirm_cancel_focus)
+                        .label(l10n::cancel(self.locale))
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.close_web_uninstall_prompt(window, cx);
+                        })),
+                )
+                .child(
+                    Button::new("web-uninstall-confirm")
+                        .danger()
+                        .track_focus(&self.settings_editor.confirm_accept_focus)
+                        .label(l10n::remove(self.locale))
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.confirm_web_uninstall(&id, window, cx);
+                        })),
+                ),
+        ))
     }
 
     fn render_web_packages_footer(
@@ -177,7 +249,7 @@ impl LauncherView {
                 Button::new("import-web-package")
                     .secondary()
                     .label(l10n::import_package(self.locale))
-                    .disabled(self.web_surface.review_loading)
+                    .disabled(self.web_surface.review_loading || self.web_surface.review_approving)
                     .on_click(cx.listener(|this, _, window, cx| {
                         let dialog = rfd::AsyncFileDialog::new()
                             .set_title(l10n::import_local_web_tool(this.locale))
@@ -205,12 +277,15 @@ impl LauncherView {
                         Button::new("open-installed-plugin")
                             .secondary()
                             .label(l10n::open_approved_tool(self.locale))
-                            .disabled(self.settings_dirty(cx))
+                            .disabled(self.settings_dirty(cx) || self.settings_editor.model.saving)
                             .on_click(cx.listener(move |this, _, window, cx| {
-                                if this.settings_dirty(cx) {
+                                if this.settings_dirty(cx) || this.settings_editor.model.saving {
                                     return;
                                 }
+                                this.retire_package_review();
+                                this.settings_editor.dismiss_on_done = false;
                                 this.screen = Screen::Launcher;
+                                crate::platform::configure_main_window_after_update(PRODUCT_NAME);
                                 this.activate_action_shortcut(
                                     crate::host::ActionShortcutBinding {
                                         action_id: action_id.clone(),
@@ -249,14 +324,20 @@ impl LauncherView {
                     )
                     .child(
                         Button::new("web-uninstall")
-                            .secondary()
+                            .ghost()
+                            .text_color(theme::danger())
                             .label(l10n::remove(self.locale))
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.change_web_package_operation(
-                                    uninstall_id.clone(),
-                                    WebPackageOperation::Uninstall,
-                                    cx,
-                                )
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                this.web_surface.uninstall_return_focus = window.focused(cx);
+                                this.web_surface.uninstall_target = Some(uninstall_id.clone());
+                                cx.defer_in(window, move |this, window, cx| {
+                                    if this.screen == Screen::WebPackages
+                                        && this.web_surface.uninstall_target.is_some()
+                                    {
+                                        this.settings_editor.confirm_cancel_focus.focus(window, cx);
+                                    }
+                                });
+                                cx.notify();
                             })),
                     )
             }))
@@ -434,10 +515,24 @@ impl LauncherView {
                                     .is_some_and(|review| review.token == approve_token)
                                 {
                                     if let Some(live) = this.live.clone() {
-                                        let receiver =
+                                        let mut receiver =
                                             live.approve_web_package(approve_token.clone());
                                         this.web_surface.review = None;
-                                        this.poll(receiver, this.live_state.generation, cx);
+                                        this.web_surface.review_approving = true;
+                                        let generation = this.live_state.generation;
+                                        cx.spawn(async move |view, cx| {
+                                            let event = receiver.recv().await;
+                                            let _ = view.update(cx, |this, cx| {
+                                                this.web_surface.review_approving = false;
+                                                if let Some(event) = event {
+                                                    if this.live_state.generation == generation {
+                                                        this.apply_auxiliary_event(event, cx);
+                                                    }
+                                                }
+                                                cx.notify();
+                                            });
+                                        })
+                                        .detach();
                                         cx.notify();
                                     }
                                 }

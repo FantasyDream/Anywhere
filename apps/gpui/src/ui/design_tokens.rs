@@ -422,6 +422,16 @@ pub mod colors {
 }
 
 pub mod metrics {
+    pub const SETTINGS_SIDEBAR_WIDTH: f32 = 172.0;
+    pub const TASKS_SIDEBAR_WIDTH: f32 = 256.0;
+    pub const SETTINGS_ROW_MIN_HEIGHT: f32 = 58.0;
+    pub const SEARCH_FIELD_HEIGHT: f32 = 34.0;
+    pub const MODAL_WIDTH_COMPACT: f32 = 360.0;
+    pub const MODAL_WIDTH_PICKER: f32 = 440.0;
+    pub const LIST_PADDING_X: f32 = 10.0;
+    pub const TASK_CARD_HEIGHT: f32 = 76.0;
+    pub const SELECTION_INDICATOR_WIDTH: f32 = 3.0;
+    pub const DRAFT_INDICATOR_SIZE: f32 = 6.0;
     pub const RADIUS: f32 = 18.0;
     pub const RESULT_RADIUS: f32 = 12.0;
     pub const CONTROL_RADIUS: f32 = 8.0;

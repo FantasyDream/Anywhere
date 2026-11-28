@@ -452,6 +452,7 @@ impl LauncherView {
             | LiveEvent::Executions(_)
             | LiveEvent::ExecutionDetail(_)
             | LiveEvent::Ignored
+            | LiveEvent::ClipboardInspector(_)
             | LiveEvent::Error(_) => {}
         }
         cx.notify();

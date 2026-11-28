@@ -5,8 +5,7 @@ use serde::Deserialize;
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Envelope<'a> {
-    #[serde(rename = "protocol")]
-    _protocol: u32,
+    protocol: u32,
     #[serde(rename = "requestId")]
     request_id: String,
     #[serde(rename = "method")]
@@ -41,6 +40,11 @@ pub fn request_id_hint(raw: &str) -> Option<String> {
 pub fn parse(raw: &str) -> WebResult<Request> {
     if raw.len() > MAX_FRAME_BYTES {
         return Err(WebError::new(WebErrorCode::TooLarge));
+    }
+    let envelope: Envelope<'_> =
+        serde_json::from_str(raw).map_err(|_| WebError::new(WebErrorCode::InvalidRequest))?;
+    if envelope.protocol != PROTOCOL {
+        return Err(WebError::new(WebErrorCode::IncompatibleProtocol));
     }
     let frame: Frame =
         serde_json::from_str(raw).map_err(|_| WebError::new(WebErrorCode::InvalidRequest))?;
@@ -134,6 +138,12 @@ mod tests {
             WebErrorCode::IncompatibleProtocol
         );
         assert_eq!(request_id_hint(&raw).as_deref(), Some("r1"));
+        let legacy =
+            r#"{"protocol":1,"requestId":"r2","method":"context.getCurrentApp","params":{}}"#;
+        assert_eq!(
+            parse(legacy).err().unwrap().code,
+            WebErrorCode::IncompatibleProtocol
+        );
     }
     #[test]
     fn accepts_only_exact_typed_request_shapes() {

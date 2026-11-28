@@ -188,7 +188,13 @@ impl Application {
                     worker_request.control.check()?;
                     let snapshot = crate::core::sync::lock_or_deny(&previews, "previews")
                         .and_then(|mut store| store.web_snapshot(&file.name, &bytes))
-                        .map_err(|_| error(WebErrorCode::HostFailure))?;
+                        .map_err(|err| {
+                            if err.to_string().contains("too many active previews") {
+                                error(WebErrorCode::Busy)
+                            } else {
+                                error(WebErrorCode::HostFailure)
+                            }
+                        })?;
                     return Ok(Work::Preview(PendingPreview::new(previews, snapshot)));
                 }
                 Plan::FrontmostApp => {
@@ -258,9 +264,12 @@ impl Application {
         let result = tokio::time::timeout_at(request.control.deadline, worker).await;
         match result {
             Ok(Ok(Ok(Work::Host(plan)))) => {
+                let mut committed_handoff = false;
                 let result = match plan {
                     Plan::OpenUrl(url) => {
-                        self.confirm_web_url(binding, &source, &request, url).await
+                        let outcome = self.confirm_web_url(binding, &source, &request, url).await;
+                        committed_handoff = outcome.is_ok();
+                        outcome
                     }
                     Plan::SetInput(text) => {
                         self.set_web_input(binding, source.get(), text, &request.control)
@@ -276,13 +285,14 @@ impl Application {
                         .map_err(|_| error(WebErrorCode::HostFailure))
                     }),
                 };
-                self.finish_web_reply(binding, &source, &request, result)
+                self.finish_web_reply_inner(binding, &source, &request, result, committed_handoff)
             }
             Ok(Ok(Ok(Work::Preview(preview)))) => {
                 let result = self
                     .show_web_preview(binding, &source, &request, preview)
                     .await;
-                self.finish_web_reply(binding, &source, &request, result)
+                let committed = result.is_ok();
+                self.finish_web_reply_inner(binding, &source, &request, result, committed)
             }
             Ok(Ok(Ok(Work::Value(value)))) => {
                 self.finish_web_reply(binding, &source, &request, Ok(value))
@@ -369,8 +379,27 @@ impl Application {
         request: &RequestTicket,
         result: WebResult<Value>,
     ) -> String {
+        self.finish_web_reply_inner(binding, source, request, result, false)
+    }
+
+    fn finish_web_reply_inner(
+        &self,
+        binding: &WebDocumentBinding,
+        source: &Source,
+        request: &RequestTicket,
+        result: WebResult<Value>,
+        committed: bool,
+    ) -> String {
         match crate::core::sync::lock_or_deny(&self.web_plugins, "web_plugins") {
-            Ok(mut web) => web.finish_call(binding, source, request, result).0,
+            Ok(mut web) => {
+                web.clear_handoff_request(binding, &request.id);
+                if committed {
+                    web.finish_call_after_commit(binding, source, request, result)
+                        .0
+                } else {
+                    web.finish_call(binding, source, request, result).0
+                }
+            }
             Err(_) => failure(Some(&request.id), error(WebErrorCode::HostFailure)),
         }
     }

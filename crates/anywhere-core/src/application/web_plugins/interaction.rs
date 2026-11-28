@@ -9,9 +9,18 @@ use crate::{
     features::preview::{PreviewResource, PreviewStore},
     Application,
 };
-use anywhere_protocol::web_bridge::{WebErrorCode, WebResult};
+use anywhere_protocol::{
+    web_bridge::{WebErrorCode, WebResult},
+    web_plugin::WebPermission,
+};
 use serde_json::Value;
-use std::{future::Future, sync::Arc};
+use std::{
+    future::Future,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+};
 use tokio::sync::{mpsc, oneshot, watch, Mutex};
 use url::Url;
 
@@ -55,6 +64,16 @@ pub struct HostInteraction {
     control: Arc<RequestControl>,
     response: oneshot::Sender<Result<(), WebErrorCode>>,
     completion: watch::Receiver<()>,
+    preview_claim: Option<PreviewClaim>,
+}
+
+struct PreviewClaim {
+    store: Arc<std::sync::Mutex<PreviewStore>>,
+    id: String,
+    claimed: Arc<AtomicBool>,
+    web: Arc<std::sync::Mutex<super::WebPluginService>>,
+    binding: WebDocumentBinding,
+    source: Source,
 }
 
 /// Frontend interactions originating in the Rust broker.
@@ -69,7 +88,8 @@ pub enum HostInteractionKind {
 
 pub(super) struct PendingPreview {
     store: Arc<std::sync::Mutex<PreviewStore>>,
-    resource: Option<PreviewResource>,
+    resource: PreviewResource,
+    claimed: Arc<AtomicBool>,
 }
 
 impl PendingPreview {
@@ -79,30 +99,32 @@ impl PendingPreview {
     ) -> Self {
         Self {
             store,
-            resource: Some(resource),
+            resource,
+            claimed: Arc::new(AtomicBool::new(false)),
         }
     }
 
-    fn resource(&self) -> WebResult<&PreviewResource> {
-        self.resource
-            .as_ref()
-            .ok_or_else(|| error(WebErrorCode::Expired))
-    }
-
-    fn claim(mut self) -> WebResult<()> {
-        let resource = self.resource()?;
-        crate::core::sync::lock_or_deny(&self.store, "previews")
-            .and_then(|mut store| store.retain(&resource.id))
-            .map_err(|_| error(WebErrorCode::Expired))?;
-        self.resource = None;
-        Ok(())
+    fn claim_handle(
+        &self,
+        web: Arc<std::sync::Mutex<super::WebPluginService>>,
+        binding: WebDocumentBinding,
+        source: Source,
+    ) -> PreviewClaim {
+        PreviewClaim {
+            store: self.store.clone(),
+            id: self.resource.id.clone(),
+            claimed: self.claimed.clone(),
+            web,
+            binding,
+            source,
+        }
     }
 }
 
 impl Drop for PendingPreview {
     fn drop(&mut self) {
-        if let Some(resource) = self.resource.take() {
-            crate::core::sync::lock_for_revoke(&self.store, "previews").release(&resource.id);
+        if !self.claimed.load(Ordering::Acquire) {
+            crate::core::sync::lock_for_revoke(&self.store, "previews").release(&self.resource.id);
         }
     }
 }
@@ -121,11 +143,45 @@ impl HostInteraction {
         }
     }
 
-    /// Reply once with the user's decision.
-    pub fn respond(self, response: Result<(), WebErrorCode>) {
-        if self.is_current() {
-            let _ = self.response.send(response);
+    /// Reply once with the user's decision. Returns `true` only when the host
+    /// accepted the reply (and atomically retained any preview lease).
+    pub fn respond(self, response: Result<(), WebErrorCode>) -> bool {
+        if !self.is_current() {
+            return false;
         }
+        if response.is_ok() {
+            if let Some(claim) = self.preview_claim {
+                let allowed = crate::core::sync::lock_or_deny(&claim.web, "web_plugins")
+                    .ok()
+                    .and_then(|mut web| {
+                        web.require(
+                            &claim.binding,
+                            claim.source.get(),
+                            WebPermission::PreviewOpen {},
+                        )
+                        .ok()
+                    })
+                    .is_some();
+                if !allowed {
+                    let _ = self.response.send(Err(WebErrorCode::PermissionDenied));
+                    return false;
+                }
+                let retained = crate::core::sync::lock_or_deny(&claim.store, "previews")
+                    .and_then(|mut store| store.retain(&claim.id))
+                    .is_ok();
+                if !retained {
+                    let _ = self.response.send(Err(WebErrorCode::Expired));
+                    return false;
+                }
+                claim.claimed.store(true, Ordering::Release);
+                if self.response.send(Ok(())).is_err() {
+                    crate::core::sync::lock_for_revoke(&claim.store, "previews").release(&claim.id);
+                    return false;
+                }
+                return true;
+            }
+        }
+        self.response.send(response).is_ok()
     }
 }
 
@@ -158,15 +214,18 @@ impl Application {
         request: &RequestTicket,
         preview: PendingPreview,
     ) -> WebResult<Value> {
+        let claim = preview.claim_handle(self.web_plugins.clone(), binding.clone(), source.clone());
         self.request_host_interaction(
             binding,
             source,
             request,
-            HostInteractionKind::Preview(preview.resource()?.clone()),
+            HostInteractionKind::Preview(preview.resource.clone()),
+            Some(claim),
         )
         .await?;
-        request.control.check()?;
-        preview.claim()?;
+        if !preview.claimed.load(Ordering::Acquire) {
+            return Err(error(WebErrorCode::Expired));
+        }
         Ok(Value::Null)
     }
 
@@ -193,6 +252,7 @@ impl Application {
                     destination: url.as_str().to_owned(),
                     query_bytes: url.query().map_or(0, str::len),
                 },
+                None,
             )
             .await;
         if decision.is_err() && background {
@@ -205,6 +265,7 @@ impl Application {
         let binding = binding.clone();
         let source = source.clone();
         let control = request.control.clone();
+        let request_id = request.id.clone();
         let web = self.web_plugins.clone();
         let platform = self.platform.clone();
         tokio::task::spawn_blocking(move || {
@@ -219,7 +280,9 @@ impl Application {
                     web.change_background_state(
                         &binding,
                         source.get(),
-                        BackgroundState::HandoffCompleted,
+                        BackgroundState::HandoffCompleted {
+                            request_id: Some(request_id),
+                        },
                     )?;
                 }
             }
@@ -243,6 +306,7 @@ impl Application {
         source: &Source,
         request: &RequestTicket,
         kind: HostInteractionKind,
+        preview_claim: Option<PreviewClaim>,
     ) -> WebResult<()> {
         request.control.check()?;
         let (sender, _guard, background) = {
@@ -273,21 +337,29 @@ impl Application {
         };
         let (response, decision) = oneshot::channel();
         let (_complete, completion) = watch::channel(());
-        sender
-            .try_send(HostInteraction {
-                request_id: request.id.clone(),
-                document_handle: (!background).then(|| binding.runtime_id().to_owned()),
-                kind,
-                control: request.control.clone(),
-                response,
-                completion,
-            })
-            .map_err(|_| error(WebErrorCode::Inactive))?;
+        let interaction = HostInteraction {
+            request_id: request.id.clone(),
+            document_handle: (!background).then(|| binding.runtime_id().to_owned()),
+            kind,
+            control: request.control.clone(),
+            response,
+            completion,
+            preview_claim,
+        };
+        let sent = tokio::select! {
+            biased;
+            _ = request.control.cancelled() => return Err(error(WebErrorCode::Cancelled)),
+            _ = tokio::time::sleep_until(request.control.deadline) => return Err(error(WebErrorCode::Timeout)),
+            result = sender.send(interaction) => result,
+        };
+        if sent.is_err() {
+            return Err(error(WebErrorCode::Inactive));
+        }
         let decision = tokio::select! {
             biased;
             _ = request.control.cancelled() => Err(WebErrorCode::Cancelled),
-            _ = tokio::time::sleep_until(request.control.deadline) => Err(WebErrorCode::Timeout),
             reply = decision => reply.unwrap_or(Err(WebErrorCode::UserCancelled)),
+            _ = tokio::time::sleep_until(request.control.deadline) => Err(WebErrorCode::Timeout),
         };
         decision.map_err(error)
     }
@@ -315,10 +387,28 @@ impl super::WebPluginService {
 
     pub(super) fn fail_background_handoff(&mut self, binding: &WebDocumentBinding) {
         if let Some(invocation) = self.invocations.get_mut(&binding.invocation_id) {
+            if invocation.document_epoch != binding.document_epoch() {
+                return;
+            }
             if invocation.is_draining() {
                 self.close_document(binding);
             } else if let RuntimeLifecycle::Background { state } = &mut invocation.lifecycle {
                 *state = BackgroundState::Running;
+            }
+        }
+    }
+
+    pub(super) fn clear_handoff_request(&mut self, binding: &WebDocumentBinding, request_id: &str) {
+        if let Some(invocation) = self.invocations.get_mut(&binding.invocation_id) {
+            if invocation.document_epoch == binding.document_epoch() {
+                if let RuntimeLifecycle::Background {
+                    state: BackgroundState::HandoffCompleted { request_id: active },
+                } = &mut invocation.lifecycle
+                {
+                    if active.as_deref() == Some(request_id) {
+                        *active = None;
+                    }
+                }
             }
         }
     }

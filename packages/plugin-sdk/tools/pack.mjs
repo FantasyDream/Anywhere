@@ -9,7 +9,15 @@ import {
   rm,
   writeFile,
 } from 'node:fs/promises';
-import {basename, dirname, join, relative, resolve, sep} from 'node:path';
+import {
+  basename,
+  dirname,
+  isAbsolute,
+  join,
+  relative,
+  resolve,
+  sep,
+} from 'node:path';
 import {crc32, deflateRawSync} from 'node:zlib';
 import {check, checkAssetPath, maxManifestBytes} from './manifest.mjs';
 
@@ -98,6 +106,15 @@ async function collect(project, manifest) {
         `Missing built asset: ${entry}`,
       );
   }
+  if (manifest.background) {
+    const bundle = files.find(
+      file => file.name === manifest.background.entry,
+    ).bytes;
+    check(
+      bundle.length <= 256 * 1024,
+      'Background bundle exceeds 256 KiB',
+    );
+  }
   if (manifest.icon) {
     const icon = files.find(file => file.name === manifest.icon).bytes;
     check(
@@ -168,12 +185,17 @@ export async function validateBuilt(project, manifest) {
 }
 
 function inside(parent, child) {
-  const rest = relative(parent, child);
+  const norm = value =>
+    process.platform === 'win32' ? value.toLowerCase() : value;
+  const base = resolve(parent);
+  const target = resolve(child);
+  const rest = relative(base, target);
   return (
     !rest ||
-    (rest !== '..' &&
+    (!isAbsolute(rest) &&
+      rest !== '..' &&
       !rest.startsWith(`..${sep}`) &&
-      resolve(parent, rest) === child)
+      norm(resolve(base, rest)) === norm(target))
   );
 }
 

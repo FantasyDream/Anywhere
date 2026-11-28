@@ -51,26 +51,32 @@ pub(crate) fn format_path_middle_truncated(path: &str) -> String {
     if trimmed.is_empty() {
         return String::new();
     }
-    let contracted = std::env::var("HOME")
-        .ok()
-        .filter(|home| !home.is_empty())
-        .and_then(|home| {
-            trimmed
-                .strip_prefix(&home)
-                .filter(|rest| rest.is_empty() || rest.starts_with('/'))
-                .map(|rest| format!("~{rest}"))
-        })
+    let home = anywhere_platform::paths::home_directory();
+    let contracted = home
+        .as_deref()
+        .and_then(|home| abbreviate_home(trimmed, home))
         .unwrap_or_else(|| trimmed.to_owned());
     let segments: Vec<&str> = contracted
         .split(std::path::is_separator)
         .filter(|part| !part.is_empty())
         .collect();
-    if segments.len() <= 2 || segments.len() <= 4 && contracted.chars().count() <= 48 {
+    if segments.len() <= 2 {
         return contracted;
+    }
+    if segments.len() <= 4 && contracted.chars().count() <= 48 {
+        return if cfg!(windows) && segments[0] == "~" {
+            segments.join(" › ")
+        } else {
+            contracted
+        };
     }
     let leading = if contracted.starts_with('~') {
         if segments.len() >= 2 {
-            format!("~/{}", segments[1])
+            if cfg!(windows) {
+                format!("~ › {}", segments[1])
+            } else {
+                format!("~/{}", segments[1])
+            }
         } else {
             "~".to_owned()
         }
@@ -82,6 +88,35 @@ pub(crate) fn format_path_middle_truncated(path: &str) -> String {
     let tail_count = segments.len().min(2);
     let tail = segments[segments.len() - tail_count..].join(" › ");
     format!("{leading} › … › {tail}")
+}
+
+fn abbreviate_home(path: &str, home: &std::path::Path) -> Option<String> {
+    let home = anywhere_platform::paths::display_path(home);
+    let rest = std::path::Path::new(path).strip_prefix(home).ok();
+    #[cfg(windows)]
+    let rest = rest.or_else(|| {
+        let path = path.as_bytes();
+        let home = home
+            .to_str()?
+            .trim_end_matches(std::path::is_separator)
+            .as_bytes();
+        let prefix = path.get(..home.len())?;
+        if !prefix.iter().zip(home).all(|(left, right)| {
+            left.eq_ignore_ascii_case(right)
+                || matches!((left, right), (b'/', b'\\') | (b'\\', b'/'))
+        }) {
+            return None;
+        }
+        let tail = std::str::from_utf8(&path[home.len()..]).ok()?;
+        (tail.is_empty() || tail.starts_with(std::path::is_separator))
+            .then(|| std::path::Path::new(tail.trim_start_matches(std::path::is_separator)))
+    });
+    let rest = rest?;
+    if rest.as_os_str().is_empty() {
+        Some("~".to_owned())
+    } else {
+        Some(format!("~{}{}", std::path::MAIN_SEPARATOR, rest.display()))
+    }
 }
 
 /// Human-friendly byte size formatting (e.g. `512 B`, `14.2 KB`, `2.4 MB`).
@@ -517,7 +552,13 @@ pub(crate) fn action_result_message(result: &ActionResult, locale: Locale) -> St
         .map(str::trim)
         .filter(|output| !output.is_empty())
     {
-        return output.chars().take(240).collect();
+        let mut chars = output.chars();
+        let preview: String = chars.by_ref().take(512).collect();
+        return if chars.next().is_some() {
+            format!("{preview}…")
+        } else {
+            preview
+        };
     }
     l10n::action_completed(locale)
 }
@@ -570,6 +611,18 @@ mod tests {
         let truncated = format_path_middle_truncated(deep);
         assert!(truncated.contains('…'));
         assert!(truncated.ends_with("src › lib.rs"));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_home_contraction_respects_separator_case_and_directory_boundary() {
+        let home = std::path::Path::new(r"C:\Users\Alice");
+        assert_eq!(
+            abbreviate_home("c:/users/alice/Documents/file.txt", home)
+                .map(|path| path.replace('/', "\\")),
+            Some(r"~\Documents\file.txt".into())
+        );
+        assert_eq!(abbreviate_home(r"C:\Users\AliceOther\file.txt", home), None);
     }
 
     #[cfg(windows)]

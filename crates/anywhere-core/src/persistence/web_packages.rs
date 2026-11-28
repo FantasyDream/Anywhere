@@ -145,6 +145,7 @@ impl WebPackageRepository {
             file.write_all(&bytes)?;
         }
         fs::rename(stage.path(), destination)?;
+        let _ = stage.keep();
         Ok(())
     }
     /// Validate every cached asset before reusing an existing digest.

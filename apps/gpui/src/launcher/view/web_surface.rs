@@ -2,7 +2,7 @@ use super::{components, visibility_script, LauncherView, LiveEvent, Screen};
 use crate::host::{WebDocument, WebPackageReview};
 use crate::l10n;
 use gpui_kit::Context;
-use gpui_kit::Entity;
+use gpui_kit::{Entity, FocusHandle};
 use gpui_webview::WebView;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc::Receiver;
@@ -23,9 +23,16 @@ pub(super) struct WebSurfaceState {
     pub(super) interaction: Option<anywhere_core::application::web_plugins::HostInteraction>,
     pub(super) interaction_expanded: bool,
     pub(super) interaction_generation: u64,
+    pub(super) interaction_focus: Option<gpui_kit::FocusHandle>,
+    pub(super) interaction_cancel_focus: Option<gpui_kit::FocusHandle>,
+    pub(super) interaction_confirm_focus: Option<gpui_kit::FocusHandle>,
     pub review: Option<WebPackageReview>,
     pub review_generation: u64,
     pub review_loading: bool,
+    pub review_approving: bool,
+    pub review_cancel: Option<Arc<std::sync::atomic::AtomicBool>>,
+    pub uninstall_target: Option<String>,
+    pub uninstall_return_focus: Option<FocusHandle>,
     pub invocation_id: Option<String>,
     pub document: Option<WebDocument>,
     pub view: Option<Entity<WebView>>,
@@ -128,9 +135,7 @@ impl LauncherView {
                         this.web_surface.state_handle = None;
                         this.web_surface.state_version = 0;
                         if this.presence.presented && !this.web_surface.needs_resume {
-                            if let Some(web_view) = this.web_surface.view.as_ref() {
-                                let _ = web_view.read(cx).set_visible(true);
-                            }
+                            this.sync_web_view_visibility(cx);
                             let _ = this.evaluate_web_script(&visibility_script(true), cx);
                         }
                     }

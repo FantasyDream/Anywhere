@@ -353,6 +353,14 @@ impl LauncherView {
                     .size(px(metrics::ICON_SIZE))
                     .text_color(theme::secondary()),
             );
+        let hotkey = if mode == InputMode::Search {
+            &self.preferences.universal_shortcut
+        } else {
+            &self.preferences.current_app_shortcut
+        };
+        if let Some(label) = crate::platform::shortcut_label(hotkey) {
+            row = row.trailing(components::keycap(label));
+        }
         if active {
             row = row.trailing(
                 Icon::new(IconName::Check)

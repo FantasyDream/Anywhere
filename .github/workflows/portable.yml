@@ -11,6 +11,8 @@ on:
       - 'rust-toolchain.toml'
       - 'crates/**'
       - 'apps/gpui/**'
+      - 'packages/plugin-sdk/**'
+      - 'plugins/**'
       - 'resources/**'
       - 'scripts/**'
       - 'docs/windows.md'
@@ -78,7 +80,7 @@ jobs:
         run: |
           npm --prefix packages/plugin-sdk ci --ignore-scripts --registry=https://registry.npmjs.org
           npm --prefix packages/plugin-sdk run build
-          node --test packages/plugin-sdk/test/phase-1.test.mjs
+          npm --prefix packages/plugin-sdk test
       - name: Check Windows GPUI and platform targets
         run: cargo clippy -p anywhere-gpui -p anywhere-platform --all-targets --locked -- -D warnings
       - name: Run shared Core, GPUI and Windows platform regressions

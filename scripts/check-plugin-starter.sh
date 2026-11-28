@@ -4,6 +4,9 @@ cd "$(dirname "$0")/.."
 ROOT="$PWD"
 SDK_ARCHIVE="${ANYWHERE_SDK_ARCHIVE:-}"
 if [[ -z "$SDK_ARCHIVE" ]]; then SDK_ARCHIVE="$(scripts/package-plugin-sdk.sh)"; fi
+if command -v cygpath >/dev/null 2>&1; then
+  SDK_ARCHIVE="$(cygpath -u "$SDK_ARCHIVE")"
+fi
 # Build outside the repository so source-relative imports cannot succeed accidentally.
 STARTER_WORK="$(mktemp -d "${TMPDIR:-/tmp}/anywhere-plugin-starter.XXXXXX")"
 trap 'rm -rf "$STARTER_WORK"' EXIT

@@ -18,18 +18,20 @@ const platform = (): Platform => {
 function shortcut(specification: string) {
   const parts = specification.split('+');
   const key = parts.pop();
-  const modifiers = parts.map(modifier =>
-    modifier === 'Mod' ? (platform() === 'macos' ? 'Meta' : 'Ctrl') : modifier,
-  );
+  const raw = parts;
   if (
     !key ||
-    new Set(modifiers).size !== modifiers.length ||
-    modifiers.some(
-      modifier => !['Meta', 'Ctrl', 'Alt', 'Shift'].includes(modifier),
-    )
+    new Set(raw).size !== raw.length ||
+    raw.some(
+      modifier => !['Mod', 'Meta', 'Ctrl', 'Alt', 'Shift'].includes(modifier),
+    ) ||
+    (raw.includes('Mod') && (raw.includes('Meta') || raw.includes('Ctrl')))
   ) {
     throw new TypeError(`Invalid shortcut: ${specification}`);
   }
+  const modifiers = raw.map(modifier =>
+    modifier === 'Mod' ? (platform() === 'macos' ? 'Meta' : 'Ctrl') : modifier,
+  );
   return {key, modifiers};
 }
 
@@ -67,6 +69,7 @@ export const environment = {
   },
   matchesShortcut(event: KeyboardEvent, specification: string): boolean {
     if (
+      typeof event.key !== 'string' ||
       event.defaultPrevented ||
       event.repeat ||
       event.isComposing ||

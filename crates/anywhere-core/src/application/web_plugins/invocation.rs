@@ -63,7 +63,7 @@ pub(super) struct Invocation {
     app: Option<WebCurrentApp>,
     binding: Option<WebDocumentBinding>,
     hidden_at: Option<Instant>,
-    document_epoch: u64,
+    pub(super) document_epoch: u64,
     usage_recorded: bool,
     pub(super) lifecycle: RuntimeLifecycle,
     pub(super) usage: UsageRecord,
@@ -76,11 +76,11 @@ pub(super) enum RuntimeLifecycle {
     Background { state: BackgroundState },
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) enum BackgroundState {
     Running,
     AwaitingInteraction,
-    HandoffCompleted,
+    HandoffCompleted { request_id: Option<String> },
 }
 
 impl Invocation {
@@ -92,9 +92,18 @@ impl Invocation {
         matches!(
             self.lifecycle,
             RuntimeLifecycle::Background {
-                state: BackgroundState::HandoffCompleted
+                state: BackgroundState::HandoffCompleted { .. }
             }
         )
+    }
+
+    pub(super) fn handoff_request_id(&self) -> Option<&str> {
+        match &self.lifecycle {
+            RuntimeLifecycle::Background {
+                state: BackgroundState::HandoffCompleted { request_id },
+            } => request_id.as_deref(),
+            _ => None,
+        }
     }
 }
 impl RuntimeLifecycle {
@@ -520,6 +529,9 @@ impl WebPluginService {
     pub(crate) fn suspend(&mut self) {
         for invocation in self.invocations.values_mut() {
             if invocation.handed_off() {
+                let keep = invocation.handoff_request_id().map(str::to_owned);
+                invocation.rpc.cancel_except(keep.as_deref());
+                invocation.closed.send_replace(true);
                 invocation.hidden_at.get_or_insert_with(Instant::now);
                 continue;
             }

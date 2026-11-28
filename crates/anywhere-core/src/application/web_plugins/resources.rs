@@ -81,9 +81,11 @@ impl SelectedResource {
         let mut chunk = [0u8; 16 * 1024];
         loop {
             control.check()?;
-            let count = read
-                .read(&mut chunk)
-                .map_err(|_| error(WebErrorCode::Expired))?;
+            let count = match read.read(&mut chunk) {
+                Ok(count) => count,
+                Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+                Err(_) => return Err(error(WebErrorCode::Expired)),
+            };
             if count == 0 {
                 break;
             }
@@ -96,6 +98,8 @@ impl SelectedResource {
         if before.len() != after.len() || before.modified().ok() != after.modified().ok() {
             return Err(error(WebErrorCode::Expired));
         }
+        // Release the held FD before reopening so each invocation holds at most one leaf FD.
+        drop(file);
         // The held FD cannot switch objects. The path must still name the selected
         // file when publishing a result, including after a concurrent rename.
         self.open()?;

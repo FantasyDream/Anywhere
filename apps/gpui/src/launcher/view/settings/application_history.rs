@@ -61,25 +61,11 @@ impl LauncherView {
                     .flex()
                     .flex_col()
                     .gap(px(metrics::SPACE_SM))
-                    .child(
-                        div()
-                            .h(px(34.))
-                            .rounded(px(metrics::CONTROL_RADIUS))
-                            .bg(theme::field())
-                            .px(px(metrics::SPACE_SM))
-                            .flex()
-                            .items_center()
-                            .child(
-                                Input::new(&self.settings_editor.history_filter_input)
-                                    .id("history-settings-filter")
-                                    .appearance(false)
-                                    .bordered(false)
-                                    .focus_bordered(false)
-                                    .cleanable(true)
-                                    .text_size(px(metrics::BODY_SIZE))
-                                    .w_full(),
-                            ),
-                    )
+                    .child(components::search_field(
+                        "history-settings-filter",
+                        &self.settings_editor.history_filter_input,
+                        l10n::app_history_filter_sources(self.locale),
+                    ))
                     .child(
                         div()
                             .flex()
@@ -179,7 +165,9 @@ impl LauncherView {
         source: crate::host::AppHistorySource,
         cx: &mut Context<Self>,
     ) -> Div {
-        let editing = self.app_history.selected_source.as_deref() == Some(source.id.as_str());
+        use anywhere_core::features::application_history::model::SourceMode;
+        let editing =
+            self.settings_editor.history_path_editing.as_deref() == Some(source.id.as_str());
         let id = source.id.clone();
         let configure_id = id.clone();
         let enabled_id = id.clone();
@@ -257,6 +245,88 @@ impl LauncherView {
                             })),
                     ),
             )
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .gap(px(metrics::SPACE_XS))
+                    .child(
+                        components::filter_chip(
+                            SharedString::from(format!("history-auto-{automatic_id}")),
+                            l10n::source_mode_automatic(self.locale),
+                            !editing && source.mode == SourceMode::Automatic,
+                        )
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.settings_editor.history_path_editing = None;
+                            if let Some(live) = this.live.as_ref() {
+                                let receiver = live.configure_app_history(
+                                    automatic_id.clone(),
+                                    String::new(),
+                                    SourceMode::Automatic,
+                                );
+                                this.poll(receiver, this.live_state.generation, cx);
+                            }
+                            cx.notify();
+                        })),
+                    )
+                    .child(
+                        components::filter_chip(
+                            SharedString::from(format!("history-select-{configure_id}")),
+                            l10n::source_mode_custom(self.locale),
+                            editing || source.mode == SourceMode::Custom,
+                        )
+                        .on_click(cx.listener(
+                            move |this, _, window, cx| {
+                                if this.settings_editor.history_path_editing.as_deref()
+                                    == Some(configure_id.as_str())
+                                {
+                                    this.settings_editor.history_path_editing = None;
+                                } else {
+                                    this.settings_editor.history_path_editing =
+                                        Some(configure_id.clone());
+                                    let value = this
+                                        .app_history
+                                        .sources
+                                        .iter()
+                                        .find(|source| source.id == configure_id)
+                                        .and_then(|source| source.path.as_ref())
+                                        .map(|path| path.display().to_string())
+                                        .unwrap_or_default();
+                                    set_input_value(
+                                        &this.settings_editor.history_path_input,
+                                        value,
+                                        window,
+                                        cx,
+                                    );
+                                    this.settings_editor
+                                        .history_path_input
+                                        .update(cx, |input, cx| input.focus(window, cx));
+                                }
+                                cx.notify();
+                            },
+                        )),
+                    )
+                    .child(
+                        components::filter_chip(
+                            SharedString::from(format!("history-off-{disabled_id}")),
+                            l10n::source_mode_disabled(self.locale),
+                            !editing && source.mode == SourceMode::Disabled,
+                        )
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.settings_editor.history_path_editing = None;
+                            if let Some(live) = this.live.as_ref() {
+                                let receiver = live.configure_app_history(
+                                    disabled_id.clone(),
+                                    String::new(),
+                                    SourceMode::Disabled,
+                                );
+                                this.poll(receiver, this.live_state.generation, cx);
+                            }
+                            cx.notify();
+                        })),
+                    ),
+            )
             .when(editing, |card| {
                 card.child(self.settings_input_row(
                     l10n::app_history_source_path(self.locale),
@@ -265,89 +335,33 @@ impl LauncherView {
                     "history-custom-path",
                     "~/Library/Application Support/...",
                 ))
+                .child(
+                    Button::new(SharedString::from(format!("history-custom-{custom_id}")))
+                        .primary()
+                        .label(l10n::app_history_save_custom(self.locale))
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            if this.settings_editor.history_path_editing.as_deref()
+                                != Some(custom_id.as_str())
+                            {
+                                return;
+                            }
+                            let path = this
+                                .settings_editor
+                                .history_path_input
+                                .read(cx)
+                                .value()
+                                .trim()
+                                .to_owned();
+                            if let Some(live) = this.live.as_ref() {
+                                let receiver = live.configure_app_history(
+                                    custom_id.clone(),
+                                    path,
+                                    SourceMode::Custom,
+                                );
+                                this.poll(receiver, this.live_state.generation, cx);
+                            }
+                        })),
+                )
             })
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(px(metrics::SPACE_XS))
-                    .flex_wrap()
-                    .child(
-                        Button::new(SharedString::from(format!("history-auto-{automatic_id}")))
-                            .secondary()
-                            .label(l10n::app_history_use_automatic(self.locale))
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                if let Some(live) = this.live.clone() {
-                                    let receiver = live.configure_app_history(
-                                        automatic_id.clone(),
-                                        String::new(),
-                                        anywhere_core::features::application_history::model::SourceMode::Automatic,
-                                    );
-                                    this.poll(receiver, this.live_state.generation, cx);
-                                }
-                            })),
-                    )
-                    .child(
-                        Button::new(SharedString::from(format!("history-custom-{custom_id}")))
-                            .secondary()
-                            .label(l10n::app_history_save_custom(self.locale))
-                            .disabled(!editing)
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                if this.app_history.selected_source.as_deref()
-                                    != Some(custom_id.as_str())
-                                {
-                                    return;
-                                }
-                                let path = this
-                                    .settings_editor
-                                    .history_path_input
-                                    .read(cx)
-                                    .value()
-                                    .trim()
-                                    .to_owned();
-                                if let Some(live) = this.live.clone() {
-                                    let receiver = live.configure_app_history(
-                                        custom_id.clone(),
-                                        path,
-                                        anywhere_core::features::application_history::model::SourceMode::Custom,
-                                    );
-                                    this.poll(receiver, this.live_state.generation, cx);
-                                }
-                            })),
-                    )
-                    .child(
-                        Button::new(SharedString::from(format!("history-off-{disabled_id}")))
-                            .secondary()
-                            .label(l10n::app_history_source_off(self.locale))
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                if let Some(live) = this.live.clone() {
-                                    let receiver = live.configure_app_history(
-                                        disabled_id.clone(),
-                                        String::new(),
-                                        anywhere_core::features::application_history::model::SourceMode::Disabled,
-                                    );
-                                    this.poll(receiver, this.live_state.generation, cx);
-                                }
-                            })),
-                    ),
-            )
-            .child(
-                Button::new(SharedString::from(format!("history-select-{configure_id}")))
-                    .ghost()
-                    .label(l10n::app_history_edit_path(self.locale))
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.app_history.selected_source = Some(configure_id.clone());
-                        let value = this
-                            .app_history
-                            .sources
-                            .iter()
-                            .find(|source| source.id == configure_id)
-                            .and_then(|source| source.path.clone())
-                            .map(|path| path.display().to_string())
-                            .unwrap_or_default();
-                        set_input_value(&this.settings_editor.history_path_input, value, window, cx);
-                        cx.notify();
-                    })),
-            )
     }
 }

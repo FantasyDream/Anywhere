@@ -170,6 +170,14 @@ impl RpcState {
         }
         false
     }
+    pub fn cancel_except(&mut self, keep: Option<&str>) {
+        self.transfer = None;
+        for (id, request) in &self.pending {
+            if keep != Some(id.as_str()) {
+                request.cancel();
+            }
+        }
+    }
     pub fn prune(&mut self) {
         if self.transfer.as_ref().is_some_and(Transfer::expired) {
             self.transfer = None;

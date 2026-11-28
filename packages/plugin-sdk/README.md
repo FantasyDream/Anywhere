@@ -118,7 +118,7 @@ const clipboard = await host.clipboard.readText();
 
 - `context.read` 只允许本次调用中声明的类型，不包含完整 Context Graph；文件只给显示名称与不透明句柄。
 - `context.currentApp` 是唤醒前冻结的 ID / 名称，需要单独批准。
-- 剪贴板读写分别需要安装时批准对应权限；当前 V0.14 GPUI Host 不再逐次确认。网页不能用 `approved`、`userGesture` 或自报 pluginId 获得资格。SDK Promise 等待 Host 的最终响应，不会自动重试副作用。
+- 剪贴板读写分别需要安装时批准对应权限；GPUI Host 不再逐次确认。网页不能用 `approved`、`userGesture` 或自报 pluginId 获得资格。SDK Promise 等待 Host 的最终响应，不会自动重试副作用。
 - `storage.local` 只能使用当前插件及来源绑定的键空间，不接受 namespace。值是 JSON；`get` 返回值或 `null`。
 - 支持 `AbortSignal`。隐藏、重载、返回、撤销时 Host 负责撤销 Rust 文档资格并释放旧客户端；`createHost(transport)` 提供的实例也有 `dispose()`。
 - 没有通用 `invoke`、Shell、后台监控、历史剪贴板、任意文件或网络 API。
@@ -131,13 +131,13 @@ const clipboard = await host.clipboard.readText();
 cargo run -p anywhere-protocol --features web-schema --example generate_web_sdk_contract --locked
 ```
 
-帧 ≤ 64 KiB；8 个进行中请求、16 个排队请求；单文档最多 4,096 个请求 ID。普通调用 5 秒；首次 ready 最多 10 秒。取消或超时无法撤回已经开始的 OS I/O，错误不承诺可以安全重试。
+帧 ≤ 64 KiB；8 个进行中请求、16 个排队请求；单文档最多 4,096 个请求 ID。普通调用 5 秒，`url.open` 确认等待 30 秒；首次 ready 最多 10 秒。取消或超时无法撤回已经开始的 OS I/O，错误不承诺可以安全重试。
 
 复制文本原始 UTF-8 ≤ 1 MiB；大文本每块 ≤ 4 KiB 原始字节，编码后 ≤ 32 KiB。结果 JSON 采用单个下载缓冲，编码后总量 ≤ 2 MiB，超过返回 `TOO_LARGE`，不静默截断。缓冲 5 秒过期，后台每秒清理；隐藏 / 销毁立即释放。SDK 按 UTF-8 边界切分，保留中文、表情和 BOM。
 
 KV 每个命名空间的值合计 ≤ 1 MiB、最多 256 个键，单键值 JSON ≤ 64 KiB；调用仍受帧上限约束。配额检查与更新在同一个 SQLite 事务内，失败保留旧值。
 
-Host 通过 `HostTransport` 注入一条只传字符串帧的消息连接。原生来源 / 主 frame / Runtime / 文档 epoch 由 Host 另行交给 Rust，不进入 SDK 请求正文。生命周期事件已接入；主题由 Host 注入 CSS tokens。返回 / 重载由 Host 提供，尚未开放 SDK navigation / actions API。
+Host 通过 `HostTransport` 注入一条只传字符串帧的消息连接。原生来源 / 主 frame / Runtime / 文档 epoch 由 Host 另行交给 Rust，不进入 SDK 请求正文。生命周期事件已接入；主题由 Host 注入 CSS tokens。WebView 可通过 `window.back()` / `window.close()` 申请返回或关闭当前窗口，底层操作仍由 Host 按文档与请求身份校验后执行；`runBackgroundMock` 需以 Node `--experimental-vm-modules` 运行（`anywhere-plugin test` 会自动注入该参数）。
 
 安装更新、禁用或撤销会失效旧调用，当前没有延迟替换编辑页的模式。卸载会清理该安装的私有 KV；没有保留数据选项。Host 的本地安装身份不等于已验证发布者，Action ID 与使用记录 / 快捷键也不提供跨发布者身份隔离。
 

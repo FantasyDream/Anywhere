@@ -32,6 +32,7 @@ export function parseUniqueJson(source) {
       for (;;) {
         check(key?.startsWith('"'), 'Expected a JSON property name');
         const name = JSON.parse(key);
+        check(!/\p{Cs}/u.test(name), 'Invalid Unicode surrogate in JSON key');
         check(!keys.has(name), `Duplicate JSON property: ${name}`);
         keys.add(name);
         check(next() === ':', 'Expected a JSON property value');
@@ -54,6 +55,12 @@ export function parseUniqueJson(source) {
       }
     }
     check(first && !'];}:,'.includes(first), 'Expected a JSON value');
+    if (first.startsWith('"')) {
+      check(
+        !/\p{Cs}/u.test(JSON.parse(first)),
+        'Invalid Unicode surrogate in JSON string',
+      );
+    }
   }
   value(next(), 0);
   return JSON.parse(source);
@@ -196,6 +203,8 @@ function validateSemantics(manifest, schema, warn) {
   if (entry) {
     checkAssetPath(entry);
     check(entry.endsWith('.html'), 'Web entry must be local HTML');
+    if (!entry.startsWith('dist/'))
+      warn(`Entry ${entry} is outside dist/; pack only includes files under dist/.`);
   }
   if (background) {
     checkAssetPath(background.entry);
@@ -203,10 +212,14 @@ function validateSemantics(manifest, schema, warn) {
       /\.m?js$/.test(background.entry),
       'Background entry must be compiled JavaScript',
     );
+    if (!background.entry.startsWith('dist/'))
+      warn(`Background entry ${background.entry} is outside dist/; pack only includes files under dist/.`);
   }
   if (icon !== null && icon !== undefined) {
     checkAssetPath(icon);
     check(icon.endsWith('.png'), 'Package icon must be PNG');
+    if (!icon.startsWith('dist/'))
+      warn(`Icon ${icon} is outside dist/; pack only includes files under dist/.`);
   }
   const ownedPrefix = `plugin.${id}.`;
   const permissionNames = permissions.map(permission => permission.name);
@@ -237,10 +250,25 @@ function validateSemantics(manifest, schema, warn) {
     );
     const canonical = origins.map(origin => {
       check(
-        /^https?:\/\/[^/?#@*\\\s]+$/i.test(origin) && !/\p{Cc}/u.test(origin),
+        Buffer.byteLength(origin) <= 8192 &&
+          /^https?:\/\/[^/?#@*\\\s]+$/i.test(origin) &&
+          !/\p{Cc}|\p{Cs}/u.test(origin),
         'URL grant must be an exact HTTP(S) origin',
       );
-      return new URL(origin).origin;
+      let parsed;
+      try {
+        parsed = new URL(origin);
+      } catch {
+        throw new Error('URL grant must be an exact HTTP(S) origin');
+      }
+      check(
+        Buffer.byteLength(parsed.href) <= 8192 &&
+          (parsed.protocol === 'http:' || parsed.protocol === 'https:') &&
+          !parsed.username &&
+          !parsed.password,
+        'URL grant must be an exact HTTP(S) origin',
+      );
+      return parsed.origin;
     });
     check(unique(canonical), 'Duplicate URL origin');
   }
@@ -297,9 +325,12 @@ function validateSemantics(manifest, schema, warn) {
         : entry && segment(entrypoint),
       `Missing or invalid command entrypoint: ${id}`,
     );
+    const localizedEntries = Object.entries(localizedTitles);
     check(
       label(title, 200) &&
-        Object.entries(localizedTitles).every(
+        localizedEntries.length <= 32 &&
+        unique(localizedEntries.map(([language]) => language.toLowerCase())) &&
+        localizedEntries.every(
           ([language, text]) =>
             language.length <= 35 &&
             /^[a-z]{2,8}(?:-[a-z0-9]{1,8})*$/i.test(language) &&

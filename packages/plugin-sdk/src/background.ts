@@ -8,11 +8,19 @@ import {limits} from './contract.js';
 import type {Calls, PluginSnapshot, WebInput} from './contract.js';
 export type {
   BackgroundAnywhere as Anywhere,
+  CallOptions,
   ReadTextOptions,
   ResourceStat,
   Unsubscribe,
 } from './api.js';
-export type {WebInput as Input, JsonValue} from './contract.js';
+export type {
+  WebCapabilities,
+  WebCurrentApp as CurrentApp,
+  WebInput as Input,
+  WebInvocation as Invocation,
+  WebResource,
+  JsonValue,
+} from './contract.js';
 export {HostError} from './errors.js';
 
 export type ResolverContext = {

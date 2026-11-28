@@ -97,6 +97,7 @@
           "additionalProperties": {
             "type": "string"
           },
+          "maxProperties": 32,
           "type": "object"
         },
         "requireContext": {
