@@ -204,7 +204,9 @@ function validateSemantics(manifest, schema, warn) {
     checkAssetPath(entry);
     check(entry.endsWith('.html'), 'Web entry must be local HTML');
     if (!entry.startsWith('dist/'))
-      warn(`Entry ${entry} is outside dist/; pack only includes files under dist/.`);
+      warn(
+        `Entry ${entry} is outside dist/; pack only includes files under dist/.`,
+      );
   }
   if (background) {
     checkAssetPath(background.entry);
@@ -213,13 +215,17 @@ function validateSemantics(manifest, schema, warn) {
       'Background entry must be compiled JavaScript',
     );
     if (!background.entry.startsWith('dist/'))
-      warn(`Background entry ${background.entry} is outside dist/; pack only includes files under dist/.`);
+      warn(
+        `Background entry ${background.entry} is outside dist/; pack only includes files under dist/.`,
+      );
   }
   if (icon !== null && icon !== undefined) {
     checkAssetPath(icon);
     check(icon.endsWith('.png'), 'Package icon must be PNG');
     if (!icon.startsWith('dist/'))
-      warn(`Icon ${icon} is outside dist/; pack only includes files under dist/.`);
+      warn(
+        `Icon ${icon} is outside dist/; pack only includes files under dist/.`,
+      );
   }
   const ownedPrefix = `plugin.${id}.`;
   const permissionNames = permissions.map(permission => permission.name);

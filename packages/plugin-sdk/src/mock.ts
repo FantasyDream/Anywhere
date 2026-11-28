@@ -239,7 +239,9 @@ export function createMock(initial: Partial<WebInvocation> = {}) {
           if (!selectedItem) return fail('EXPIRED');
           if (!selectedItem.readable) return fail('PERMISSION_DENIED');
           const limit =
-            params.maxBytes === undefined ? limits.textBytes : Number(params.maxBytes);
+            params.maxBytes === undefined
+              ? limits.textBytes
+              : Number(params.maxBytes);
           if (
             !Number.isSafeInteger(limit) ||
             limit < 1 ||

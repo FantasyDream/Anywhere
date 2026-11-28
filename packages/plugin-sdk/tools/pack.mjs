@@ -110,10 +110,7 @@ async function collect(project, manifest) {
     const bundle = files.find(
       file => file.name === manifest.background.entry,
     ).bytes;
-    check(
-      bundle.length <= 256 * 1024,
-      'Background bundle exceeds 256 KiB',
-    );
+    check(bundle.length <= 256 * 1024, 'Background bundle exceeds 256 KiB');
   }
   if (manifest.icon) {
     const icon = files.find(file => file.name === manifest.icon).bytes;
