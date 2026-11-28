@@ -2,45 +2,60 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT="$PWD"
-mkdir -p build/plugin-sdk
-(
-  cd packages/plugin-sdk
-  npm pack --json --pack-destination "$ROOT/build/plugin-sdk" >"$ROOT/build/plugin-sdk/pack.json"
-)
-SDK_ARCHIVE="$ROOT/build/plugin-sdk/$(node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync("build/plugin-sdk/pack.json", "utf8"))[0].filename)')"
-# Build outside the repository: source-relative SDK imports cannot accidentally work.
+SDK_ARCHIVE="${ANYWHERE_SDK_ARCHIVE:-}"
+if [[ -z "$SDK_ARCHIVE" ]]; then SDK_ARCHIVE="$(scripts/package-plugin-sdk.sh)"; fi
+# Build outside the repository so source-relative imports cannot succeed accidentally.
 STARTER_WORK="$(mktemp -d "${TMPDIR:-/tmp}/anywhere-plugin-starter.XXXXXX")"
 trap 'rm -rf "$STARTER_WORK"' EXIT
 mkdir "$STARTER_WORK/sdk"
 tar -xzf "$SDK_ARCHIVE" -C "$STARTER_WORK/sdk" --strip-components=1
 python3 scripts/check-docs.py --package "$STARTER_WORK/sdk"
 cmp "$ROOT/LICENSE" "$STARTER_WORK/sdk/LICENSE"
-node "$STARTER_WORK/sdk/tools/create.mjs" init "$STARTER_WORK/my-tool"
-cmp "$ROOT/LICENSE" "$STARTER_WORK/my-tool/vendor/plugin-sdk/LICENSE"
-python3 scripts/check-docs.py --package "$STARTER_WORK/my-tool/vendor/plugin-sdk"
-# Refuse to overwrite an existing project, including its user changes.
-if node "$STARTER_WORK/sdk/tools/create.mjs" init "$STARTER_WORK/my-tool"; then
+CLI="$STARTER_WORK/sdk/tools/anywhere-plugin.mjs"
+
+for variant in web ts background hybrid; do
+  project="$STARTER_WORK/my-$variant"
+  if [[ "$variant" == web ]]; then
+    node "$CLI" init "$project"
+  else
+    node "$CLI" init "$project" "--$variant"
+  fi
+  cmp "$ROOT/LICENSE" "$project/vendor/plugin-sdk/LICENSE"
+  cmp "$STARTER_WORK/sdk/tools/skill/SKILL.md" "$project/.agents/skills/anywhere-plugin-dev/SKILL.md"
+  if [[ -e "$project/vendor/plugin-sdk/templates" ]]; then
+    echo 'Vendored SDK unexpectedly contains starter templates.' >&2
+    exit 1
+  fi
+  (
+    cd "$project"
+    npm install --registry=https://registry.npmjs.org --ignore-scripts --no-audit --no-fund
+    node "$CLI" validate
+    if node "$CLI" validate --built; then
+      echo 'Built validation unexpectedly accepted a missing dist.' >&2
+      exit 1
+    fi
+    if [[ "$variant" != web ]]; then npm run check; fi
+    if [[ "$variant" == background ]]; then npm run dev; else npm run build; fi
+    node "$CLI" test
+    node "$CLI" validate --built
+    npm run pack
+    node "$CLI" pack --output output/repacked.awplugin
+    cmp "output/my-$variant.awplugin" output/repacked.awplugin
+  )
+  package="$project/output/my-$variant.awplugin"
+  cargo run -p anywhere-plugin --example inspect_web_package --locked -- "$package"
+  if [[ "$(uname -s)" == Darwin ]]; then
+    mkdir "$STARTER_WORK/host-$variant"
+    ANYWHERE_DATA_DIR="$STARTER_WORK/host-$variant" cargo run -p anywhere-core --example web_sdk_conformance --locked -- --import "$package"
+  fi
+  if [[ "$variant" != background ]]; then
+    node "$ROOT/packages/plugin-sdk/test/dev-server.mjs" "$project"
+  fi
+done
+
+if node "$CLI" init "$STARTER_WORK/my-web"; then
   echo 'Starter unexpectedly overwrote an existing directory.' >&2
   exit 1
 fi
-(
-  cd "$STARTER_WORK/my-tool"
-  npm install --registry=https://registry.npmjs.org --ignore-scripts --no-audit --no-fund
-  cmp "$ROOT/LICENSE" node_modules/@anywhere/sdk/LICENSE
-  npm run build
-  npm run pack
-)
-cargo run -p anywhere-plugin --example inspect_web_package --locked -- "$STARTER_WORK/my-tool/output/my-tool.awplugin"
-cp "$STARTER_WORK/my-tool/output/my-tool.awplugin" "$ROOT/build/plugin-sdk/text-transform.awplugin"
-printf 'Standalone starter built and validated outside the checkout.\n'
-
-node "$STARTER_WORK/sdk/tools/create.mjs" init "$STARTER_WORK/my-parser" --background
-(
-  cd "$STARTER_WORK/my-parser"
-  npm install --registry=https://registry.npmjs.org --ignore-scripts --no-audit --no-fund
-  npm run check
-  npm run build
-  npm run pack
-)
-cargo run -p anywhere-plugin --example inspect_web_package --locked -- "$STARTER_WORK/my-parser/output/my-parser.awplugin"
-cargo run -p anywhere-core --example web_sdk_conformance --locked -- --background "$STARTER_WORK/my-parser/output/my-parser.awplugin"
+cp "$STARTER_WORK/my-web/output/my-web.awplugin" "$ROOT/build/plugin-sdk/text-transform.awplugin"
+cargo run -p anywhere-core --example web_sdk_conformance --locked -- --background "$STARTER_WORK/my-background/output/my-background.awplugin"

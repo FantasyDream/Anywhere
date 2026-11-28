@@ -93,7 +93,7 @@ impl Drop for RpcState {
 impl RpcState {
     #[cfg(test)]
     pub fn admit(&mut self, id: &str, queued: bool) -> WebResult<RequestTicket> {
-        self.admit_with_quota(id, queued, true)
+        self.admit_with_quota(id, queued, true, REQUEST_TIMEOUT_MS)
     }
 
     pub fn admit_call(&mut self, id: &str, call: &WebCall) -> WebResult<RequestTicket> {
@@ -107,7 +107,7 @@ impl RpcState {
                 | WebCall::TextCancel { .. }
                 | WebCall::Cancel { .. }
         );
-        self.admit_with_quota(id, queued, counts_quota)
+        self.admit_with_quota(id, queued, counts_quota, call.spec().timeout_ms)
     }
 
     fn admit_with_quota(
@@ -115,6 +115,7 @@ impl RpcState {
         id: &str,
         queued: bool,
         counts_quota: bool,
+        timeout_ms: u64,
     ) -> WebResult<RequestTicket> {
         self.prune();
         if self.seen.contains(id) {
@@ -152,7 +153,7 @@ impl RpcState {
             cancelled: AtomicBool::new(false),
             cancellation: tokio::sync::Notify::new(),
             running: AtomicBool::new(false),
-            deadline: Instant::now() + Duration::from_millis(REQUEST_TIMEOUT_MS),
+            deadline: Instant::now() + Duration::from_millis(timeout_ms),
         });
         if queued {
             self.pending.insert(id.into(), control.clone());

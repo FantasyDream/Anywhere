@@ -21,6 +21,9 @@ impl LauncherView {
         if self.screen == screen {
             return;
         }
+        if self.screen == Screen::WebPackages {
+            self.retire_package_review();
+        }
         if self.screen == Screen::ApplicationHistory {
             self.app_history.close_object_actions();
             self.app_history.page_actions_open = false;

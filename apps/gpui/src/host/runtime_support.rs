@@ -228,6 +228,10 @@ pub(super) fn web_packages_from(application: &ApplicationRuntime) -> Result<Vec<
         .web_package_statuses()?
         .into_iter()
         .map(|status| WebPackage {
+            diagnostics: application
+                .application()
+                .web_package_diagnostics(&status.id),
+            open_action_id: status.open_action_id,
             id: status.id,
             name: status.name,
             version: status.version,
@@ -265,6 +269,9 @@ pub(super) fn web_permission_label(
         WebPermission::InputRead {} => "input.read".to_owned(),
         WebPermission::InputWrite {} => "input.write".to_owned(),
         WebPermission::FrontmostApp {} => "frontmost-app".to_owned(),
+        WebPermission::UrlOpen { origins } => format!("url.open:{}", origins.join(", ")),
+        WebPermission::ResourcesRead {} => "resources.read".to_owned(),
+        WebPermission::PreviewOpen {} => "preview.open".to_owned(),
     }
 }
 

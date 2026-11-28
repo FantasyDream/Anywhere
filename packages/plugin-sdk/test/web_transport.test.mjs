@@ -111,8 +111,8 @@ for (const encoding of ['string', 'binary']) {
     const text =
       ' {"path":"C:\\\\work\\\\project","quote":"\\"","name":"中文🚀","line":"\\n"}\n';
     const invocation = {
-      plugin_id: 'dev.example.json',
-      command_id: 'open',
+      pluginId: 'dev.example.json',
+      commandId: 'open',
       entrypoint: 'workspace',
       input: {kind: 'text', source: 'user_input', text},
     };
@@ -146,7 +146,7 @@ for (const encoding of ['string', 'binary']) {
       stored,
     );
     await assert.rejects(
-      client.context.getCurrentApp({signal: AbortSignal.timeout(1000)}),
+      client.app.getSource({signal: AbortSignal.timeout(1000)}),
       {code: 'PERMISSION_DENIED'},
     );
   });

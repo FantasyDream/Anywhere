@@ -727,12 +727,7 @@ fn current_app_wakeup_does_not_resume_the_previous_target(cx: &mut TestAppContex
             view.model.select_scope(Some("app.example".into()));
             set_input_value(&view.input, "Git 状态", window, cx);
 
-            assert!(view.activate_from_entry(
-                InputMode::Environment,
-                false,
-                window,
-                cx
-            ));
+            assert!(view.activate_from_entry(InputMode::Environment, false, window, cx));
             assert!(!view.presence.retained_workspace);
             assert!(view.presence.hidden_at.is_none());
             assert!(view.model.query.is_empty());

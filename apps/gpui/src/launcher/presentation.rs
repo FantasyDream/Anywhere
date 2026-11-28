@@ -28,9 +28,7 @@ pub(crate) fn readable_extended_path(value: &str) -> Option<String> {
     if let Some(unc) = value.strip_prefix(r"\\?\UNC\") {
         return Some(format!(r"\\{unc}"));
     }
-    value
-        .strip_prefix(r"\\?\")
-        .map(|path| path.to_owned())
+    value.strip_prefix(r"\\?\").map(|path| path.to_owned())
 }
 
 pub(crate) fn readable_search_roots(roots: &[String]) -> Vec<String> {
@@ -483,6 +481,9 @@ pub(crate) fn web_permission_label(permission: &str, locale: Locale) -> String {
     if let Some(types) = permission.strip_prefix("context.read:") {
         return l10n::permission_context_read(locale, types);
     }
+    if let Some(origins) = permission.strip_prefix("url.open:") {
+        return l10n::permission_open_url(locale, origins);
+    }
     match permission {
         "current-app" => l10n::permission_current_app(locale),
         "clipboard.read-text" => l10n::permission_read_clipboard(locale),
@@ -491,6 +492,8 @@ pub(crate) fn web_permission_label(permission: &str, locale: Locale) -> String {
         "input.read" => l10n::permission_input_read(locale),
         "input.write" => l10n::permission_input_write(locale),
         "frontmost-app" => l10n::permission_frontmost_app(locale),
+        "resources.read" => l10n::permission_read_selection(locale),
+        "preview.open" => l10n::permission_preview_selection(locale),
         _ => permission.to_owned(),
     }
 }

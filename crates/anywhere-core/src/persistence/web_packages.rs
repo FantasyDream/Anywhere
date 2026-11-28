@@ -123,19 +123,7 @@ impl WebPackageRepository {
     pub fn stage(&self, package: &VerifiedWebPackage) -> Result<()> {
         let destination = self.root.join(package.digest());
         if destination.exists() {
-            // Same digest is reusable only while both the archive and all extracted
-            // assets are intact. Otherwise reapproval would report success but the
-            // page would still fail at the resource boundary. Do not overwrite an
-            // installed directory in-place; uninstall/reimport is the recovery path.
-            let installed = self.package(package.digest())?;
-            ensure!(
-                installed.digest() == package.digest(),
-                "cached Web package changed"
-            );
-            for asset in package.assets() {
-                self.resource_file(package.digest(), asset).read()?;
-            }
-            return Ok(());
+            return self.validate_staged(package);
         }
         let stage = tempfile::tempdir_in(&self.root)?;
         let mut archive = fs::OpenOptions::new()
@@ -159,6 +147,23 @@ impl WebPackageRepository {
         fs::rename(stage.path(), destination)?;
         Ok(())
     }
+    /// Validate every cached asset before reusing an existing digest.
+    pub fn validate_staged(&self, package: &VerifiedWebPackage) -> Result<()> {
+        // Same digest is reusable only while both the archive and all extracted
+        // assets are intact. Otherwise reapproval would report success but the
+        // page would still fail at the resource boundary. Do not overwrite an
+        // installed directory in-place; uninstall/reimport is the recovery path.
+        let installed = self.package(package.digest())?;
+        ensure!(
+            installed.digest() == package.digest(),
+            "cached Web package changed"
+        );
+        for asset in package.assets() {
+            self.resource_file(package.digest(), asset).read()?;
+        }
+        Ok(())
+    }
+
     pub fn collect_unused(&self, receipts: &BTreeMap<String, Receipt>) {
         if let Ok(entries) = fs::read_dir(&self.root) {
             for entry in entries.flatten() {

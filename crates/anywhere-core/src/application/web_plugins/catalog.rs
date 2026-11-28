@@ -130,10 +130,16 @@ impl WebPluginCatalog {
                     require_input_match: command.require_input_match,
                 };
                 let action = ActionDefinition {
-                    localized_titles: Default::default(),
+                    localized_titles: command.localized_titles.clone(),
                     id: reference.action_id(),
                     title: command.title.clone(),
-                    subtitle: Some(entry.manifest.name.clone()),
+                    subtitle: Some(
+                        command
+                            .subtitle
+                            .as_ref()
+                            .unwrap_or(&entry.manifest.name)
+                            .clone(),
+                    ),
                     shortcut: None,
                     accepts: command
                         .accepts
@@ -153,7 +159,12 @@ impl WebPluginCatalog {
                     // usage are equal; adding helper commands must not displace
                     // the package's default entry just because of lexical IDs.
                     base_priority: -(index as i32),
-                    icon: "code".into(),
+                    icon: command
+                        .icon
+                        .as_deref()
+                        .filter(|icon| anywhere_protocol::web_plugin::COMMAND_ICONS.contains(icon))
+                        .unwrap_or("code")
+                        .into(),
                     group_id: groups::TOOLS.into(),
                     aliases: vec![],
                     keywords: command.keywords.clone(),

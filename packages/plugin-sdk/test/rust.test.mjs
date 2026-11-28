@@ -70,9 +70,9 @@ test(
     t.after(() => client.dispose());
     await client.ready();
     const input = await client.invocation.get();
-    assert.equal(input.plugin_id, 'dev.example.conformance');
+    assert.equal(input.pluginId, 'dev.example.conformance');
     assert.equal(input.input.kind, 'empty');
-    assert.equal(await client.context.getCurrentApp(), null);
+    assert.equal(await client.app.getSource(), null);
     await client.storage.set('prefs', {indent: 2});
     assert.deepEqual(await client.storage.get('prefs'), {indent: 2});
     await client.storage.remove('prefs');

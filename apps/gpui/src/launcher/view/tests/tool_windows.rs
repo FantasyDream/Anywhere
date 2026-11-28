@@ -23,7 +23,7 @@ fn write_test_awplugin(path: &std::path::Path, id: &str, name: &str, command_tit
         "id": id,
         "name": name,
         "version": "1.0.0",
-        "apiVersion": "1",
+        "apiVersion": "2",
         "platforms": ["macos"],
         "entry": "index.html",
         "permissions": [],
@@ -329,7 +329,7 @@ fn tool_window_and_reopened_launcher_keep_independent_query_and_lifetime(cx: &mu
         .unwrap(),
     );
     let LiveEvent::WebReview(review) = live
-        .inspect_web_package(package_path.display().to_string())
+        .inspect_web_package(package_path.clone())
         .blocking_recv()
         .unwrap()
     else {

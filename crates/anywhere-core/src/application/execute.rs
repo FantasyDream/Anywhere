@@ -24,12 +24,26 @@ impl Application {
         let result = request.spawn().await?;
         let result = async {
             let mut completed = result?;
-            if self
+            if let Some(background) = self
                 .run_headless_web_action(completed.output.view.as_ref(), session_id, revision)
                 .await?
             {
                 completed.output.view = None;
-                completed.output.close_window = true;
+                completed.output.close_window = background.close_window;
+                completed.output.text = background.message;
+                completed.history_result = self
+                    .resolver
+                    .history
+                    .lock()
+                    .map_err(|_| anyhow::anyhow!("history lock poisoned"))
+                    .and_then(|mut history| {
+                        history.record(
+                            &background.usage.action_id,
+                            &background.usage.context_type,
+                            &background.usage.source_app,
+                            crate::application::session_runtime::now(),
+                        )
+                    });
             }
             Ok::<_, anyhow::Error>(completed)
         }

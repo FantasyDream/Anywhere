@@ -4,7 +4,7 @@ export function jsonInputText(input) {
   if (input.kind === 'text') return input.text;
   if (
     input.kind === 'data' &&
-    input.type_id === JSON_CONTEXT &&
+    input.typeId === JSON_CONTEXT &&
     typeof input.value?.text === 'string'
   )
     return input.value.text;

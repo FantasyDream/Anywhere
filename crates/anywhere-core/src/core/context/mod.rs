@@ -116,6 +116,7 @@ pub struct ResolvedContext {
     pub depth: u8,
     pub source_context_id: Option<ContextId>,
     pub capture: Option<CaptureMetadata>,
+    pub(crate) selected_file: Option<anywhere_platform::selected_file::SelectedFileIdentity>,
     pub session_id: SessionId,
     pub revision: Revision,
 }
@@ -132,6 +133,7 @@ impl ResolvedContext {
             depth: 0,
             source_context_id: None,
             capture: None,
+            selected_file: None,
             session_id: 0,
             revision: 0,
         }

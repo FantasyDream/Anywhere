@@ -55,18 +55,6 @@ impl LauncherView {
         let title = row.title.clone();
         let accessibility = row.title.clone();
         let shortcut = row.shortcut.clone();
-        let primary_label = || {
-            if is_menu {
-                l10n::open(self.locale)
-            } else if row.command_id.as_deref() == Some("core.files.search") {
-                l10n::search(self.locale)
-            } else {
-                match row.kind {
-                    CandidateKind::File | CandidateKind::Application => l10n::open(self.locale),
-                    _ => l10n::run(self.locale),
-                }
-            }
-        };
         let show_preview = selected && enabled && is_file && self.can_preview_selected_file();
         let show_actions = selected
             && enabled
@@ -122,6 +110,7 @@ impl LauncherView {
                 .child(shortcut),
             );
         }
+        let primary_label = || primary_row_label(&row, self.locale);
         let mut row = components::ListRow::new(format!("candidate-{index}"))
             .density(components::RowDensity::Regular)
             .selected(selected)
@@ -217,6 +206,18 @@ impl LauncherView {
     }
 
     // Kept as a free function so `render_row` borrows `icons.cache` independently of `model.rows`.
+}
+
+fn primary_row_label(row: &LauncherRow, locale: Locale) -> String {
+    if row.is_menu {
+        l10n::open(locale)
+    } else if row.command_id.as_deref() == Some("core.files.search") {
+        l10n::search(locale)
+    } else if matches!(row.kind, CandidateKind::File | CandidateKind::Application) {
+        l10n::open(locale)
+    } else {
+        l10n::run(locale)
+    }
 }
 
 fn row_icon(cache: &mut ApplicationIconCache, row: &LauncherRow) -> AnyElement {

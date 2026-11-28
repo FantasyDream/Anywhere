@@ -311,7 +311,8 @@ impl LauncherView {
     ) -> Div {
         let active = row.status.is_active();
         let readable_directory =
-            crate::launcher::presentation::readable_file_path(&row.directory).to_owned();
+            crate::launcher::presentation::readable_extended_path(&row.directory)
+                .unwrap_or_else(|| row.directory.clone());
         let (status_color, status_icon) = task_status_style(row.status);
         let status_label = match row.status {
             anywhere_protocol::ExecutionSessionStatus::Running => l10n::running(locale),

@@ -6,10 +6,59 @@ impl LiveLauncher {
         self.spawn_blocking(move || Ok(LiveEvent::WebPackages(web_packages_from(&application)?)))
     }
 
-    pub fn inspect_web_package(&self, path: String) -> Receiver<LiveEvent> {
+    pub fn inspect_web_package(&self, path: std::path::PathBuf) -> Receiver<LiveEvent> {
         let application = self.application.clone();
         self.spawn_blocking(move || {
-            let review = application.inspect_web_package(std::path::Path::new(&path))?;
+            let review = application.inspect_web_package(&path)?;
+            use anywhere_protocol::web_plugin::WebPermission;
+            let origins = review.permissions.iter().find_map(|permission| {
+                if let WebPermission::UrlOpen { origins } = permission {
+                    Some(origins)
+                } else {
+                    None
+                }
+            });
+            let data_to_url = origins.is_some()
+                && review.permissions.iter().any(|permission| {
+                    matches!(
+                        permission,
+                        WebPermission::ResourcesRead {} | WebPermission::ClipboardReadText {}
+                    )
+                });
+            let details = crate::host::WebReviewDetails {
+                command_count: review.command_count,
+                commands: review
+                    .commands
+                    .into_iter()
+                    .map(|command| (command.title, command.localized_titles))
+                    .collect(),
+                resolver_count: review.resolver_count,
+                background_actions: review.background_action_count,
+                added: review
+                    .permissions_added
+                    .iter()
+                    .map(web_permission_label)
+                    .collect(),
+                removed: review
+                    .permissions_removed
+                    .iter()
+                    .map(web_permission_label)
+                    .collect(),
+                scope_changes: review
+                    .permission_scopes
+                    .iter()
+                    .map(|(old, new)| (web_permission_label(old), web_permission_label(new)))
+                    .collect(),
+                data_to_url,
+                any_origin: origins.is_some_and(|origins| origins == &["*"]),
+                insecure_http: origins.is_some_and(|origins| {
+                    origins.iter().any(|origin| {
+                        origin
+                            .split_once("://")
+                            .is_some_and(|(scheme, _)| scheme.eq_ignore_ascii_case("http"))
+                    })
+                }),
+            };
             Ok(LiveEvent::WebReview(WebPackageReview {
                 token: review.token,
                 id: review.id,
@@ -22,6 +71,8 @@ impl LiveLauncher {
                     .map(web_permission_label)
                     .collect(),
                 updating: review.updating,
+                same_version: review.same_version,
+                details,
             }))
         })
     }
@@ -105,7 +156,11 @@ impl LiveLauncher {
                 .dispatch_web_frame(&handle, &origin, main_frame, &frame)
                 .await
             {
-                Ok(frame) => LiveEvent::WebFrameReply { handle, frame },
+                Ok(outcome) => LiveEvent::WebFrameReply {
+                    handle,
+                    frame: outcome.reply_frame,
+                    host_action: outcome.host_action,
+                },
                 Err(error) => LiveEvent::Error(format!("{error:#}")),
             }
         })

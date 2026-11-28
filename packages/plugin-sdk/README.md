@@ -2,9 +2,20 @@
 
 WebView / 按需后台任务共用的最小插件 SDK，运行时无 npm 依赖，不启动 Node。已接入 macOS 本地 WebView、Host 确认 UI 与安装入口，也连接 Rust 合成测试宿主。当前仍是本地开发预览，完整安全 / 跨平台验收尚未完成。
 
-**第一次开发插件：** 阅读仓库中的 [第三方插件开发指南](https://github.com/FantasyDream/Anywhere/blob/main/docs/plugin-development.md)。SDK `.tgz` 自带 `templates/minimal/` 和 `tools/package.py`，可在独立目录使用；当前没有公开 npm 发布版。
+**第一次开发插件：** 阅读仓库中的 [第三方插件开发指南](https://github.com/FantasyDream/Anywhere/blob/main/docs/plugin-development.md)。SDK `.tgz` 自带四种 API 2 模板和 Node.js 22+ CLI，可在独立目录使用。
 
 导出包包含 `dist/`、类型、公共 CSS、模板、打包工具、本说明和 MIT 许可证。业务通过 `@anywhere/sdk` / `@anywhere/sdk/styles/controls.css` 标准导入，不引用仓库源文件。模板的 `npm run build` 构建网页，`npm run pack` 生成 `.awplugin`；`vendor/` 中保留 SDK 包后，不再依赖原仓库位置。
+
+`anywhere-plugin` 支持 `init`、`validate --built`、`pack --output <file.awplugin>` 和 `test`。
+从模板运行 `npm run dev` 可试用浏览器 Mock 或后台 Mock。普通 Web 代码使用
+`definePlugin`，后台命令使用 `anywhere-background` 构建条件，自动解析器使用
+`defineResolver`，返回 `{typeId, value}` 组成的数组。
+
+Web 和显式后台 Action 可使用 `url.open`、`resources.stat` 和 `resources.readText`。
+外链由宿主逐次确认，文本读取只接受本次启动原始单文件句柄。WebView 还提供
+`window.back`、`window.close` 和 `preview.open`。如需显示平台键帽和匹配键盘事件，
+两处使用同一规格，例如 `environment.formatShortcut('Mod+Enter')` 与
+`environment.matchesShortcut(event, 'Mod+Enter')`。
 
 ## 统一业务 API
 
@@ -47,10 +58,10 @@ const plugin = definePlugin({
   // onError(error) 可选：缺省使用共享样式的错误提示。
 });
 // 在业务按钮中调用，处理取消 / 失败后再提示结果。
-await plugin.host.clipboard.writeText('hello');
+await plugin.anywhere.clipboard.writeText('hello');
 ```
 
-页面渲染后调用。启动就绪、首次输入、隐藏时撤销待处理请求、恢复后的新连接、退出释放均自动完成；`plugin.host` 是稳定门面，旧按钮处理器在恢复后也能使用新连接。`plugin.ready` 在首次启动处理结束后完成，错误通过 `onError` 报告；`plugin.dispose()` 幂等，可在前端框架卸载时调用。`onLaunch(invocation, {signal})` 的 signal 在页面销毁时中止；异步业务自行检查，避免卸载后更新状态。`onDispose` 用来清理业务资源。
+页面渲染后调用。启动就绪、首次输入、隐藏时撤销待处理请求、恢复后的新连接、退出释放均自动完成；`plugin.anywhere` 是稳定门面，旧按钮处理器在恢复后也能使用新连接。`plugin.ready` 在首次启动处理结束后完成，错误通过 `onError` 报告；`plugin.dispose()` 幂等，可在前端框架卸载时调用。`onLaunch(invocation, {signal})` 的 signal 在页面销毁时中止；异步业务自行检查，避免卸载后更新状态。`onDispose` 用来清理业务资源。
 
 背景、默认控件样式自动注入，无需 CSS 导入；模板的 `aw-tool` 提供标准工具栏、可伸展编辑区和状态栏。可使用任意标准 HTML / 前端框架，自定义业务布局；这里没有新增 UI DSL。底层 API 继续兼容，只有进阶集成才需自行管理它们。
 
@@ -98,7 +109,7 @@ import { host } from '@anywhere/sdk';
 await host.ready();
 const invocation = await host.invocation.get();
 
-const app = await host.context.getCurrentApp();
+const app = await host.app.getSource();
 const prefs = await host.storage.get('preferences');
 await host.storage.set('preferences', { indent: 2 });
 await host.clipboard.writeText('Text to copy');

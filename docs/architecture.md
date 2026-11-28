@@ -213,13 +213,13 @@ helper 行为必须按[验收矩阵](mvp-gpui.md#物理桌验矩阵)单独记录
 
 ## Web 插件
 
-安装时 Rust 验证 Manifest、资源、摘要和权限。批准后 WebView 只访问固定 origin
-与已验证资源；页面通过受限 JSON 字符串帧 IPC 进入统一 broker。Rust 拥有文档 handle、
-请求资格、预算和取消，GPUI 只挂载视图和转发生命周期事件。
+Rust 用 API 2 Manifest 审查身份、摘要、命令和权限。批准后的 WebView 通过协议 2
+向统一 broker 发请求，有限后台 QuickJS 使用同一运行角色和授权检查。数据请求、
+窗口意图和确认/预览交互分别交付；GPUI 挂载原生视图、显示确认卡并管理焦点。
 
-替换文档会推进 generation。旧页面的资源请求、ack、状态事件或关闭回调不能影响
-新文档。Web 包损坏只移除可选 Web 能力，不阻断 Launcher 启动。按需 QuickJS 使用
-同一能力代理，当前仍为进程内执行；进程隔离尚未交付。
+文档换代、停用和安装目录更新会撤销旧调用。包损坏保留可管理的安装记录。单文件
+读取校验原生文件身份，预览使用共享 PreviewStore 管理只读快照。详见
+[Web 插件架构](web-plugin-design.md)。
 
 ## 扩展入口
 

@@ -1570,6 +1570,34 @@ pub fn approve_and_install(locale: Locale) -> String {
     }
 }
 
+pub fn approve_and_enable(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Approve and enable".to_string(),
+        Locale::Zh => "批准并启用".to_string(),
+    }
+}
+
+pub fn approve(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Approve".to_string(),
+        Locale::Zh => "批准".to_string(),
+    }
+}
+
+pub fn plugin_version_installed(locale: Locale) -> String {
+    match locale {
+        Locale::En => "This version is already installed and enabled.".to_string(),
+        Locale::Zh => "该版本已安装且当前已启用。".to_string(),
+    }
+}
+
+pub fn plugin_version_disabled(locale: Locale) -> String {
+    match locale {
+        Locale::En => "This version is already installed and currently disabled.".to_string(),
+        Locale::Zh => "该版本已安装且当前处于停用状态。".to_string(),
+    }
+}
+
 pub fn web_tools(locale: Locale) -> String {
     match locale {
         Locale::En => "Web tools".to_string(),
@@ -2158,6 +2186,150 @@ pub fn browser_page_description(locale: Locale) -> String {
     match locale {
         Locale::En => "Use the active Safari, Chrome, or Edge tab’s web address".to_string(),
         Locale::Zh => "使用 Safari、Chrome 或 Edge 当前标签页的网页地址".to_string(),
+    }
+}
+
+pub fn plugin_open_url_title(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Open this link?".to_string(),
+        Locale::Zh => "打开此链接？".to_string(),
+    }
+}
+
+pub fn plugin_open_url(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Open link".to_string(),
+        Locale::Zh => "打开链接".to_string(),
+    }
+}
+
+pub fn show_link_details(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Show full destination".to_string(),
+        Locale::Zh => "展开完整地址".to_string(),
+    }
+}
+
+pub fn show_link_query_details(locale: Locale, bytes: &str) -> String {
+    let values = &[("bytes", bytes.to_string())];
+    match locale {
+        Locale::En => fill("Show full destination ({bytes} query bytes)", values),
+        Locale::Zh => fill("展开完整地址（查询参数 {bytes} 字节）", values),
+    }
+}
+
+pub fn hide_link_details(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Hide full destination".to_string(),
+        Locale::Zh => "收起完整地址".to_string(),
+    }
+}
+
+pub fn plugin_review_pending(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Finish or cancel the current package review first.".to_string(),
+        Locale::Zh => "请先完成或取消当前插件审查。".to_string(),
+    }
+}
+
+pub fn open_approved_tool(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Open tool".to_string(),
+        Locale::Zh => "立即打开".to_string(),
+    }
+}
+
+pub fn plugin_command_count(locale: Locale, count: &str) -> String {
+    let values = &[("count", count.to_string())];
+    match locale {
+        Locale::En => fill("{count} commands", values),
+        Locale::Zh => fill("{count} 条命令", values),
+    }
+}
+
+pub fn plugin_background_activity(locale: Locale, resolvers: &str, actions: &str) -> String {
+    let values = &[
+        ("resolvers", resolvers.to_string()),
+        ("actions", actions.to_string()),
+    ];
+    match locale {
+        Locale::En => fill(
+            "Background activity · {resolvers} resolvers and {actions} actions",
+            values,
+        ),
+        Locale::Zh => fill("后台活动 · {resolvers} 个解析器和 {actions} 条动作", values),
+    }
+}
+
+pub fn plugin_added_grants(locale: Locale, grants: &str) -> String {
+    let values = &[("grants", grants.to_string())];
+    match locale {
+        Locale::En => fill("New permissions\n{grants}", values),
+        Locale::Zh => fill("新增权限\n{grants}", values),
+    }
+}
+
+pub fn plugin_removed_grants(locale: Locale, grants: &str) -> String {
+    let values = &[("grants", grants.to_string())];
+    match locale {
+        Locale::En => fill("Removed permissions\n{grants}", values),
+        Locale::Zh => fill("移除权限\n{grants}", values),
+    }
+}
+
+pub fn plugin_scope_changed(locale: Locale, old: &str, new: &str) -> String {
+    let values = &[("old", old.to_string()), ("new", new.to_string())];
+    match locale {
+        Locale::En => fill("Changed scope\n{old} → {new}", values),
+        Locale::Zh => fill("权限范围变化\n{old} → {new}", values),
+    }
+}
+
+pub fn plugin_data_external_risk(locale: Locale) -> String {
+    match locale {
+        Locale::En => {
+            "This plugin can read local data and include it in a link it asks you to open."
+                .to_string()
+        }
+        Locale::Zh => "此插件能够读取本地数据，并可将数据加入请求您打开的链接。".to_string(),
+    }
+}
+
+pub fn plugin_any_origin_risk(locale: Locale) -> String {
+    match locale {
+        Locale::En => "The plugin can request to open any HTTP(S) site.".to_string(),
+        Locale::Zh => "插件可请求打开任意 HTTP(S) 站点。".to_string(),
+    }
+}
+
+pub fn plugin_http_risk(locale: Locale) -> String {
+    match locale {
+        Locale::En => {
+            "An HTTP destination may send link details over an unencrypted connection.".to_string()
+        }
+        Locale::Zh => "HTTP 站点可能通过未加密的连接传送链接内容。".to_string(),
+    }
+}
+
+pub fn permission_open_url(locale: Locale, origins: &str) -> String {
+    let values = &[("origins", origins.to_string())];
+    match locale {
+        Locale::En => fill("Open a URL with confirmation at {origins}", values),
+        Locale::Zh => fill("经确认后打开以下站点的链接：{origins}", values),
+    }
+}
+
+pub fn permission_read_selection(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Read the selected local file".to_string(),
+        Locale::Zh => "读取选中的本地文件".to_string(),
+    }
+}
+
+pub fn permission_preview_selection(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Preview the selected local file".to_string(),
+        Locale::Zh => "预览选中的本地文件".to_string(),
     }
 }
 
@@ -3283,4 +3455,4 @@ pub fn search_directory_unavailable(locale: Locale) -> String {
 }
 
 /// Stable message count for generated-resource verification.
-pub const MESSAGE_COUNT: usize = 446;
+pub const MESSAGE_COUNT: usize = 468;

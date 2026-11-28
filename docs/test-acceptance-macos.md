@@ -611,13 +611,18 @@ Obsidian 使用 `vaults` 下 16 位十六进制 ID 和测试路径。测试文�
 | PKG-011 | P1 / H | 从 Settings 管理区和 Web Packages 页分别操作启用 / 列表选择 | 当前安装状态一致，旧 review / 错误不污染新操作 | Pending |
 | PKG-012 | P0 / H | 无网络环境重复导入 / 使用本地包；同 ID 不同本地包 | 功能不依赖市场；明确本地批准不等于验证发布者身份 / OS 进程沙箱 | Pending |
 
+Phase 1 桌验补充（Pending）见[插件验收矩阵](web-plugin-phase-1.md#逐项验收矩阵)。
+使用独立数据目录，从选择器、设置拖放、文件结果“审查 Anywhere 插件”和系统双击
+进入同一审查卡。分别测试冷启动、运行中打开、审查时隐藏、再次打开，以及含中文
+和空格的路径。批准前查询插件命令，确认搜索中尚未出现。
+
 ### 6.19 WEB：WebView、SDK、权限与生命周期
 
 | ID | 级别 / 方式 | 前置与操作 | 验收预期 | 状态 |
 | --- | --- | --- | --- | --- |
 | WEB-001 | P1 / M | 名称搜索 Text Pad / JSON Workspace，打开后观察首帧、输入焦点和错误 | 真实 WebView 可用；搜索名称不误填为工具正文，空白入口可手工输入 | Pending |
 | WEB-002 | P1 / H | 启动 Context / input 后同 revision 的 snapshot_seq 更新，再真正编辑新 revision | 初始、重复快照、新输入区分正确；旧快照不覆盖插件新草稿 | Pending |
-| WEB-003 | P0 / H | context.read 允许 / 不允许、Input 读写权限组合、文件型 Context | 仅获准单对象 / Input；缺授权为空或拒绝；不暴露完整图、路径或正文文件权限 | Pending |
+| WEB-003 | P0 / H | context.read 允许 / 不允许、Input 读写权限组合、文件型 Context | 仅获准单对象 / Input；缺授权为空或拒绝；文件正文只经独立读取权限和启动单文件句柄访问 | Pending |
 | WEB-004 | P0 / H | Source app / frontmost 权限组合；唤醒后切前台 | 冻结来源与此刻前台不混用；缺权限不推送秘密元数据 | Pending |
 | WEB-005 | P0 / M | 批准剪贴板权限后显式读 / 写，再用缺权限包重复 | 获准调用不逐次弹框，成功才反馈；拒绝不写部分数据、不自动重试写入 | Pending |
 | WEB-006 | P1 / H | storage get / set / remove、重开 / 更新 / 卸载，与另一个包比较 | 私有存储隔离；更新按命名空间契约保留，卸载仅清本包 | Pending |
@@ -836,3 +841,12 @@ VoiceOver（UI-011）纳入功能矩阵和正式发行门槛。开发预览可�
 Pass / Fail / Blocked / Pending / N/A 数、缺陷与复验、18来源真实覆盖表、物理
 输入与权限覆盖、资源样本、未覆盖范围。失败项保留原复现序列；未执行不得从
 旧截图、旧构建记录或单测通过数推定成功。
+
+
+### V0.15 Web 插件能力桌验
+
+| 场景 | 操作 | 状态 |
+| --- | --- | --- |
+| WKWebView 确认卡 | 调用 `url.open`，检查 WebView 原生表面让出确认卡，Enter 确认、Esc 取消，取消后回到启动焦点 | Pending |
+| Finder 与 Quick Look | 单选 CSV 读取并预览，原窗口与独立窗口分别运行，退出预览检查焦点；再用多选、符号链接和 iCloud 占位复验 | Pending |
+| 双平台键帽和中文 IME | 打开 JSON Workspace，确认键帽与按键一致，Ime 组词时操作不会执行 | Pending |

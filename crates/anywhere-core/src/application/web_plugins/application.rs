@@ -4,6 +4,29 @@ use anyhow::{Context, Result};
 use anywhere_protocol::web_plugin::{WebInvocation, WebPlatform};
 
 impl Application {
+    /// True while an approved background handoff still needs a short completion window.
+    pub fn has_background_web_handoff(&self) -> bool {
+        self.web_plugins.lock().is_ok_and(|web| {
+            web.invocations
+                .values()
+                .any(|invocation| invocation.handed_off())
+        })
+    }
+
+    /// Sanitized in-memory background failures for an installed package.
+    pub fn web_package_diagnostics(&self, package: &str) -> Vec<String> {
+        self.web_plugins
+            .lock()
+            .ok()
+            .map_or_else(Vec::new, |web| web.diagnostics.entries(package))
+    }
+
+    pub(super) fn clear_web_package_diagnostics(&self, package: &str) {
+        if let Ok(web) = self.web_plugins.lock() {
+            web.diagnostics.clear(package);
+        }
+    }
+
     /// Resource reads validate identity without cloning the (up to 1 MiB) invocation.
     /// Call again after disk I/O so hiding/revocation cannot publish a stale response.
     pub fn validate_web_document(
@@ -57,6 +80,7 @@ impl Application {
                 &providers,
                 self.resolver.session.clone(),
                 self.platform.clone(),
+                &web.diagnostics,
             )?;
             let restart = [&web.catalog, &catalog].iter().any(|catalog| {
                 catalog.entries.values().any(|entry| {

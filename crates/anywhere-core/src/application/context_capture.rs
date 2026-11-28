@@ -268,7 +268,7 @@ fn browser_context(raw: &str) -> Result<Option<ResolvedContext>> {
     )))
 }
 
-fn finder_contexts(paths: Vec<PathBuf>) -> Result<Vec<ResolvedContext>> {
+pub(super) fn finder_contexts(paths: Vec<PathBuf>) -> Result<Vec<ResolvedContext>> {
     if paths.is_empty() {
         return Ok(Vec::new());
     }
@@ -293,6 +293,12 @@ fn finder_contexts(paths: Vec<PathBuf>) -> Result<Vec<ResolvedContext>> {
             None
         };
         if let Some((type_id, value)) = value {
+            let selected_file = match &value {
+                ContextValue::File(path) if parent.is_none() => {
+                    anywhere_platform::selected_file::SelectedFileIdentity::capture(path).ok()
+                }
+                _ => None,
+            };
             let mut child = ResolvedContext::new(
                 type_id,
                 value,
@@ -300,6 +306,7 @@ fn finder_contexts(paths: Vec<PathBuf>) -> Result<Vec<ResolvedContext>> {
                 "platform.finder_selection",
             );
             child.id = format!("capture.finder.item.{index}");
+            child.selected_file = selected_file;
             child.source_context_id = parent.clone();
             child.depth = u8::from(parent.is_some());
             contexts.push(child);

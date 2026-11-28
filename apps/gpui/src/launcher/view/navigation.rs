@@ -506,6 +506,8 @@ impl LauncherView {
     }
 
     pub fn prepare_hide(&mut self, cx: &mut Context<Self>) {
+        self.drop_web_host_interaction();
+        self.retire_package_review();
         self.cancel_activation_prefill();
         if self.standalone_shelf {
             crate::platform::remember_clipboard_shelf_position();
@@ -536,7 +538,12 @@ impl LauncherView {
             }
             return;
         }
-        self.presence.retained_workspace = self.should_retain_workspace();
+        self.presence.retained_workspace = self.should_retain_workspace()
+            || self.live.as_ref().is_some_and(|live| {
+                live.web_runtime()
+                    .application()
+                    .has_background_web_handoff()
+            });
         self.presence.hidden_at = self.presence.retained_workspace.then(Instant::now);
         if self.presence.retained_workspace {
             if let Some(live) = &self.live {

@@ -101,6 +101,16 @@ impl LauncherView {
                 .into_any_element()
         };
         let selected = self.web.packages.get(self.web.selected).cloned();
+        let diagnostics = selected
+            .as_ref()
+            .filter(|package| !package.diagnostics.is_empty())
+            .map(|package| {
+                div()
+                    .p(px(metrics::SPACE_SM))
+                    .text_size(px(metrics::CAPTION_SIZE))
+                    .text_color(theme::secondary())
+                    .child(package.diagnostics.join("\n"))
+            });
         let review = self
             .web_surface
             .review
@@ -134,6 +144,7 @@ impl LauncherView {
                 .flex_1()
                 .min_h(px(0.))
                 .child(content)
+                .children(diagnostics)
                 .child(footer)
         };
         self.render_page_shell(
@@ -166,6 +177,7 @@ impl LauncherView {
                 Button::new("import-web-package")
                     .secondary()
                     .label(l10n::import_package(self.locale))
+                    .disabled(self.web_surface.review_loading)
                     .on_click(cx.listener(|this, _, window, cx| {
                         let dialog = rfd::AsyncFileDialog::new()
                             .set_title(l10n::import_local_web_tool(this.locale))
@@ -176,11 +188,7 @@ impl LauncherView {
                                 return;
                             };
                             this.update(cx, |this, cx| {
-                                if let Some(live) = this.live.clone() {
-                                    let receiver =
-                                        live.inspect_web_package(file.path().display().to_string());
-                                    this.poll(receiver, this.live_state.generation, cx);
-                                }
+                                this.inspect_package(file.path().to_owned(), cx);
                             })
                             .ok();
                         })
@@ -188,6 +196,36 @@ impl LauncherView {
                     })),
             )
             .child(div().flex_1())
+            .when_some(
+                selected
+                    .as_ref()
+                    .and_then(|package| package.open_action_id.clone()),
+                |row, action_id| {
+                    row.child(
+                        Button::new("open-installed-plugin")
+                            .secondary()
+                            .label(l10n::open_approved_tool(self.locale))
+                            .disabled(self.settings_dirty(cx))
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                if this.settings_dirty(cx) {
+                                    return;
+                                }
+                                this.screen = Screen::Launcher;
+                                this.activate_action_shortcut(
+                                    crate::host::ActionShortcutBinding {
+                                        action_id: action_id.clone(),
+                                        title: String::new(),
+                                        shortcut: String::new(),
+                                        global: false,
+                                        routes: Vec::new(),
+                                    },
+                                    window,
+                                    cx,
+                                );
+                            })),
+                    )
+                },
+            )
             .children(selected.filter(|package| !package.builtin).map(|package| {
                 let id = package.id;
                 let rollback_id = id.clone();
@@ -229,6 +267,20 @@ impl LauncherView {
         review: &crate::host::WebPackageReview,
         cx: &mut Context<Self>,
     ) -> gpui_kit::Stateful<Div> {
+        use anywhere_core::application::web_plugins::SameWebPackageVersion;
+
+        let language = if self.locale == Locale::Zh {
+            "zh"
+        } else {
+            "en"
+        };
+        let commands = review
+            .details
+            .commands
+            .iter()
+            .map(|(title, localized)| localized.get(language).unwrap_or(title).as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
         let approve_token = review.token.clone();
         div()
             .id("web-package-review")
@@ -289,30 +341,30 @@ impl LauncherView {
                             .child(review.digest.chars().take(16).collect::<String>()),
                     ),
             )
-            .child(
-                div()
-                    .text_size(px(metrics::CAPTION_SIZE))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(theme::primary())
-                    .child(l10n::requested_access(self.locale)),
+            .child(div().text_color(theme::primary()).caption_text().child(
+                l10n::plugin_command_count(self.locale, &review.details.command_count.to_string()),
+            ))
+            .when(!commands.is_empty(), |card| {
+                card.child(
+                    div()
+                        .caption_text()
+                        .text_color(theme::secondary())
+                        .child(commands),
+                )
+            })
+            .when(
+                review.details.resolver_count > 0 || review.details.background_actions > 0,
+                |card| {
+                    card.child(div().caption_text().text_color(theme::secondary()).child(
+                        l10n::plugin_background_activity(
+                            self.locale,
+                            &review.details.resolver_count.to_string(),
+                            &review.details.background_actions.to_string(),
+                        ),
+                    ))
+                },
             )
-            .child(
-                div()
-                    .text_size(px(metrics::CAPTION_SIZE))
-                    .text_color(theme::secondary())
-                    .child(if review.permissions.is_empty() {
-                        l10n::no_host_permissions(self.locale)
-                    } else {
-                        review
-                            .permissions
-                            .iter()
-                            .map(|permission| {
-                                format!("• {}", web_permission_label(permission, self.locale))
-                            })
-                            .collect::<Vec<_>>()
-                            .join("\n")
-                    }),
-            )
+            .child(self.render_review_permissions(review))
             .child(
                 div()
                     .text_size(px(metrics::CAPTION_SIZE))
@@ -327,6 +379,21 @@ impl LauncherView {
                         .child(l10n::this_replaces_the_installed_code_closes_its(
                             self.locale,
                         )),
+                )
+            })
+            .when_some(review.same_version, |element, installed| {
+                element.child(
+                    div()
+                        .text_size(px(metrics::CAPTION_SIZE))
+                        .text_color(theme::secondary())
+                        .child(match installed {
+                            SameWebPackageVersion::Enabled => {
+                                l10n::plugin_version_installed(self.locale)
+                            }
+                            SameWebPackageVersion::Disabled => {
+                                l10n::plugin_version_disabled(self.locale)
+                            }
+                        }),
                 )
             })
             .child(
@@ -352,14 +419,119 @@ impl LauncherView {
                     .child(
                         Button::new("approve-web-package")
                             .primary()
-                            .label(l10n::approve_and_install(self.locale))
+                            .label(match review.same_version {
+                                Some(SameWebPackageVersion::Disabled) => {
+                                    l10n::approve_and_enable(self.locale)
+                                }
+                                Some(SameWebPackageVersion::Enabled) => l10n::approve(self.locale),
+                                None => l10n::approve_and_install(self.locale),
+                            })
                             .on_click(cx.listener(move |this, _, _, cx| {
-                                if let Some(live) = this.live.clone() {
-                                    let receiver = live.approve_web_package(approve_token.clone());
-                                    this.poll(receiver, this.live_state.generation, cx);
+                                if this
+                                    .web_surface
+                                    .review
+                                    .as_ref()
+                                    .is_some_and(|review| review.token == approve_token)
+                                {
+                                    if let Some(live) = this.live.clone() {
+                                        let receiver =
+                                            live.approve_web_package(approve_token.clone());
+                                        this.web_surface.review = None;
+                                        this.poll(receiver, this.live_state.generation, cx);
+                                        cx.notify();
+                                    }
                                 }
                             })),
                     ),
             )
+    }
+
+    fn render_review_permissions(&self, review: &crate::host::WebPackageReview) -> Div {
+        let grant_labels = |grants: &[String]| {
+            grants
+                .iter()
+                .map(|value| web_permission_label(value, self.locale))
+                .collect::<Vec<_>>()
+                .join("\n")
+        };
+        div()
+            .flex()
+            .flex_col()
+            .gap(px(metrics::SPACE_SM))
+            .child(
+                div()
+                    .text_size(px(metrics::CAPTION_SIZE))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(theme::primary())
+                    .child(l10n::requested_access(self.locale)),
+            )
+            .child(
+                div()
+                    .text_size(px(metrics::CAPTION_SIZE))
+                    .text_color(theme::secondary())
+                    .child(if review.permissions.is_empty() {
+                        l10n::no_host_permissions(self.locale)
+                    } else {
+                        review
+                            .permissions
+                            .iter()
+                            .map(|permission| {
+                                format!("• {}", web_permission_label(permission, self.locale))
+                            })
+                            .collect::<Vec<_>>()
+                            .join("\n")
+                    }),
+            )
+            .when(review.updating, |card| {
+                card.when(!review.details.added.is_empty(), |card| {
+                    card.child(div().caption_text().text_color(theme::warning()).child(
+                        l10n::plugin_added_grants(
+                            self.locale,
+                            &grant_labels(&review.details.added),
+                        ),
+                    ))
+                })
+                .when(!review.details.removed.is_empty(), |card| {
+                    card.child(div().caption_text().text_color(theme::secondary()).child(
+                        l10n::plugin_removed_grants(
+                            self.locale,
+                            &grant_labels(&review.details.removed),
+                        ),
+                    ))
+                })
+                .children(review.details.scope_changes.iter().map(|(old, new)| {
+                    div().caption_text().text_color(theme::warning()).child(
+                        l10n::plugin_scope_changed(
+                            self.locale,
+                            &web_permission_label(old, self.locale),
+                            &web_permission_label(new, self.locale),
+                        ),
+                    )
+                }))
+            })
+            .when(review.details.data_to_url, |card| {
+                card.child(
+                    div()
+                        .caption_text()
+                        .text_color(theme::warning())
+                        .child(l10n::plugin_data_external_risk(self.locale)),
+                )
+            })
+            .when(review.details.any_origin, |card| {
+                card.child(
+                    div()
+                        .caption_text()
+                        .text_color(theme::warning())
+                        .child(l10n::plugin_any_origin_risk(self.locale)),
+                )
+            })
+            .when(review.details.insecure_http, |card| {
+                card.child(
+                    div()
+                        .caption_text()
+                        .text_color(theme::warning())
+                        .child(l10n::plugin_http_risk(self.locale)),
+                )
+            })
     }
 }

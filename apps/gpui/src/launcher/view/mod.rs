@@ -89,6 +89,8 @@ mod tasks_controller;
 mod tool_window;
 #[path = "controllers/web.rs"]
 mod web_controller;
+#[path = "controllers/web_interaction.rs"]
+mod web_interaction;
 mod web_surface;
 
 pub(crate) use actions::bind_keys;
@@ -502,6 +504,7 @@ impl LauncherView {
         self.hotkey_error = hotkey_error;
         self.notice = settings_error.or_else(|| self.hotkey_error_message());
         self.notice_kind = components::NoticeKind::Error;
+        Self::listen_web_host(&live, window, cx);
         self.live = Some(live);
         self.hotkeys = hotkeys;
         self.runtime_state = RuntimeState::Ready;
@@ -538,6 +541,9 @@ impl LauncherView {
         let standalone_shelf = kind == ViewKind::ClipboardShelf;
         let standalone_tasks = kind == ViewKind::Tasks;
         let auxiliary = standalone_tasks || standalone_shelf;
+        if let Some(live) = live.as_ref().filter(|_| !auxiliary) {
+            Self::listen_web_host(live, window, cx);
+        }
         let runtime_state = if live.is_some() {
             RuntimeState::Ready
         } else {
@@ -2101,6 +2107,9 @@ impl LauncherView {
         cx: &mut Context<Self>,
     ) {
         match destination {
+            anywhere_protocol::HostView::WebPackageReview { path } => {
+                self.open_package_review(path.into(), window, cx);
+            }
             anywhere_protocol::HostView::FileSearch => {
                 self.capture_parent_workspace(cx);
                 self.model.set_query(String::new());
@@ -2686,6 +2695,7 @@ impl Render for LauncherView {
             Screen::Settings => self.render_settings(cx),
         };
         div()
+            .id("launcher-root")
             .size_full()
             .relative()
             .flex()
@@ -2731,6 +2741,18 @@ impl Render for LauncherView {
                 }),
             )
             .child(content)
+            .when(self.is_settings_surface(), |root| {
+                root.on_drop(
+                    cx.listener(|this, paths: &gpui_kit::ExternalPaths, window, cx| {
+                        if let [path] = paths.paths() {
+                            if crate::plugin_open::is_local_package(path) {
+                                this.open_package_review(path.clone(), window, cx);
+                            }
+                        }
+                    }),
+                )
+            })
+            .children(self.render_web_host_interaction(cx))
             .when(
                 self.is_settings_surface() && self.settings_editor.close_pending,
                 |root| root.child(self.render_settings_close_prompt(cx)),
@@ -2836,6 +2858,7 @@ fn web_state_version(frame: &str) -> Option<u64> {
 enum PreviewTarget {
     File { candidate_id: String, revision: u32 },
     Clipboard(i64),
+    WebDocument(String),
 }
 
 #[derive(Clone, Debug)]

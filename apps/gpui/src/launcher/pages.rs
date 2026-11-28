@@ -617,6 +617,8 @@ mod tests {
             rollback: false,
             builtin: false,
             permission_count: 0,
+            open_action_id: None,
+            diagnostics: vec![],
         };
         let mut model = WebPageModel::default();
         model.apply(vec![package("one"), package("two")]);

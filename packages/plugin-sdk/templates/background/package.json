@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "node build.mjs",
-    "pack": "python3 node_modules/@anywhere/sdk/tools/package.py . --output output/background-tool.awplugin",
+    "pack": "anywhere-plugin pack --output output/background-tool.awplugin",
     "check": "tsc --noEmit"
   },
   "devDependencies": {

@@ -3,7 +3,7 @@ use anyhow::{bail, ensure, Context, Result};
 use anywhere_platform::clipboard::ClipboardPayload;
 use std::{
     collections::BTreeMap,
-    path::PathBuf,
+    path::{Path, PathBuf},
     time::{Duration, Instant},
 };
 
@@ -15,7 +15,27 @@ pub struct PreviewResource {
 }
 struct Lease {
     _temporary: Option<tempfile::TempDir>,
+    #[cfg(windows)]
+    readonly_snapshot: Option<PathBuf>,
     pending_until: Option<Instant>,
+}
+#[cfg(windows)]
+#[expect(
+    clippy::permissions_set_readonly_false,
+    reason = "Windows clears an attribute so the private snapshot can be deleted"
+)]
+impl Drop for Lease {
+    fn drop(&mut self) {
+        if let Some(path) = &self.readonly_snapshot {
+            if let Ok(metadata) = std::fs::symlink_metadata(path) {
+                if metadata.is_file() {
+                    let mut permissions = metadata.permissions();
+                    permissions.set_readonly(false);
+                    let _ = std::fs::set_permissions(path, permissions);
+                }
+            }
+        }
+    }
 }
 #[derive(Default)]
 pub struct PreviewStore {
@@ -91,6 +111,52 @@ impl PreviewStore {
         std::fs::write(&path, bytes)?;
         self.insert(vec![path], title, Some(directory))
     }
+    pub(crate) fn web_snapshot(&mut self, name: &str, bytes: &[u8]) -> Result<PreviewResource> {
+        let name = name
+            .chars()
+            .map(|ch| {
+                if ch.is_control() || r#"\/:*?"<>|"#.contains(ch) {
+                    '_'
+                } else {
+                    ch
+                }
+            })
+            .collect::<String>();
+        let name = name.trim_matches(['.', ' ']);
+        let filename = Path::new(name);
+        let extension = filename
+            .extension()
+            .and_then(|value| value.to_str())
+            .unwrap_or("");
+        let stem = filename
+            .file_stem()
+            .and_then(|value| value.to_str())
+            .unwrap_or("File");
+        let extension = &extension[..extension.floor_char_boundary(64)];
+        let stem_limit = 230 - extension.len() - usize::from(!extension.is_empty());
+        let stem = &stem[..stem.floor_char_boundary(stem_limit)];
+        let path_name = if extension.is_empty() {
+            format!("Preview-{stem}")
+        } else {
+            format!("Preview-{stem}.{extension}")
+        };
+        let directory = self.temporary()?;
+        let path = directory.path().join(path_name);
+        std::fs::write(&path, bytes)?;
+        let mut permissions = path.metadata()?.permissions();
+        permissions.set_readonly(true);
+        let resource = self.insert(vec![path.clone()], name.to_owned(), Some(directory))?;
+        if let Err(error) = std::fs::set_permissions(&path, permissions) {
+            self.release(&resource.id);
+            return Err(error.into());
+        }
+        #[cfg(windows)]
+        if let Some(lease) = self.leases.get_mut(&resource.id) {
+            lease.readonly_snapshot = Some(path);
+        }
+        Ok(resource)
+    }
+
     fn temporary(&mut self) -> Result<tempfile::TempDir> {
         if let Some(root) = &self.root {
             std::fs::create_dir_all(root)?;
@@ -157,6 +223,8 @@ impl PreviewStore {
             id,
             Lease {
                 _temporary: temporary,
+                #[cfg(windows)]
+                readonly_snapshot: None,
                 pending_until: Some(Instant::now() + Duration::from_secs(5)),
             },
         );

@@ -35,18 +35,14 @@ impl LauncherView {
             title,
             subtitle,
             id,
-            div()
-                .id(id)
-                .w_full()
-                .test_support()
-                .child(
-                    Textarea::new(input)
-                        .appearance(true)
-                        .text_size(px(metrics::BODY_SIZE))
-                        .aria_label(placeholder)
-                        .h(px(72.))
-                        .max_h(px(120.)),
-                ),
+            div().id(id).w_full().test_support().child(
+                Textarea::new(input)
+                    .appearance(true)
+                    .text_size(px(metrics::BODY_SIZE))
+                    .aria_label(placeholder)
+                    .h(px(metrics::CONTROL_HEIGHT * 3.0))
+                    .max_h(px(metrics::CONTROL_HEIGHT * 5.0)),
+            ),
         )
     }
 

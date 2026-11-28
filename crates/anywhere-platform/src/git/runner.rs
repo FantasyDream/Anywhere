@@ -73,7 +73,10 @@ fn run_command(
         .stderr(Stdio::piped())
         .spawn()
         .context("start confined read-only git command")?;
+    #[cfg(windows)]
     let _confinement = confine_child(&child)?;
+    #[cfg(not(windows))]
+    confine_child(&child)?;
     let stdout = child.stdout.take().context("git stdout missing")?;
     let stderr = child.stderr.take().context("git stderr missing")?;
     // Drain both pipes concurrently: waiting for exit first can deadlock on a large diff.
@@ -309,7 +312,8 @@ fn confine_child(child: &std::process::Child) -> Result<Option<WindowsGitConfine
         if exited {
             return Ok(None);
         }
-        return Err(std::io::Error::last_os_error()).context("assign git process to confinement job");
+        return Err(std::io::Error::last_os_error())
+            .context("assign git process to confinement job");
     }
     Ok(Some(WindowsGitConfinement(job)))
 }
@@ -471,7 +475,11 @@ mod tests {
             .unwrap()
             .set_modified(std::time::UNIX_EPOCH + Duration::from_secs(60))
             .unwrap();
-        let clean_command = if cfg!(windows) { "cmd /c more" } else { "/bin/cat" };
+        let clean_command = if cfg!(windows) {
+            "cmd /c more"
+        } else {
+            "/bin/cat"
+        };
         repo.git(&["config", "filter.fixture.clean", clean_command]);
         repo.git(&["config", "filter.fixture.required", "true"]);
         for operation in [GitOperation::Status, GitOperation::Diff] {

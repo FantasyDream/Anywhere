@@ -92,6 +92,7 @@ pub enum LiveEvent {
     WebFrameReply {
         handle: String,
         frame: String,
+        host_action: Option<anywhere_core::application::web_plugins::WebHostAction>,
     },
     WebState {
         handle: String,

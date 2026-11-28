@@ -13,7 +13,11 @@ import {workspaceInput} from '../src/workspace-input.mjs';
 
 const source = '{"n":900719925474099312345,"n":1e9999,"s":"中文🚀\\n"}';
 const input = text => ({kind: 'text', source: 'selected_text', text});
-const data = value => ({kind: 'data', type_id: value.type, value: value.value});
+const data = value => ({
+  kind: 'data',
+  typeId: value.typeId,
+  value: value.value,
+});
 
 test('UTF-8 budgets match Web encoding without requiring browser APIs', () => {
   for (const text of [
@@ -30,7 +34,7 @@ test('UTF-8 budgets match Web encoding without requiring browser APIs', () => {
 
 test('resolver recognizes containers and escaped containers without rounding source tokens', () => {
   const plain = resolveJsonContexts(input(source));
-  assert.deepEqual(plain, [{type: JSON_CONTEXT, value: {text: source}}]);
+  assert.deepEqual(plain, [{typeId: JSON_CONTEXT, value: {text: source}}]);
   let encoded = source;
   for (let layer = 0; layer < 4; layer++) {
     encoded = JSON.stringify(encoded);
@@ -102,7 +106,7 @@ test('background copies use the selected Context, saved indentation and installe
   await assert.rejects(copyJson(host, 'copy-format'), /requires a recognized/);
   host.context.get = async () => ({
     kind: 'data',
-    type_id: JSON_CONTEXT,
+    typeId: JSON_CONTEXT,
     value: {text: '{broken}'},
   });
   await assert.rejects(copyJson(host, 'copy-minify'));

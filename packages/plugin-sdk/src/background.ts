@@ -3,12 +3,42 @@
  */
 import {HostError} from './errors.js';
 import {inspectText, uploadText} from './text_upload.js';
-import type {Anywhere, CallOptions} from './api.js';
+import type {BackgroundAnywhere as Anywhere, CallOptions} from './api.js';
 import {limits} from './contract.js';
 import type {Calls, PluginSnapshot, WebInput} from './contract.js';
-export type {Anywhere, Unsubscribe} from './api.js';
+export type {
+  BackgroundAnywhere as Anywhere,
+  ReadTextOptions,
+  ResourceStat,
+  Unsubscribe,
+} from './api.js';
 export type {WebInput as Input, JsonValue} from './contract.js';
 export {HostError} from './errors.js';
+
+export type ResolverContext = {
+  readonly context: Readonly<Pick<Anywhere['context'], 'get'>>;
+  readonly input: Readonly<Pick<Anywhere['input'], 'get'>>;
+  readonly app: Readonly<Anywhere['app']>;
+};
+export type DerivedContext = {
+  typeId: string;
+  value: import('./contract.js').JsonValue;
+};
+export type BackgroundResult = {message?: string; closeWindow?: boolean};
+
+/** Supply only read APIs to automatic Context resolvers. */
+export function defineResolver(
+  resolve: (
+    context: ResolverContext,
+  ) => DerivedContext[] | Promise<DerivedContext[]>,
+) {
+  return () =>
+    resolve({
+      context: {get: anywhere.context.get},
+      input: {get: anywhere.input.get},
+      app: anywhere.app,
+    });
+}
 
 declare const __anywhereInvoke: (method: string, params: string) => string;
 async function invoke<T>(
@@ -58,6 +88,18 @@ function subscribe<T>(
   };
 }
 export const anywhere: Anywhere = {
+  url: {
+    open: (url, options) => invoke('url.open', {url}, options),
+  },
+  resources: {
+    stat: (handle, options) => invoke('resources.stat', {handle}, options),
+    readText: (handle, options) =>
+      invoke(
+        'resources.readText',
+        {handle, maxBytes: options?.maxBytes},
+        options,
+      ),
+  },
   context: {
     get: async () => (await state()).context,
     onChange: callback =>

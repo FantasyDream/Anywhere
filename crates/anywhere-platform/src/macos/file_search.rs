@@ -1,7 +1,5 @@
 //! One bounded Spotlight filename query. No shell, private index or content read.
-use crate::{
-    FileIndexResults, FileSearchBackend, FileSearchEngine, FileSearchHit, FileSearchQuery,
-};
+use crate::{FileSearchEngine, FileSearchHit};
 use anyhow::{bail, Context, Result};
 use std::{
     collections::BTreeSet,
@@ -31,33 +29,6 @@ pub(crate) const SUPPORTED_ENGINES: &[FileSearchEngine] = &[
 
 pub(crate) const DEFAULT_ENGINE: FileSearchEngine = FileSearchEngine::SystemIndex;
 
-pub(super) struct SpotlightBackend;
-
-impl FileSearchBackend for SpotlightBackend {
-    fn engine(&self) -> FileSearchEngine {
-        FileSearchEngine::SystemIndex
-    }
-
-    fn is_available(&self) -> bool {
-        Path::new("/usr/bin/mdfind").is_file()
-    }
-
-    fn search(
-        &self,
-        query: &FileSearchQuery<'_>,
-        cancelled: &(dyn Fn() -> bool + Sync),
-    ) -> Result<FileIndexResults> {
-        let mut options = query.options.clone();
-        if !query.roots.is_empty() {
-            options.roots = query.roots.to_vec();
-        }
-        let hits = index_search(query.text, query.limit, &options, cancelled, query.timeout)?;
-        Ok(FileIndexResults {
-            truncated: hits.len() >= query.limit,
-            hits,
-        })
-    }
-}
 pub(super) fn search(
     query: &str,
     limit: usize,

@@ -44,14 +44,13 @@ flowchart TD
 
 ## 包与安装
 
-Manifest 声明包 ID、版本、入口、资源、命令、Context resolver、后台 module 和
-所需权限。安装流程：
+Manifest 使用 `schemaVersion: 1` 与 `apiVersion: "2"`，声明包、命令、运行入口和最多 16 项权限。安装流程如下。
 
-1. 用户选择本地包，Rust 在有限预算内读取和验证。
-2. 返回本次 inspect 的不可变摘要、资源列表和权限说明。
+1. 选择器、设置拖放、文件对象动作或系统打开交付本地包路径，Rust 在有限预算内读取和验证。
+2. 审查显示本次不可变摘要、命令、后台活动和权限变化。退出审查时回收待批准 token。
 3. 用户批准或取消；批准使用精确 review token。
 4. Rust 将包记录、哈希和 grant 原子写入存储。
-5. GPUI 失效已安装列表并允许启用；执行资格来自当前批准。
+5. GPUI 更新列表。相同摘要重复批准保留原有回滚点，已启用版本保留现有实例。
 
 过期或重复取消为无操作，不能撤销替换后的新审批。包损坏只移除对应 Web 能力，
 不阻止 Launcher 启动。更新后资源变化必须重新审查；旧实例不能继续使用新权限。
@@ -84,20 +83,18 @@ session revision；只有后者能区分“启动输入”和“启动后的新�
 
 ## IPC
 
-页面与 Rust 使用版本化、带请求 ID 的受限消息：
+页面与 Rust 使用协议 2 和 camelCase 字段。Rust 的 MethodSpec 同时生成 SDK 与桥 schema，并约束运行角色和请求时限。
 
-- Context / Input：初始投影与后续值事件；
-- 剪贴板：只允许 grant 声明和 broker 实现的请求；
-- Host 调用：能力名、参数和 schema 校验；
-- 后台事件：与 UI 请求分离，不把订阅错误报告为已完成操作；
-- ack / close：绑定 resource ID 与 document generation。
+- 数据 RPC：在有界 worker 中执行存储、剪贴板和选中文件读取。
+- 宿主窗口意图：从验证过的请求构建类型化回退或关闭操作，应用前核对当前绑定。
+- 宿主交互：同一窗口内只进行一个确认或预览受理，等待时释放数据 worker。外链确认显示规范化 origin 与目标，确认后用该目标调用系统。
 
 字符串帧传输和 HTML bootstrap 由 `apps/gpui/src/web_tool.rs` 生成并验证（文档侧同时保留 `ArrayBuffer` 解码兼容）。消息大小、
 并发、等待时间和输出都有上限。JS 不直接访问 Rust API 或文件系统。
 
 请求在 worker admission 时等待取消；已经开始的实际 I/O 保持自己的许可至结束。
 过期回复不能写入新文档。资源读取只取得有界描述，释放管理锁后核对 SHA-256，
-发布前再复验文档资格。
+发布前再复验文档资格。用户选择的本地文件使用独立的原生身份校验，文件操作只接受启动时签发的单文件句柄。恢复同一个 WebView 保留句柄，独立工具窗重新签发。Quick Look 只读取有大小限制的私有只读快照。
 
 ## Context 与后台运行
 
@@ -109,13 +106,12 @@ Manifest 可声明 `background.resolvers`。自动解析：
 - 不发布工具页、不启动 WebView、不允许副作用。
 
 显式后台命令使用同一 Rust broker 和安装权限，在按需 QuickJS VM 中执行并返回
-有限结果。当前 VM 仍为进程内 worker；进程隔离尚未交付。包批准后只保留脚本
+消息和关闭意图。有效完成后记录 Usage，脚本失败分类只保留在有界内存诊断中。外链交接导致失焦时允许已提交任务完成尾声，禁用、卸载与显式取消仍撤销执行。当前 VM 仍为进程内 worker；进程隔离尚未交付。包批准后只保留脚本
 校验描述符，启动时不常驻脚本、档案或 VM。
 
 ## SDK 与主题
 
-`@anywhere/sdk` 提供 Context、Input、剪贴板、来源与消息类型。构建条件为 Web
-adapter 或 QuickJS adapter，两种运行时共享类型而不是直接通信。
+`@anywhere/sdk` 提供 WebView、有限后台命令和只读解析器的类型门面。SDK 归档包含在普通浏览器和 Node 裸 VM 测试宿主调用的 Mock。
 
 文本上传使用 UTF-8 字节计数、Unicode 校验和按标量边界分块。begin / chunk /
 commit / cancel 是事务；失败后释放待回复名额并继续允许后续请求。浏览器与后台

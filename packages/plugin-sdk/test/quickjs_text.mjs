@@ -37,9 +37,10 @@ for (const name of ['small', 'unicode', 'limit', 'escaped', 'invalid']) {
     outfile: `${fixture}/dist/background.js`,
   });
   execFileSync(
-    'python3',
+    process.execPath,
     [
-      `${root}packages/plugin-sdk/tools/package.py`,
+      `${root}packages/plugin-sdk/tools/anywhere-plugin.mjs`,
+      'pack',
       fixture,
       '--output',
       archive,

@@ -4,6 +4,10 @@ use std::sync::Mutex;
 
 impl LauncherView {
     pub(super) fn close_web_surface(&mut self, cx: &mut Context<Self>) {
+        self.drop_web_host_interaction();
+        if self.preview.web_owner.is_some() {
+            self.close_preview(cx);
+        }
         tracing::debug!(
             screen = ?self.screen,
             has_view = self.web_surface.view.is_some(),
@@ -53,6 +57,10 @@ impl LauncherView {
     pub(super) fn reload_web_tool(&mut self, cx: &mut Context<Self>) {
         if self.web_surface.opening || self.web_surface.resume_busy {
             return;
+        }
+        self.drop_web_host_interaction();
+        if self.preview.web_owner.is_some() {
+            self.close_preview(cx);
         }
         let Some(invocation_id) = self.web_surface.invocation_id.clone() else {
             return;
@@ -104,17 +112,93 @@ impl LauncherView {
         }
     }
 
+    pub(crate) fn open_package_review(
+        &mut self,
+        path: std::path::PathBuf,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if self.screen != Screen::WebPackages {
+            if !self.open_settings(window, cx) {
+                return false;
+            }
+            self.open_screen(Screen::WebPackages, window, cx);
+        }
+        self.inspect_package(path, cx);
+        true
+    }
+
+    pub(in crate::launcher::view) fn inspect_package(
+        &mut self,
+        path: std::path::PathBuf,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.presence.presented || self.screen != Screen::WebPackages {
+            return;
+        }
+        if self.web_surface.review_loading || self.web_surface.review.is_some() {
+            self.set_notice(
+                l10n::plugin_review_pending(self.locale),
+                components::NoticeKind::Warning,
+            );
+            cx.notify();
+            return;
+        }
+        let Some(live) = self.live.clone() else {
+            return;
+        };
+        self.web_surface.review_loading = true;
+        self.web_surface.review_generation = self.web_surface.review_generation.wrapping_add(1);
+        let generation = self.web_surface.review_generation;
+        let mut receiver = live.inspect_web_package(path);
+        cx.notify();
+        cx.spawn(async move |view, cx| {
+            let mut event = receiver.recv().await;
+            let _ = view.update(cx, |this, cx| {
+                if this.web_surface.review_generation != generation
+                    || this.screen != Screen::WebPackages
+                    || !this.presence.presented
+                {
+                    return;
+                }
+                this.web_surface.review_loading = false;
+                match event.take() {
+                    Some(LiveEvent::WebReview(review)) => {
+                        this.web_surface.review = Some(review);
+                        this.notice = None;
+                    }
+                    Some(LiveEvent::Error(error)) => {
+                        this.set_notice(error, components::NoticeKind::Error)
+                    }
+                    _ => {}
+                }
+                cx.notify();
+            });
+            if let Some(LiveEvent::WebReview(review)) = event {
+                let _ = live.cancel_web_review(review.token);
+            }
+        })
+        .detach();
+    }
+
+    pub(in crate::launcher::view) fn retire_package_review(&mut self) -> bool {
+        self.web_surface.review_generation = self.web_surface.review_generation.wrapping_add(1);
+        let checking = std::mem::take(&mut self.web_surface.review_loading);
+        let review = self.web_surface.review.take();
+        let cancelled = checking || review.is_some();
+        if let (Some(live), Some(review)) = (&self.live, review) {
+            let _ = live.cancel_web_review(review.token);
+        }
+        cancelled
+    }
+
     pub(super) fn cancel_web_package_review(
         &mut self,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        let Some(review) = self.web_surface.review.take() else {
+        if !self.retire_package_review() {
             return false;
-        };
-        if let Some(live) = &self.live {
-            let receiver = live.cancel_web_review(review.token);
-            self.poll(receiver, self.live_state.generation, cx);
         }
         self.surface_focus_handle.focus(window, cx);
         cx.notify();
@@ -179,9 +263,7 @@ impl LauncherView {
             .with_devtools(cfg!(debug_assertions))
             .with_autoplay(false)
             .with_initialization_script(bootstrap_script(language))
-            .with_navigation_handler({
-                move |candidate| nav_policy.accepts_navigation(&candidate)
-            })
+            .with_navigation_handler(move |candidate| nav_policy.accepts_navigation(&candidate))
             .with_new_window_req_handler(|_, _| wry::NewWindowResponse::Deny)
             .with_download_started_handler(|_, _| false)
             .with_custom_protocol("anywhere-plugin".to_owned(), move |_, request| {
@@ -201,15 +283,11 @@ impl LauncherView {
                 let source = request.uri().to_string();
                 let frame = request.body();
                 if frame.len() > WEB_FRAME_BYTES {
-                    tracing::warn!(
-                        source = %source,
-                        frame_bytes = frame.len(),
-                        "web_ipc_frame_rejected"
-                    );
+                    tracing::warn!(frame_bytes = frame.len(), "web_ipc_frame_rejected");
                     return;
                 }
                 if !ipc_policy.accepts_source(&source) {
-                    tracing::warn!(source = %source, "web_ipc_source_rejected");
+                    tracing::warn!("web_ipc_source_rejected");
                     return;
                 }
                 let Ok(binding) = ipc_binding.lock() else {
@@ -342,6 +420,7 @@ impl LauncherView {
                     LiveEvent::WebFrameReply {
                         handle: event_handle,
                         frame,
+                        host_action,
                     } => {
                         let request_value =
                             serde_json::from_str::<serde_json::Value>(&request).ok();
@@ -447,6 +526,9 @@ impl LauncherView {
                                     this.follow_web_state(handle.clone(), 0, generation, cx);
                                 }
                                 _ => {}
+                            }
+                            if let Some(action) = host_action {
+                                this.schedule_web_host_action(action, generation, cx);
                             }
                             cx.notify();
                         });

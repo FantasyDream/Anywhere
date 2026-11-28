@@ -6,7 +6,7 @@ use crate::{
 };
 use anyhow::{ensure, Context, Result};
 use anywhere_plugin::web::VerifiedWebPackage;
-use anywhere_protocol::web_plugin::{WebPermission, WebPlatform};
+use anywhere_protocol::web_plugin::{WebCommand, WebPermission, WebPlatform};
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},
@@ -24,7 +24,10 @@ pub struct WebPackageStatus {
     pub permissions: Vec<WebPermission>,
     pub rollback: bool,
     pub builtin: bool,
+    pub open_action_id: Option<String>,
 }
+/// Approval screen for the exact package bytes captured during inspection.
+#[derive(Debug)]
 pub struct WebPackageReview {
     pub token: String,
     pub id: String,
@@ -33,6 +36,21 @@ pub struct WebPackageReview {
     pub digest: String,
     pub permissions: Vec<WebPermission>,
     pub updating: bool,
+    pub commands: Vec<WebCommand>,
+    pub command_count: usize,
+    pub resolver_count: usize,
+    pub background_action_count: usize,
+    pub permissions_added: Vec<WebPermission>,
+    pub permissions_removed: Vec<WebPermission>,
+    pub permission_scopes: Vec<(WebPermission, WebPermission)>,
+    pub same_version: Option<SameWebPackageVersion>,
+}
+
+/// Enabled state of an installed package with the same content digest.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SameWebPackageVersion {
+    Enabled,
+    Disabled,
 }
 struct Pending {
     token: String,
@@ -113,11 +131,18 @@ impl WebPackageStore {
         self.statuses.clone()
     }
     pub fn inspect(&mut self, path: &Path) -> Result<WebPackageReview> {
-        // A new inspection supersedes the old review even when validation fails.
-        // Release its compressed snapshot before capturing another archive.
-        self.pending = None;
+        ensure!(
+            self.pending.is_none(),
+            "finish or cancel the pending Web package review"
+        );
         // Capture before presenting review. Replacing/deleting the original is harmless.
-        let package = VerifiedWebPackage::read(std::fs::File::open(path)?)?;
+        ensure!(path.is_file(), "choose a local Web package file");
+        let source = std::fs::File::open(path)?;
+        ensure!(
+            source.metadata()?.is_file(),
+            "Web package source is not a regular file"
+        );
+        let package = VerifiedWebPackage::read(source)?;
         ensure!(
             package.manifest().platforms.contains(&self.platform),
             "unsupported Web platform"
@@ -133,6 +158,28 @@ impl WebPackageStore {
         );
         let token = super::token()?;
         let m = package.manifest();
+        let installed = self.receipts.get(&m.id);
+        let previous = self
+            .statuses
+            .iter()
+            .find(|status| status.id == m.id && status.available)
+            .map_or(&[][..], |status| status.permissions.as_slice());
+        let mut permissions_added = Vec::new();
+        let mut permission_scopes = Vec::new();
+        for new in &m.permissions {
+            match previous.iter().find(|old| old.name() == new.name()) {
+                None => permissions_added.push(new.clone()),
+                Some(old) if !same_permission(old, new) => {
+                    permission_scopes.push((old.clone(), new.clone()))
+                }
+                _ => {}
+            }
+        }
+        let permissions_removed = previous
+            .iter()
+            .filter(|old| m.permissions.iter().all(|new| new.name() != old.name()))
+            .cloned()
+            .collect();
         let review = WebPackageReview {
             token: token.clone(),
             id: m.id.clone(),
@@ -140,7 +187,30 @@ impl WebPackageStore {
             version: m.version.clone(),
             digest: package.digest().into(),
             permissions: m.permissions.clone(),
-            updating: self.receipts.contains_key(&m.id),
+            commands: m.commands.iter().take(8).cloned().collect(),
+            command_count: m.commands.len(),
+            resolver_count: m
+                .background
+                .as_ref()
+                .map_or(0, |background| background.resolvers.len()),
+            background_action_count: m
+                .commands
+                .iter()
+                .filter(|command| !command.runtime.is_webview())
+                .count(),
+            permissions_added,
+            permissions_removed,
+            permission_scopes,
+            updating: installed.is_some_and(|receipt| receipt.digest != package.digest()),
+            same_version: installed
+                .filter(|receipt| receipt.digest == package.digest())
+                .map(|receipt| {
+                    if receipt.enabled {
+                        SameWebPackageVersion::Enabled
+                    } else {
+                        SameWebPackageVersion::Disabled
+                    }
+                }),
         };
         self.pending = Some(Pending { token, package });
         Ok(review)
@@ -164,16 +234,28 @@ impl WebPackageStore {
         let package = pending.package;
         let id = package.manifest().id.clone();
         let digest = package.digest().to_owned();
-        self.repository.stage(&package)?;
         let old = self.receipts.get(&id);
+        if let Some(current) = old.filter(|receipt| receipt.digest == digest) {
+            self.repository.validate_staged(&package)
+                .context("cached Web package is unavailable; roll back or uninstall the package before importing again")?;
+            return if current.enabled {
+                Ok(())
+            } else {
+                self.set_enabled(app, &id, true)
+            };
+        }
+        self.repository.stage(&package)?;
         // Explicit same-ID local update approval is required even without new permissions.
         // Identity continuity is local only; it is not a publisher signature.
         let receipt = Receipt {
             id: id.clone(),
             digest: digest.clone(),
-            source: old.map(|r| r.source.clone()).unwrap_or(super::token()?),
+            source: match old {
+                Some(receipt) => receipt.source.clone(),
+                None => super::token()?,
+            },
             enabled: true,
-            previous: old.filter(|r| r.digest != digest).map(|r| r.digest.clone()),
+            previous: old.map(|receipt| receipt.digest.clone()),
         };
         let mut next = self.receipts.clone();
         next.insert(id, receipt);
@@ -199,6 +281,7 @@ impl WebPackageStore {
         let removed = next.remove(id).context("Web package not installed")?;
         let namespace = super::storage_namespace(&removed.id, &removed.source);
         self.change(app, next)?;
+        app.clear_web_package_diagnostics(id);
         app.clear_web_storage_namespace(&namespace)?;
         self.repository.collect_unused(&self.receipts);
         Ok(())
@@ -273,6 +356,7 @@ impl WebPackageStore {
                         permissions: vec![],
                         rollback: !builtin && receipt.previous.is_some(),
                         builtin,
+                        open_action_id: None,
                     });
                     continue;
                 }
@@ -289,6 +373,17 @@ impl WebPackageStore {
                 permissions: m.permissions.clone(),
                 rollback: !builtin && receipt.previous.is_some(),
                 builtin,
+                open_action_id: receipt
+                    .enabled
+                    .then(|| {
+                        m.commands
+                            .iter()
+                            .find(|command| {
+                                command.runtime.is_webview() && !command.needs_context()
+                            })
+                            .map(|command| format!("web:{}:{}", m.id, command.id))
+                    })
+                    .flatten(),
             });
             if !receipt.enabled {
                 continue;
@@ -351,4 +446,14 @@ struct PreparedCatalog {
     catalog: WebPluginCatalog,
     statuses: Vec<WebPackageStatus>,
     assets: BTreeMap<(String, String), WebResourceFile>,
+}
+
+fn same_permission(old: &WebPermission, new: &WebPermission) -> bool {
+    match (old, new) {
+        (WebPermission::ContextRead { types: old }, WebPermission::ContextRead { types: new })
+        | (WebPermission::UrlOpen { origins: old }, WebPermission::UrlOpen { origins: new }) => {
+            old.len() == new.len() && old.iter().all(|item| new.contains(item))
+        }
+        _ => old == new,
+    }
 }

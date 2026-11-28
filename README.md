@@ -35,7 +35,7 @@ V0.14 已接入[应用历史与动作排序](docs/mvp-gpui.md)：通用文件读
 - **开发工具**：Git 常用动作、Maven / Gradle / Node / Cargo 与 Spring Boot 动作，长任务可返回查看输出与停止。
 - **快捷键与语言**：自定义 Action / 全局 / Context 快捷键，支持简体中文、English、全拼与首字母搜索。外观支持跟随系统、浅色和深色。
 - **应用历史**：在对应 Current App 中自动出现 IDEA、VS Code、Sublime Text、Obsidian 等来源；设置中可检测、自定义路径或停用来源。接入与限制见[来源指南](docs/application-history-sources.md)。
-- **Web 插件预览**：可信本地包、明确权限、统一主题与 TypeScript SDK；JSON Workspace 作为普通插件实现。
+- **Web 插件预览**：API 2 本地包、安装审查、Node CLI 与双 Mock。获准插件可请求打开外链、读取从 Finder 或 Explorer 单选的文件并使用原生预览。JSON Workspace、Issue Link 和 Selected CSV 提供示例。
 
 终端 / PTY、插件进程隔离、插件市场和浏览器历史暂未交付。第三方 Context 按需解析获准输入。macOS 的 Current App 提供 Accessibility 菜单动作，Windows 支持标准 Win32 菜单栏。macOS 使用系统 Quick Look，Windows 可接入外部 QuickLook。详见[系统预览](docs/native-preview.md)。
 

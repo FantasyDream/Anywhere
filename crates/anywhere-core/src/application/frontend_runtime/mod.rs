@@ -8,8 +8,8 @@ use crate::{
         builtin_registry,
         settings_service::SettingsService,
         web_plugins::{
-            WebDocumentBinding, WebMessageSource, WebPackageReview, WebPackageStatus,
-            WebPackageStore,
+            WebDispatchOutcome, WebDocumentBinding, WebHostAction, WebMessageSource,
+            WebPackageReview, WebPackageStatus, WebPackageStore,
         },
         Application,
     },
@@ -411,11 +411,11 @@ impl ApplicationRuntime {
         origin: &str,
         main_frame: bool,
         frame: &str,
-    ) -> Result<String> {
+    ) -> Result<WebDispatchOutcome> {
         let binding = self.document(handle).map_err(anyhow::Error::new)?;
         Ok(self
             .application
-            .dispatch_web_message(
+            .dispatch_web_outcome(
                 &binding,
                 WebMessageSource {
                     runtime_id: binding.runtime_id(),
@@ -426,6 +426,24 @@ impl ApplicationRuntime {
                 frame,
             )
             .await)
+    }
+
+    /// Recheck the binding immediately before the frontend applies a window intent.
+    pub fn validate_web_host_action(&self, action: &WebHostAction) -> Result<()> {
+        let binding = self.document(&action.handle)?;
+        anyhow::ensure!(
+            binding.document_epoch() == action.document_epoch,
+            "Web document changed"
+        );
+        self.application.validate_web_document(
+            &binding,
+            WebMessageSource {
+                runtime_id: binding.runtime_id(),
+                document_epoch: binding.document_epoch(),
+                origin: binding.origin(),
+                main_frame: true,
+            },
+        )
     }
 
     pub fn web_resource(&self, handle: &str, path: &str) -> Result<Vec<u8>> {

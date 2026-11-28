@@ -7,6 +7,7 @@ pub mod paths;
 pub mod private_storage;
 pub mod search_exclusions;
 pub mod search_storage;
+pub mod selected_file;
 mod traits;
 use anyhow::Result;
 pub use file_search::{FileSearchBackend, FileSearchQuery};

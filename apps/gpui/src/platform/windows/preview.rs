@@ -342,7 +342,7 @@ fn is_viewer_window(window: HWND, pid: u32) -> bool {
             .all(|(&window_unit, &expected)| window_unit == u16::from(expected))
 }
 
-fn current_user_sid() -> Option<String> {
+pub(super) fn current_user_sid() -> Option<String> {
     let mut token: HANDLE = null_mut();
     if unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) } == 0
         || token.is_null()

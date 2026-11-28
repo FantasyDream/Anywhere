@@ -1,6 +1,7 @@
 mod backdrop;
 mod icon;
 pub(super) mod login_item;
+mod package_handoff;
 pub(super) mod preview;
 mod tray;
 
@@ -57,7 +58,10 @@ impl Drop for InstanceGuard {
     }
 }
 
-pub fn acquire_instance() -> Option<InstanceGuard> {
+pub fn acquire_instance(
+    package: Option<&std::path::Path>,
+    open_packages: mpsc::Sender<std::path::PathBuf>,
+) -> Option<InstanceGuard> {
     if std::env::var_os("ANYWHERE_DATA_DIR").is_some()
         || std::env::var_os("ANYWHERE_PREVIEW").is_some()
     {
@@ -71,6 +75,12 @@ pub fn acquire_instance() -> Option<InstanceGuard> {
     let already_running = unsafe { GetLastError() } == ERROR_ALREADY_EXISTS;
     let guard = InstanceGuard(handle);
     if already_running {
+        if let Some(package) = package {
+            if !package_handoff::send(package) {
+                tracing::warn!("plugin_handoff_delivery_failed");
+            }
+            return None;
+        }
         if !background_launch() {
             for _ in 0..20 {
                 if tray::restore_existing() {
@@ -81,6 +91,7 @@ pub fn acquire_instance() -> Option<InstanceGuard> {
         }
         return None;
     }
+    package_handoff::listen(open_packages);
     Some(guard)
 }
 

@@ -5,9 +5,7 @@ use super::{
 use std::cell::Cell;
 use windows_sys::Win32::UI::{
     Accessibility::{HCF_HIGHCONTRASTON, HIGHCONTRASTW},
-    WindowsAndMessaging::{
-        SystemParametersInfoW, SPI_GETCLIENTAREAANIMATION, SPI_GETHIGHCONTRAST,
-    },
+    WindowsAndMessaging::{SystemParametersInfoW, SPI_GETCLIENTAREAANIMATION, SPI_GETHIGHCONTRAST},
 };
 
 thread_local! {

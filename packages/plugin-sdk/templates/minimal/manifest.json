@@ -3,7 +3,7 @@
   "id": "dev.example.text-transform",
   "name": "Text Transform",
   "version": "0.1.0",
-  "apiVersion": "1",
+  "apiVersion": "2",
   "platforms": ["macos"],
   "entry": "dist/index.html",
   "permissions": [

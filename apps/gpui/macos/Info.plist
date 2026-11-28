@@ -6,6 +6,19 @@
   <string>en</string>
   <key>CFBundleDisplayName</key>
   <string>Anywhere</string>
+  <key>CFBundleDocumentTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleTypeName</key>
+      <string>Anywhere Plugin Package</string>
+      <key>CFBundleTypeRole</key>
+      <string>Viewer</string>
+      <key>LSHandlerRank</key>
+      <string>Owner</string>
+      <key>LSItemContentTypes</key>
+      <array><string>dev.anywhere.plugin-package</string></array>
+    </dict>
+  </array>
   <key>CFBundleExecutable</key>
   <string>Anywhere</string>
   <key>CFBundleIconFile</key>
@@ -32,5 +45,21 @@
   <string>Read the current Finder location and selection, and browser pages, to suggest actions when you open Anywhere.</string>
   <key>NSHighResolutionCapable</key>
   <true/>
+  <key>UTExportedTypeDeclarations</key>
+  <array>
+    <dict>
+      <key>UTTypeIdentifier</key>
+      <string>dev.anywhere.plugin-package</string>
+      <key>UTTypeDescription</key>
+      <string>Anywhere Plugin Package</string>
+      <key>UTTypeConformsTo</key>
+      <array><string>public.data</string><string>public.archive</string></array>
+      <key>UTTypeTagSpecification</key>
+      <dict>
+        <key>public.filename-extension</key>
+        <array><string>awplugin</string></array>
+      </dict>
+    </dict>
+  </array>
 </dict>
 </plist>

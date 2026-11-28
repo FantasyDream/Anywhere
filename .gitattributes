@@ -9,5 +9,8 @@
 *.icns binary
 *.ttf binary
 *.woff2 binary
+plugins/examples/** text=auto eol=lf
+packages/plugin-sdk/templates/** text=auto eol=lf
+*.awplugin binary
 
 **/*.g.swift linguist-generated=true

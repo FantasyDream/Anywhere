@@ -1,7 +1,8 @@
 //! Third-party resolvers contribute namespaced data through the existing Context engine.
 use super::{
-    background_runtime::{self, Current, HostInvoke},
+    background_runtime::{self, BackgroundFailure, Current, HostInvoke},
     catalog::WebPluginCatalog,
+    diagnostics::Diagnostics,
     projection,
 };
 use crate::core::context::{
@@ -22,6 +23,8 @@ use std::sync::{
 #[derive(Clone)]
 struct BackgroundProvider {
     descriptor: ProviderDescriptor,
+    package: String,
+    diagnostics: Diagnostics,
     entrypoint: String,
     file: crate::persistence::web_packages::WebResourceFile,
     permissions: Vec<WebPermission>,
@@ -30,9 +33,8 @@ struct BackgroundProvider {
     platform: Arc<dyn Platform>,
 }
 #[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Derived {
-    #[serde(rename = "type")]
     type_id: String,
     value: Value,
 }
@@ -43,6 +45,7 @@ impl WebPluginCatalog {
         base: &ContextProviderRegistry,
         session: Arc<crate::application::session_coordinator::SessionCoordinator>,
         platform: Arc<dyn Platform>,
+        diagnostics: &Diagnostics,
     ) -> Result<ContextProviderRegistry> {
         let mut next = base.clone();
         next.retain_contributors(|id| !id.starts_with("web:"));
@@ -56,6 +59,8 @@ impl WebPluginCatalog {
                 .context("background resource not mounted")?;
             for resolver in &background.resolvers {
                 let provider = Arc::new(BackgroundProvider {
+                    package: registration.manifest.id.clone(),
+                    diagnostics: diagnostics.clone(),
                     descriptor: ProviderDescriptor {
                         id: format!("web.{}.{}", registration.manifest.id, resolver.id),
                         accepts: resolver.accepts.clone(),
@@ -181,13 +186,21 @@ impl BackgroundProvider {
         };
         let invoke: HostInvoke = Arc::new(move |call| {
             let denied = || WebError::new(WebErrorCode::PermissionDenied);
+            let spec = call.spec();
+            if !spec.roles.contains(&WebRole::Resolver)
+                || spec.permission.is_some_and(|name| {
+                    !permissions
+                        .iter()
+                        .any(|permission| permission.name() == name)
+                })
+            {
+                return Err(denied());
+            }
             Ok(match call {
                 WebCall::StateGet {} | WebCall::StateSubscribe {} => json!(snapshot),
                 WebCall::ContextGet {} => json!(snapshot.context),
                 WebCall::InputGet {} if snapshot.input.is_some() => json!(snapshot.input),
-                WebCall::CurrentApp {} | WebCall::SourceApp {}
-                    if permissions.contains(&WebPermission::CurrentApp {}) =>
-                {
+                WebCall::SourceApp {} if permissions.contains(&WebPermission::CurrentApp {}) => {
                     json!(source_app)
                 }
                 WebCall::FrontmostApp {}
@@ -220,9 +233,18 @@ impl BackgroundProvider {
             invoke,
             current,
             budget,
-        )?;
+        )
+        .inspect_err(|&error| {
+            self.diagnostics
+                .record(&self.package, &self.entrypoint, error);
+        })?;
         ensure!(check(), "resolver expired");
-        let output: Vec<Derived> = serde_json::from_value(output)?;
+        let output: Vec<Derived> = serde_json::from_value(output).map_err(|_| {
+            let error = BackgroundFailure::InvalidReturn;
+            self.diagnostics
+                .record(&self.package, &self.entrypoint, error);
+            error
+        })?;
         ensure!(output.len() <= 16, "too many derived contexts");
         output
             .into_iter()

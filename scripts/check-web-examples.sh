@@ -6,7 +6,8 @@ if [[ "${ANYWHERE_SDK_READY:-0}" == 1 ]]; then
 else
   python3 scripts/build-web-examples.py
 fi
-for package in build/web-examples/dev.anywhere.json-workspace.awplugin build/web-examples/dev.example.text-pad.awplugin build/web-examples/dev.example.json-summary.awplugin; do
+for package in build/web-examples/dev.anywhere.json-workspace.awplugin build/web-examples/dev.example.text-pad.awplugin build/web-examples/dev.example.json-summary.awplugin \
+  build/web-examples/dev.example.issue-link.awplugin build/web-examples/dev.example.selected-csv.awplugin; do
   cargo run -p anywhere-plugin --example inspect_web_package --locked -- "$package"
 done
 if ! cmp -s build/web-examples/dev.anywhere.json-workspace.awplugin crates/anywhere-core/resources/builtin-web-plugins/dev.anywhere.json-workspace.awplugin; then

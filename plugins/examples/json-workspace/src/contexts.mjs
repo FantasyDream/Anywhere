@@ -11,7 +11,7 @@ export function resolveJsonContexts(input) {
   try {
     const decoded = decodeDocument(input.text);
     if (!['{', '['].includes(decoded.text.trimStart()[0])) return [];
-    return [{type: JSON_CONTEXT, value: {text: decoded.text}}];
+    return [{typeId: JSON_CONTEXT, value: {text: decoded.text}}];
   } catch {
     return []; // An ordinary search term is not a plugin failure.
   }

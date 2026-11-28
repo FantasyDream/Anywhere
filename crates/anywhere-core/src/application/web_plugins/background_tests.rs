@@ -1,6 +1,9 @@
 use super::{tests::*, *};
-use crate::core::context::{ContextValue, ExecutionContext, ResolvedContext};
 use crate::Application;
+use crate::{
+    application::LauncherApplication,
+    core::context::{ContextValue, ExecutionContext, ResolvedContext},
+};
 use anywhere_protocol::{web_plugin::*, *};
 use serde_json::{json, Value};
 use std::{
@@ -10,8 +13,11 @@ use std::{
 };
 use zip::{write::SimpleFileOptions, ZipWriter};
 
-fn background_package(code: &str, permissions: Value) -> anywhere_plugin::web::VerifiedWebPackage {
-    let manifest = json!({"schemaVersion":1,"id":"dev.example.background","name":"Background","version":"1.0.0","apiVersion":"1","platforms":["macos"],"permissions":permissions,
+pub(super) fn background_package(
+    code: &str,
+    permissions: Value,
+) -> anywhere_plugin::web::VerifiedWebPackage {
+    let manifest = json!({"schemaVersion":1,"id":"dev.example.background","name":"Background","version":"1.0.0","apiVersion":"2","platforms":["macos"],"permissions":permissions,
         "background":{"entry":"background.js","resolvers":[{"id":"parse","accepts":["core.text"],"produces":["plugin.dev.example.background.result"],"entrypoint":"parse"}]},
         "commands":[{"id":"copy","title":"Copy parsed value","accepts":["plugin.dev.example.background.result"],"runtime":"background","entrypoint":"copy"}]});
     let mut zip = ZipWriter::new(Cursor::new(Vec::new()));
@@ -32,7 +38,7 @@ fn background_package(code: &str, permissions: Value) -> anywhere_plugin::web::V
 fn permissions() -> Value {
     json!([{"name":"context.read","types":["core.text","plugin.dev.example.background.result"]},{"name":"clipboard.writeText"}])
 }
-fn install(
+pub(super) fn install(
     app: &Application,
     root: &std::path::Path,
     package: &anywhere_plugin::web::VerifiedWebPackage,
@@ -51,7 +57,7 @@ fn install(
 async fn automatic_resolver_cannot_write_and_outputs_remain_package_owned() {
     let code = r#"export async function parse() {
       const result=JSON.parse(__anywhereInvoke('clipboard.writeText', '{"text":"wrong"}'));
-      return [{type:'plugin.dev.example.background.result', value:result.error.code}];
+      return [{typeId:'plugin.dev.example.background.result', value:result.error.code}];
     } export function copy() {}"#;
     let app = app();
     let root = tempfile::tempdir().unwrap();
@@ -109,7 +115,7 @@ async fn automatic_resolver_cannot_write_and_outputs_remain_package_owned() {
 async fn undeclared_native_contexts_and_changed_script_bytes_are_rejected() {
     let app = app();
     let root = tempfile::tempdir().unwrap();
-    let package = background_package("export function parse(){return [{type:'core.file',value:'/private/secret'}]} export function copy(){}", permissions());
+    let package = background_package("export function parse(){return [{typeId:'core.file',value:'/private/secret'}]} export function copy(){}", permissions());
     let _store = install(&app, root.path(), &package);
     let provider = app
         .resolver
@@ -309,7 +315,7 @@ async fn dropping_a_headless_execution_retires_its_binding_and_job() {
 async fn removing_resolvers_restarts_the_graph_without_publishing_stale_plugin_contexts() {
     let app = app();
     let root = tempfile::tempdir().unwrap();
-    let package = background_package("export function parse(){return [{type:'plugin.dev.example.background.result',value:{ok:true}}]} export function copy(){}", permissions());
+    let package = background_package("export function parse(){return [{typeId:'plugin.dev.example.background.result',value:{ok:true}}]} export function copy(){}", permissions());
     let mut store = install(&app, root.path(), &package);
     let id = app.begin_activation().unwrap();
     app.update_context_input(id, "hello".into(), 1, None, InputMode::Content)
@@ -375,6 +381,70 @@ async fn headless_context_reads_reuse_chunked_unicode_transfer() {
     let binding = app
         .bind_web_document(&invocation, WebPlatform::Macos)
         .unwrap();
-    assert_eq!(app.run_background_command(&binding).await.unwrap(), "90000");
+    assert_eq!(
+        app.run_background_command(&binding).await.unwrap(),
+        json!(90000)
+    );
     app.close_web_document(&binding).unwrap();
+}
+
+#[tokio::test]
+async fn background_usage_is_recorded_after_valid_feedback_through_launcher() {
+    let cases = [
+        (
+            "return {message:'Copied', closeWindow:false}",
+            true,
+            Some("Copied"),
+            false,
+        ),
+        ("return {message:'Copied'}", true, Some("Copied"), false),
+        ("return undefined", true, None, true),
+        ("return {message:null}", false, None, false),
+        ("return ['private']", false, None, false),
+        (
+            "throw Error('sensitive execution body')",
+            false,
+            None,
+            false,
+        ),
+    ];
+    for (body, succeeds, text, closes) in cases {
+        let app = app();
+        let root = tempfile::tempdir().unwrap();
+        let source = format!("export function parse(){{return [{{typeId:'plugin.dev.example.background.result',value:1}}]}} export function copy(){{{body}}}");
+        let _store = install(
+            &app,
+            root.path(),
+            &background_package(&source, permissions()),
+        );
+        let session = app.begin_activation().unwrap();
+        let result = app
+            .update_context_input(session, "fixture".into(), 1, None, InputMode::Content)
+            .await
+            .unwrap()
+            .unwrap();
+        let action = result
+            .candidates
+            .iter()
+            .find(|candidate| {
+                candidate.command_id.as_deref() == Some("web:dev.example.background:copy")
+            })
+            .unwrap();
+        let response = app.execute(session, 1, action.id.clone()).await.unwrap();
+        assert_eq!(
+            response.succeeded(),
+            succeeds,
+            "{body}: {:?}",
+            response.error
+        );
+        assert_eq!(response.output_text.as_deref(), text, "{body}");
+        assert_eq!(response.close_window, closes, "{body}");
+        let history = app.resolver.history.lock().unwrap().load_global().unwrap();
+        assert_eq!(history.len(), usize::from(succeeds), "{body}");
+        let diagnostics = app.web_package_diagnostics("dev.example.background");
+        assert_eq!(diagnostics.is_empty(), succeeds, "{body}");
+        assert!(diagnostics
+            .iter()
+            .all(|summary| !summary.contains("sensitive")));
+    }
 }

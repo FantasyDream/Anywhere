@@ -67,7 +67,8 @@ pub(super) fn attach(child: &Child) -> Result<State> {
         if exited {
             return Ok(State { job: None });
         }
-        return Err(std::io::Error::last_os_error()).context("assign process to Windows job object");
+        return Err(std::io::Error::last_os_error())
+            .context("assign process to Windows job object");
     }
     Ok(State { job: Some(job) })
 }

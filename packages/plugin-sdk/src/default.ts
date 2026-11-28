@@ -12,6 +12,21 @@ function current() {
 }
 /** Zero-setup facade. Startup, visibility, rebind and disposal belong to the SDK. */
 export const anywhere: Anywhere = {
+  url: {
+    open: (url, options) => current().url.open(url, options),
+  },
+  resources: {
+    stat: (handle, options) => current().resources.stat(handle, options),
+    readText: (handle, options) =>
+      current().resources.readText(handle, options),
+  },
+  window: {
+    back: options => current().window.back(options),
+    close: options => current().window.close(options),
+  },
+  preview: {
+    open: (handle, options) => current().preview.open(handle, options),
+  },
   context: {
     get: () => current().context.get(),
     onChange: callback => current().context.onChange(callback),

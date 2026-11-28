@@ -23,6 +23,7 @@ pub use dto::{
     ActivationInput, AppHistoryItem, AppHistoryObjectAction, AppHistorySnapshot, AppHistorySource,
     ClipboardItem, ClipboardSnapshot, ExecutionDetail, ExecutionRow, PreviewFile,
     ShortcutCandidate, ShortcutCatalogAction, WebDocument, WebPackage, WebPackageReview,
+    WebReviewDetails,
 };
 pub use hotkeys::{registered_preferences, HotKeyAction, HotKeyController};
 pub use login_item::LoginItemState;

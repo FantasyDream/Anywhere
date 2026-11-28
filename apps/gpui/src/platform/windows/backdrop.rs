@@ -5,7 +5,6 @@ use std::{
     ptr::{null, null_mut},
 };
 use windows::{
-    UI::Color,
     core::{implement, Interface, Result as WinResult, GUID, HSTRING, PCWSTR},
     Foundation::{IPropertyValue, PropertyValue},
     Graphics::Effects::{
@@ -25,6 +24,7 @@ use windows::{
             DQTAT_COM_NONE, DQTYPE_THREAD_CURRENT,
         },
     },
+    UI::Color,
     UI::Composition::{
         CompositionColorBrush, CompositionEffectSourceParameter,
         CompositionRoundedRectangleGeometry, CompositionSpriteShape, CompositionVisualSurface,
@@ -63,10 +63,9 @@ use windows_sys::{
                 USER_DEFAULT_SCREEN_DPI, WM_ACTIVATE, WM_CAPTURECHANGED, WM_DPICHANGED,
                 WM_GETMINMAXINFO, WM_LBUTTONUP, WM_MOUSEMOVE, WM_MOVE, WM_NCDESTROY, WM_NCHITTEST,
                 WM_NCLBUTTONDOWN, WM_SETTINGCHANGE, WM_SHOWWINDOW, WM_SIZE, WM_THEMECHANGED,
-                WM_WINDOWPOSCHANGED,
-                WNDCLASSW, WS_CAPTION, WS_EX_NOACTIVATE, WS_EX_NOREDIRECTIONBITMAP,
-                WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_MAXIMIZEBOX, WS_MINIMIZEBOX,
-                WS_POPUP, WS_SYSMENU, WS_THICKFRAME,
+                WM_WINDOWPOSCHANGED, WNDCLASSW, WS_CAPTION, WS_EX_NOACTIVATE,
+                WS_EX_NOREDIRECTIONBITMAP, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT,
+                WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_POPUP, WS_SYSMENU, WS_THICKFRAME,
             },
         },
     },
@@ -341,8 +340,8 @@ impl BackdropHost {
         let dpi = unsafe { GetDpiForWindow(owner_hwnd) };
         let zoomed = unsafe { IsZoomed(owner_hwnd) != 0 };
         let transparent = transparency_enabled();
-        let dark = crate::platform::current_window_appearance()
-            == crate::platform::WindowAppearance::Dark;
+        let dark =
+            crate::platform::current_window_appearance() == crate::platform::WindowAppearance::Dark;
         let scale = if dpi > 0 {
             dpi as f32 / USER_DEFAULT_SCREEN_DPI as f32
         } else {
@@ -843,14 +842,7 @@ fn clamp_maximize_to_work_area(hwnd: HWND, lparam: LPARAM) {
 fn is_resize_edge(hit: u32) -> bool {
     matches!(
         hit,
-        HTLEFT
-            | HTRIGHT
-            | HTTOP
-            | HTTOPLEFT
-            | HTTOPRIGHT
-            | HTBOTTOM
-            | HTBOTTOMLEFT
-            | HTBOTTOMRIGHT
+        HTLEFT | HTRIGHT | HTTOP | HTTOPLEFT | HTTOPRIGHT | HTBOTTOM | HTBOTTOMLEFT | HTBOTTOMRIGHT
     )
 }
 

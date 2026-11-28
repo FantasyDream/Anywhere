@@ -382,7 +382,6 @@ impl LauncherView {
             }
             LiveEvent::WebPackages(packages) => {
                 self.web.apply(packages);
-                self.web_surface.review = None;
                 self.notice = None;
             }
             LiveEvent::WebReview(review) => {
@@ -423,7 +422,7 @@ impl LauncherView {
                 self.web_surface.document = Some(document);
                 self.notice = None;
             }
-            LiveEvent::WebFrameReply { handle, frame } => {
+            LiveEvent::WebFrameReply { handle, frame, .. } => {
                 if self
                     .web_surface
                     .document

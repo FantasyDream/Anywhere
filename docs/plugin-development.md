@@ -2,7 +2,7 @@
 
 插件可以是 Web 界面，也可以是无需界面的后台 JavaScript。你只负责 TypeScript / JavaScript 业务；Anywhere 负责容器、默认样式、权限、Context 调度和资源释放。界面可使用普通 HTML，也可以使用 React、Vue、Svelte。
 
-**当前范围为 macOS 与 Windows 可信本地包开发预览。** 下述 API 描述当前源码；历史发布包不一定具备这些能力。SDK 尚未发布到 npm，使用导出的 `.tgz` 安装。开发需要 Node.js 22+ 和 Python 3.10+；插件运行时不需要 Node、Python 或 Rust。
+**当前范围为 macOS 与 Windows 可信本地包开发预览。** 下述 API 描述当前源码；历史发布包不一定具备这些能力。SDK 尚未发布到 npm，使用导出的 `.tgz` 安装。开发、验证和打包需要 Node.js 22+。已批准的插件由 Anywhere 运行。
 
 ## 1. 从模板开始
 
@@ -13,8 +13,13 @@ npm exec --package=/绝对路径/anywhere-sdk-0.1.0.tgz -- anywhere-plugin init 
 cd my-tool
 npm install --ignore-scripts
 npm run build
+npm test
+npm run validate
 npm run pack
 ```
+
+默认创建 JavaScript 界面项目，也可选 `--ts`、`--background` 或 `--hybrid`。
+`npm run dev` 启动浏览器 Mock 或运行后台 Mock。浏览器调试面板提供合成选区、两种平台和语言、主题、隐藏恢复、撤销及超限场景。
 
 得到 `output/my-tool.awplugin`。模板可以输入文字、转成大写、请求复制，也能接收本次 Action 的文本输入。创建器不会覆盖已有目录。
 
@@ -25,11 +30,12 @@ SDK 自动保存在 `vendor/plugin-sdk/`，项目可独立移动。提交源码�
 ## 2. 安装并试用
 
 1. 打开 Anywhere → **Settings → Features → Web tools → Import**。
-2. 选择 `.awplugin`，核对名称、版本和权限后批准。
-3. 在 Global Search 搜索 **My Tool**，回车打开。
-4. 输入文字，点 Uppercase；点 Copy text 后，在安装时批准的权限内直接复制；失败时由 SDK 报告。
+2. 选择 `.awplugin`。也可拖到设置页、对 Launcher 文件结果执行“审查 Anywhere 插件”，或由系统用 Anywhere 打开。
+3. 核对来源、摘要、命令与权限范围后批准。安装后可在该页立即打开支持空输入的界面命令。
+4. 在 Global Search 搜索 **My Tool**，回车打开。
+5. 输入文字，点 Uppercase；点 Copy text 后，在安装时批准的权限内直接复制；失败时由 SDK 报告。
 
-修改后重新执行 `npm run build`、`npm run pack`，再导入更新。**Reload 只重新加载已批准的包，不读取源码目录。** 当前不支持开发服务器和 HMR。
+修改后重新执行 `npm run build`、`npm run pack`，再导入更新。Reload 重新加载已批准的安装内容。浏览器 Mock 从开发服务器读取本地构建产物。
 
 ## 3. 开发时改哪里
 
@@ -56,13 +62,13 @@ my-tool/
 | `entry` | 本地 HTML 入口，模板为 `dist/index.html` |
 | `permissions` | 只声明实际使用的宿主能力 |
 | `commands[].id` | 稳定的 Action ID；不要随显示名称一起改动 |
-| `commands[].title`、`keywords` | Action 标题与搜索关键词 |
+| `commands[].title`、`localizedTitles`、`subtitle`、`icon`、`keywords` | 标题、本地化标题、说明、白名单图标与搜索关键词 |
 | `commands[].accepts` | 接受的 Context 类型，如 `core.text` |
 | `commands[].entrypoint` | 传给同一网页的路由参数；多个 Action 可复用一个页面 |
 
 同一个插件在匹配和使用记录分数相同时，按 Manifest 的命令顺序排列，建议把默认入口放在第一项。
 
-模板声明 `schemaVersion: 1`、`apiVersion: "1"` 和 `platforms: ["macos"]`。面向 Windows 时将 `windows` 加入实际支持的平台列表，并使用 WebView2 复验包。内置 JSON Workspace 声明两个平台，Text Pad 与 JSON Summary 示例保留 macOS 声明。见 [最小模板](../packages/plugin-sdk/templates/minimal/manifest.json)和 [Windows 桌面验收](test-acceptance-windows.md#webview2-与插件)。
+模板声明 `schemaVersion: 1`、`apiVersion: "2"` 和 `platforms: ["macos"]`。面向 Windows 时将 `windows` 加入实际支持的平台列表，并使用 WebView2 复验包。内置 JSON Workspace、Text Pad 与 JSON Summary 声明两个平台。见 [最小模板](../packages/plugin-sdk/templates/minimal/manifest.json)和 [Windows 桌面验收](test-acceptance-windows.md#webview2-与插件)。
 
 ## 4. 接收输入与调用宿主
 
@@ -79,14 +85,14 @@ const plugin = definePlugin({
 });
 
 // 在按钮处理器里调用；成功后再提示已复制。
-await plugin.host.clipboard.writeText(input.value);
+await plugin.anywhere.clipboard.writeText(input.value);
 ```
 
 `onLaunch` 每个页面实例只执行一次，隐藏后恢复不会覆盖文稿。返回 / 重载时 SDK 自动释放连接；React / Vue 卸载组件时也可以调用 `plugin.dispose()`。如有异步业务，可用 `onLaunch(invocation, {signal})` 的信号判断页面是否已销毁。
 
 不传 `onError` 时显示默认错误提示；需要业务提示时传入 `onError(error)`。业务按钮自身的异步操作仍应捕获失败、恢复按钮状态，取消复制后不能显示成功。SDK 自动处理协议和分块，不自动重试副作用。
 
-返回、重载和工具选项由 Host 提供，SDK 当前没有 `navigation.back`、`actions.set` 或 `host.theme.subscribe`。主题 / 背景由 Host 自动注入；不需要注册页面动作来适配样式。
+宿主提供返回、重载和工具选项。插件也可通过 `anywhere.window.back()` 或 `anywhere.window.close()` 请求当前 Web 窗口操作。主题和背景由宿主注入。
 
 输入可能是 `text`、`url`、`resources`、插件自有的 `data` 或 `empty`。按工具名称打开时可以没有输入，不要把搜索关键词当成正文。`empty.reason` 会说明没有对象、未授权或超限等原因。
 
@@ -110,6 +116,9 @@ stop();
 | 读取剪贴板文本 | `anywhere.clipboard.readText()` | `clipboard.readText` |
 | 复制文本 | `anywhere.clipboard.writeText(text)` | `clipboard.writeText` |
 | 私有小型设置（界面 / 后台命令共用） | `anywhere.storage.get(key)`、`set(key, value)`、`remove(key)` | `storage.local` |
+| 经宿主确认打开外部站点 | `anywhere.url.open(url)` | `url.open`，精确 origin 或 `["*"]` |
+| 单文件元数据或 UTF-8 内容 | `anywhere.resources.stat(handle)`、`readText(handle, {maxBytes})` | `resources.read` 与 `context.read(core.file)` |
+| 原生预览 | `anywhere.preview.open(handle)` | `preview.open` 与 `context.read(core.file)` |
 
 所有异步调用返回 Promise，订阅返回取消函数。Context 和 Input 使用初始快照与变化推送；旧版本事件不会覆盖新快照。`context.get()` 返回获准的单个对象，绝不返回完整原生图。无 Context 授权时得到 `empty`；缺少 Input / 应用权限时读写调用失败，订阅不推送未授权的内容。来源应用在唤醒前冻结，实时前台应用可能是 Anywhere 自身，二者不可混用。
 
@@ -122,15 +131,15 @@ stop();
 
 有限后台任务遵守相同的写入结果语义：没有 Context / Input 订阅者时，写入只使快照缓存失效，下次 getter 再读取；有订阅者时尝试同步并通知，读回失败不拒绝已确认的写入，也不缓存失败的 Promise。后续显式读取仍可能因任务额度或生命周期失效而失败，不承诺恢复已经耗尽的预算。
 
-`definePlugin()` 仍适用于需要 `onLaunch` 或 `onError` 的页面，返回的 `plugin.anywhere` 提供同一套业务 API；`plugin.host` 是已有兼容入口。
+`definePlugin()` 仍适用于需要 `onLaunch` 或 `onError` 的页面，返回的 `plugin.anywhere` 提供同一套业务 API。
 
 当前 V0.14 GPUI Host 中，剪贴板读写只需安装时批准相应权限，运行时不再逐次
 弹窗。缺少权限、隐藏 / 撤销或失效的实例仍被拒绝；成功后才显示“已复制”，
 不要自动重试写入。历史 Host 的逐次确认流程不属于当前 SDK 契约。
 
-`context.read` 也支持 `core.url`、`core.file`、`core.directory`、`core.file_selection`，需要同时加入 `accepts`。文件只提供名称、类型和不透明句柄，目前不能读取文件正文或取得完整路径。
+`context.read` 也支持 `core.url`、`core.file`、`core.directory`、`core.file_selection`，需要同时加入 `accepts`。文件投影提供名称、类型和不透明句柄。获准的单个 Finder / Explorer 普通文件可读取 UTF-8 内容，最多 1 MiB。预览使用独立权限和最多 16 MiB 的私有快照，文件路径留在宿主。用 `readable` 与 `previewable` 决定是否显示操作。
 
-当前没有 Shell、Node API、任意文件访问、网络请求、图片剪贴板、后台监控或完整 Context Graph API。
+外链每次都需要宿主确认，可用于打开经批准站点中的工单。插件 WebView 保持离线，外部浏览器接收已确认的 URL。
 
 ### 自动匹配 JSON
 
@@ -162,19 +171,19 @@ npm exec --package=/绝对路径/anywhere-sdk-0.1.0.tgz -- anywhere-plugin init 
 Manifest 的 `background.entry` 指向构建出的 `.js`，`background.resolvers` 静态声明解析函数和输入 / 输出类型。输出必须属于 `plugin.<插件 id>.<类型>`；只允许 Manifest 中声明的类型。示例：
 
 ```ts
-import {anywhere} from '@anywhere/sdk';
-export async function resolve() {
-  const input = await anywhere.context.get();
+import {defineResolver} from '@anywhere/sdk';
+export const resolve = defineResolver(async ({context}) => {
+  const input = await context.get();
   if (input.kind !== 'text') return [];
-  return [{type: 'plugin.dev.example.my-parser.summary', value: {length: input.text.length}}];
-}
+  return [{typeId: 'plugin.dev.example.my-parser.summary', value: {length: input.text.length}}];
+});
 ```
 
 对应 Manifest 需有 `context.read(core.text)`，解析器 `accepts: ["core.text"]`、`produces: ["plugin.dev.example.my-parser.summary"]`、`entrypoint: "resolve"`。它通过现有 Context Graph 调度，不能伪造 `core.file` 等第一方类型，也不能把输出变成原生文件权限。未匹配时返回 `[]`。
 
 无界面命令在 `commands[]` 声明 `runtime: "background"`，`entrypoint` 为导出的函数名。接受 Context 的后台命令只在匹配对象存在时出现；`accepts: []` 可定义无对象的全局命令。普通 Web 命令省略 `runtime` 即可，继续使用 HTML `entry` 和路由 `entrypoint`。仅后台包可省略 HTML `entry`。
 
-自动解析器只能读取获准的 Context / Input / 应用快照，不得弹确认、改输入或读写剪贴板。显式后台 Action 可以调用获准的宿主能力，剪贴板操作不再逐次确认。后台命令由 Rust 执行到完成，不创建工具页；成功后关闭 Launcher，失败留在原搜索显示错误。后台任务是有限调用，无常驻监听；订阅提供本任务初始状态及自身输入修改后的状态，任务结束一起释放。不是后台守护程序。
+自动解析器只能读取获准的 Context / Input / 应用快照，不得弹确认、改输入或读写剪贴板。显式后台 Action 可以调用获准的宿主能力，剪贴板操作不再逐次确认。后台命令可返回空值或 `{message?, closeWindow?}`。消息为最多 512 个 UTF-8 字节的纯文本。带消息的成功结果默认留在搜索页；空消息默认关闭。失败或取消保留窗口。成功后记录一次 Usage，失败分类可在 Web 工具页查看。后台任务是有限调用，无常驻监听；订阅提供本任务初始状态及自身输入修改后的状态，任务结束一起释放。不是后台守护程序。
 
 第三方文本解析器经安装授权并启用后，也参与现有的默认输入识别；这是显式命令执行前的只读 QuickJS 调用，不同于 Web 命令不执行 JS 的宿主 `inputMatchers`。预填识别单任务采用 75 ms JS 预算，整轮在 150 ms 后不再启动额外识别器，避免大量插件拖慢唤醒。识别之后仍由正常 Context Graph 解析，不把预填探测直接当作执行资格。
 
@@ -191,7 +200,7 @@ QuickJS 每次按需创建，32 MiB 内存、256 KiB 栈、250 ms JS 执行预�
 - 自定义局部组件时使用 `--aw-text`、`--aw-secondary`、`--aw-surface`、`--aw-border`、`--aw-accent` 等 CSS 变量。
 - 常用图标也由 Host 提供，例如 `<button><span class="aw-icon aw-icon--copy" aria-hidden="true"></span>复制</button>`。无需图标依赖或样式代码；保留文字标签，仅图标按钮须提供 `aria-label`。完整列表见 SDK README。
 - 使用标准 HTML 控件并为输入框提供标签；宿主负责 macOS 嵌入视图的无障碍连接与生命周期，无需插件注册原生节点或修改框架。实际 VoiceOver 可操作性仍需验收，不能用样式一致或单元测试代替。
-- 保留 Esc 和 ⌘K 给 Host；局部快捷键不要拦截输入法组合输入。
+- 用 `environment.formatShortcut` 和 `environment.matchesShortcut` 共用同一规格，例如 `Mod+Shift+C`。`Mod` 在 macOS 对应 ⌘，在 Windows 对应 Ctrl。组合输入、AltGr 和重复键由 SDK 跳过。
 
 隐藏后页面最多保留 15 秒，未完成宿主请求会失效。`definePlugin` 自动取消待处理请求，恢复时重新就绪并保留文稿；插件无需监听可见性或重复读取输入。`onDispose` 可用于释放业务自己的计时器等资源。
 
@@ -205,20 +214,21 @@ QuickJS 每次按需创建，32 MiB 内存、256 KiB 栈、250 ms JS 执行预�
 
 `npm run pack` 使用 SDK 自带打包器，只收集根目录的 `manifest.json` 和 `dist/`，不会打包源码、依赖和 SDK 安装包。`.awplugin` 是 ZIP，不要直接压缩整个项目目录后改名。
 
-资源放在别处时，显式指定运行资源目录：
+先把 HTML、JavaScript、图标和其他运行资源构建进 `dist/`。以下命令可直接运行 SDK 的 Node CLI。
 
 ```sh
-python3 node_modules/@anywhere/sdk/tools/package.py . \
-  --assets dist --assets assets --output output/my-tool.awplugin
+npx --no-install anywhere-plugin validate --built
+npx --no-install anywhere-plugin pack --output output/my-tool.awplugin
 ```
 
-入口和图标必须包含在所选资源中；不支持符号链接。打包器不执行安装或授权，完整校验由 Anywhere 导入时完成。
+CLI 检测重复 JSON 键，打包前剥离编辑器用的顶层 `$schema`，以 UTF-8 和 LF 保存归档 Manifest。
+宿主导入时验证版本、归档、内容摘要和授权；API 1 包需使用当前 SDK 重新构建。
 
 页面可按相对路径加载包内图片和 WOFF / WOFF2 / TTF / OTF 字体，ICO 可作为页面图片资源；Manifest 的工具图标仍只接受 PNG。资源需先通过包校验和当前文档身份检查，页面仍只有一个 `.html` 入口，不能通过附加 HTML 文档或字体资源扩大能力。
 
 | 问题 | 检查方式 |
 |---|---|
-| 浏览器里显示 `HOST_UNAVAILABLE` | 宿主 API 需在 Anywhere 中验证；普通浏览器只适合预览网页 |
+| 浏览器里显示 `HOST_UNAVAILABLE` | 用 `npm run dev` 加载 Mock，或在 Anywhere 导入验证真实宿主 |
 | 搜不到 Action | 确认插件已启用，搜索标题 / 关键词，先回到 Global Search |
 | 输入为空 | 检查 `accepts` 和 `context.read`；按名称打开时无输入是正常情况 |
 | `PERMISSION_DENIED` | 修改权限后需重新打包、导入批准 |
@@ -233,15 +243,13 @@ Storage 合计最多 1 MiB / 256 个键，单值最多 64 KiB，实际请求还�
 以下命令仅用于在 Anywhere 仓库中导出 SDK，插件作者不需要安装整个仓库：
 
 ```sh
-mkdir -p build/plugin-sdk
-cd packages/plugin-sdk
-npm ci --ignore-scripts
-npm pack --pack-destination ../../build/plugin-sdk
+npm --prefix packages/plugin-sdk ci --ignore-scripts
+scripts/package-plugin-sdk.sh
 ```
 
 插件和宿主都不显示固定页脚。主要操作放到工具栏或对应内容区标题，成功 / 失败反馈就近显示；宿主负责页头返回、Esc 和工具选项，插件不用重复实现。
 
-SDK 包含编译后的接口、类型、公共 CSS、模板和打包器。更多信息：[SDK 说明](../packages/plugin-sdk/README.md)、[JSON 示例](../plugins/examples/json-workspace/README.md)、[平台设计](web-plugin-design.md)。
+SDK 包含编译接口、公共 CSS、编辑器与归档 schema、Mock、模板、Node CLI 和开发 Skill。校验和随 SDK 写入 `build/plugin-sdk/`。更多信息：[SDK 说明](../packages/plugin-sdk/README.md)、[JSON 示例](../plugins/examples/json-workspace/README.md)、[平台设计](web-plugin-design.md)。
 
 ## 7. 进阶用法
 

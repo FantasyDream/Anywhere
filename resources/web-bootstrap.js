@@ -119,7 +119,7 @@
         const cancellation = message.method === 'request.cancel';
         // Cancellation is unqueued and only forwarded for an active pending request.
         if (cancellation) {
-          if (!pending.delete(message.params?.request_id)) return;
+          if (!pending.delete(message.params?.requestId)) return;
         } else {
           if (pending.size >= 32) throw new Error('BUSY');
           pending.add(message.requestId);

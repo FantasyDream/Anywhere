@@ -95,8 +95,7 @@ pub(crate) fn roots(options: &FileSearchOptions) -> Result<Vec<PathBuf>> {
 
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub(crate) fn searchable_path(path: &Path, include_hidden: bool) -> bool {
-    path.is_absolute()
-        && searchable_components(path, include_hidden)
+    path.is_absolute() && searchable_components(path, include_hidden)
 }
 
 fn searchable_components(path: &Path, include_hidden: bool) -> bool {

@@ -149,6 +149,14 @@ Explorer 双击产物启动并记录该开关。默认托盘式样式和登录�
 
 ## WebView2 与插件
 
+V0.15 Phase 1 桌验补充为 Pending，使用同一批试点包和[插件验收矩阵](web-plugin-phase-1.md#逐项验收矩阵)。
+
+- 在便携 EXE 的“打开方式”中选择 Anywhere，记录冷启动及主实例运行中接收的审查卡。试用中文版路径、空格、第二份待审查包、隐藏清锁和 `ANYWHERE_DATA_DIR` 隔离。
+- 确认 WebView2 原生表面在外链确认时隐藏，取消后恢复焦点；确认后访问批准的实际 origin。
+- 从 Explorer 单选 CSV，读取并用 QuickLook 预览。记录 OneDrive 文件已下载与未下载、重解析点、多选、路径替换、15 秒内恢复和独立工具窗。
+- 在 JSON Workspace 用 Ctrl 键帽完成运行与复制，实测中文 IME 和 AltGr，记录 WebView2 Runtime 版本。
+
+
 | ID | 优先级 | 桌面操作 | 可观察的通过条件 |
 | --- | --- | --- | --- |
 | W-WEB-01 | P1 | 搜索内置 JSON Workspace，输入小 JSON 并查询、复制结果到记事本；从页头打开独立窗口，再唤醒 Launcher，分别操作两个窗口并关闭 | 宿主正常渲染、输出可核对，两个窗口并存且没有串焦点；关闭后可重新打开 |

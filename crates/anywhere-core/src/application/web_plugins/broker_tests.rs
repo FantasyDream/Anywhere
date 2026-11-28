@@ -22,6 +22,8 @@ use std::{
 struct ClipboardPort {
     reads: AtomicUsize,
     writes: Mutex<Vec<String>>,
+    urls: Mutex<Vec<String>>,
+    before_open_url: Option<Box<dyn Fn() + Send + Sync>>,
     text: Mutex<String>,
     fail: bool,
     frontmost: Option<anywhere_platform::ApplicationInfo>,
@@ -55,8 +57,12 @@ impl anywhere_platform::ClipboardHost for ClipboardPort {
 }
 impl anywhere_platform::FileSearchHost for ClipboardPort {}
 impl anywhere_platform::ResourceOpener for ClipboardPort {
-    fn open_url(&self, _: &str) -> anyhow::Result<()> {
-        anyhow::bail!("unexpected operation")
+    fn open_url(&self, value: &str) -> anyhow::Result<()> {
+        if let Some(callback) = &self.before_open_url {
+            callback();
+        }
+        self.urls.lock().unwrap().push(value.into());
+        Ok(())
     }
     fn open_file(&self, _: &Path) -> anyhow::Result<()> {
         anyhow::bail!("unexpected operation")
@@ -116,7 +122,7 @@ fn setup_named(
     (app, binding)
 }
 fn frame(id: &str, method: &str, params: Value) -> String {
-    json!({"protocol":1,"requestId":id,"method":method,"params":params}).to_string()
+    json!({"protocol":2,"requestId":id,"method":method,"params":params}).to_string()
 }
 async fn call(
     app: &Application,
@@ -667,7 +673,7 @@ async fn cancelled_queued_requests_release_bookkeeping_without_waiting_for_worke
                     &binding,
                     "cancel-copy",
                     "request.cancel",
-                    json!({"request_id":"queued-copy"}),
+                    json!({"requestId":"queued-copy"}),
                 )
                 .await,
             );
@@ -924,5 +930,339 @@ async fn source_application_is_frozen_while_frontmost_is_queried_live() {
         reply(call(&app, &binding, "live", "app.getFrontmost", json!({})).await)["result"]["value"]
             ["id"],
         "app.live"
+    );
+}
+
+#[tokio::test]
+async fn url_confirmation_uses_canonical_origin_and_rejects_busy_or_revoked_requests() {
+    let port = Arc::new(ClipboardPort::default());
+    let (app, binding) = setup(
+        json!([{"name":"url.open","origins":["https://例え.example"]}]),
+        port.clone(),
+        ModuleStorageHost::memory().unwrap(),
+        "one",
+    );
+    let mut interactions = app.web_host_interactions().unwrap();
+    let make_call = |id: &'static str| {
+        let app = app.clone();
+        let binding = binding.clone();
+        tokio::spawn(async move {
+            reply(
+                call(
+                    &app,
+                    &binding,
+                    id,
+                    "url.open",
+                    json!({"url":"https://例え.example/a?q=1"}),
+                )
+                .await,
+            )
+        })
+    };
+    let outside = reply(
+        call(
+            &app,
+            &binding,
+            "outside",
+            "url.open",
+            json!({"url":"https://elsewhere.example"}),
+        )
+        .await,
+    );
+    assert_eq!(outside["error"]["code"], "PERMISSION_DENIED");
+    let first = make_call("first");
+    let consent = interactions.recv().await.unwrap();
+    assert_eq!(app.web_rpc_workers.available_permits(), MAX_RUNNING);
+    let HostInteractionKind::OpenUrl {
+        origin,
+        destination,
+        query_bytes,
+    } = &consent.kind
+    else {
+        panic!("expected URL consent");
+    };
+    assert_eq!(origin, "https://xn--r8jz45g.example");
+    assert_eq!(destination, "https://xn--r8jz45g.example/a?q=1");
+    assert_eq!(*query_bytes, 3);
+    assert_eq!(make_call("busy").await.unwrap()["error"]["code"], "BUSY");
+    consent.respond(Err(WebErrorCode::UserCancelled));
+    assert_eq!(first.await.unwrap()["error"]["code"], "USER_CANCELLED");
+    let second = make_call("approved");
+    interactions.recv().await.unwrap().respond(Ok(()));
+    assert!(second.await.unwrap().get("result").is_some());
+    assert_eq!(
+        *port.urls.lock().unwrap(),
+        ["https://xn--r8jz45g.example/a?q=1"]
+    );
+    let revoked = make_call("revoked");
+    let consent = interactions.recv().await.unwrap();
+    let _new = app
+        .bind_web_document(&binding.invocation_id, WebPlatform::Macos)
+        .unwrap();
+    consent.respond(Ok(()));
+    assert!(revoked.await.unwrap().get("error").is_some());
+    assert_eq!(port.urls.lock().unwrap().len(), 1);
+    let outcome = app
+        .dispatch_web_outcome(
+            &binding,
+            source(&binding),
+            &frame("close", "window.close", json!({})),
+        )
+        .await;
+    assert!(outcome.host_action.is_none());
+}
+
+#[cfg(any(target_os = "macos", windows))]
+#[tokio::test]
+async fn file_capabilities_are_scoped_to_the_captured_identity_and_document() {
+    use crate::{application::context_capture::finder_contexts, core::context::ContextValue};
+    let root = tempfile::tempdir().unwrap();
+    let dir = root.path().canonicalize().unwrap();
+    let path = dir.join("选区.csv");
+    std::fs::write(&path, "a,b\n1,2").unwrap();
+    let port = Arc::new(ClipboardPort::default());
+    let app = Arc::new(Application::new(
+        port,
+        ActionRegistry::default(),
+        Box::<MemoryUsage>::default(),
+        vec![],
+    ));
+    let package = package_named(
+        "dev.example.tool",
+        json!([
+            {"name":"context.read","types":["core.file"]},{"name":"resources.read"},{"name":"preview.open"}
+        ]),
+        json!(["core.file"]),
+        "fixture",
+    );
+    app.publish_web_catalog(
+        WebPluginCatalog::prepare(WebPlatform::Macos, [(&package, approval(&package))]).unwrap(),
+    )
+    .unwrap();
+    let session = app.begin_activation().unwrap();
+    let registry = app.resolver.base_registry();
+    let mut contexts = finder_contexts(vec![path.clone()]).unwrap();
+    let mut selected = contexts.pop().unwrap();
+    assert!(matches!(selected.value, ContextValue::File(_)));
+    selected.session_id = session;
+    let id = start(
+        &mut app.web_plugins.lock().unwrap(),
+        &reference(&registry),
+        &selected,
+    );
+    let binding = app.bind_web_document(&id, WebPlatform::Macos).unwrap();
+    let invocation = app.web_invocation(&binding, source(&binding)).unwrap();
+    let WebInput::Resources { items, .. } = invocation.input else {
+        panic!("selected file missing");
+    };
+    let item = &items[0];
+    assert!(item.readable && item.previewable);
+    let params = json!({"handle":item.handle});
+    let stat = reply(call(&app, &binding, "stat", "resources.stat", params.clone()).await);
+    assert_eq!(stat["result"]["value"]["bytes"], 7);
+    assert_eq!(stat["result"]["value"]["name"], "选区.csv");
+    assert_eq!(
+        reply(call(&app, &binding, "read", "resources.readText", params.clone()).await)["result"]
+            ["value"],
+        "a,b\n1,2"
+    );
+    assert_eq!(
+        reply(
+            call(
+                &app,
+                &binding,
+                "forged",
+                "resources.readText",
+                json!({"handle":"forged"})
+            )
+            .await
+        )["error"]["code"],
+        "EXPIRED"
+    );
+    assert_eq!(
+        reply(
+            call(
+                &app,
+                &binding,
+                "small",
+                "resources.readText",
+                json!({"handle":item.handle,"maxBytes":6})
+            )
+            .await
+        )["error"]["code"],
+        "TOO_LARGE"
+    );
+    let mut interactions = app.web_host_interactions().unwrap();
+    let preview = {
+        let app = app.clone();
+        let binding = binding.clone();
+        let params = params.clone();
+        tokio::spawn(
+            async move { reply(call(&app, &binding, "preview", "preview.open", params).await) },
+        )
+    };
+    let offer = interactions.recv().await.unwrap();
+    let HostInteractionKind::Preview(resource) = &offer.kind else {
+        panic!("missing native preview")
+    };
+    let snapshot = PathBuf::from(&resource.paths[0]);
+    let preview_id = resource.id.clone();
+    assert_ne!(snapshot, path);
+    assert_eq!(snapshot.extension().unwrap(), "csv");
+    assert!(snapshot.metadata().unwrap().permissions().readonly());
+    assert_eq!(std::fs::read_to_string(&snapshot).unwrap(), "a,b\n1,2");
+    offer.respond(Ok(()));
+    assert!(preview.await.unwrap().get("result").is_some());
+    app.release_preview(&preview_id).unwrap();
+    assert!(!snapshot.exists());
+
+    for (case, data, expected) in [
+        ("empty", vec![], None),
+        ("non-utf8", vec![0xff], Some("INVALID_REQUEST")),
+        ("nul", vec![0], Some("INVALID_REQUEST")),
+        (
+            "over-limit",
+            vec![b'x'; MAX_TEXT_BYTES + 1],
+            Some("TOO_LARGE"),
+        ),
+        (
+            "bridge-overflow",
+            vec![b'"'; MAX_TEXT_BYTES],
+            Some("TOO_LARGE"),
+        ),
+    ] {
+        std::fs::write(&path, data).unwrap();
+        let response =
+            reply(call(&app, &binding, case, "resources.readText", params.clone()).await);
+        assert_eq!(response["error"]["code"].as_str(), expected, "{case}");
+    }
+    std::fs::write(&path, "a,b\n1,2").unwrap();
+    let prior = app
+        .web_plugins
+        .lock()
+        .unwrap()
+        .tool_window(&binding, session, 0)
+        .unwrap();
+    let (mut tool, tool_id) = prior;
+    let tool_binding = tool.bind(&tool_id, WebPlatform::Macos).unwrap();
+    let WebInput::Resources { items, .. } = tool
+        .invocation(&tool_binding, source(&tool_binding))
+        .unwrap()
+        .input
+    else {
+        panic!("tool file missing")
+    };
+    assert_ne!(items[0].handle, item.handle);
+    app.web_plugins.lock().unwrap().suspend();
+    let resumed = app
+        .resume_web_document(&binding, WebPlatform::Macos)
+        .unwrap();
+    assert_eq!(
+        reply(
+            call(
+                &app,
+                &resumed,
+                "restored",
+                "resources.readText",
+                params.clone()
+            )
+            .await
+        )["result"]["value"],
+        "a,b\n1,2"
+    );
+    std::fs::rename(&path, dir.join("previous.csv")).unwrap();
+    std::fs::write(&path, "replacement").unwrap();
+    assert_eq!(
+        reply(call(&app, &resumed, "replaced", "resources.readText", params).await)["error"]
+            ["code"],
+        "EXPIRED"
+    );
+}
+
+#[tokio::test]
+async fn background_handoff_survives_focus_loss_and_denies_new_calls() {
+    use super::background_tests::{background_package, install};
+    use crate::application::LauncherApplication;
+    let opened = Arc::new(tokio::sync::Notify::new());
+    let (resume_open, wait_open) = std::sync::mpsc::channel();
+    let halt = Mutex::new(wait_open);
+    let port = Arc::new(ClipboardPort {
+        before_open_url: Some(Box::new({
+            let opened = opened.clone();
+            move || {
+                opened.notify_one();
+                halt.lock().unwrap().recv().unwrap();
+            }
+        })),
+        ..Default::default()
+    });
+    let app = Arc::new(Application::new(
+        port.clone(),
+        ActionRegistry::default(),
+        Box::<MemoryUsage>::default(),
+        vec![],
+    ));
+    let root = tempfile::tempdir().unwrap();
+    let package = background_package(
+        r#"
+      export function parse() {
+        return [{typeId:'plugin.dev.example.background.result',value:'support'}];
+      }
+      export function copy(){
+        const url = JSON.parse(__anywhereInvoke('url.open', '{"url":"https://example.com/help"}'));
+        if(url.error) throw Error(url.error.code);
+        const after = JSON.parse(__anywhereInvoke('clipboard.writeText', '{"text":"must fail"}'));
+        if(after.error?.code !== 'INACTIVE') throw Error('new call was allowed after focus loss');
+        return {message:'Opened'};
+      }"#,
+        json!([
+            {"name":"context.read","types":["core.text","plugin.dev.example.background.result"]},
+            {"name":"clipboard.writeText"},{"name":"url.open","origins":["https://example.com"]}
+        ]),
+    );
+    let _store = install(&app, root.path(), &package);
+    let mut events = app.web_host_interactions().unwrap();
+    let session = app.begin_activation().unwrap();
+    let state = app
+        .update_context_input(
+            session,
+            "fixture".into(),
+            1,
+            None,
+            anywhere_protocol::InputMode::Content,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    let action = state
+        .candidates
+        .iter()
+        .find(|candidate| {
+            candidate.command_id.as_deref() == Some("web:dev.example.background:copy")
+        })
+        .unwrap()
+        .id
+        .clone();
+    let execution = tokio::spawn({
+        let app = app.clone();
+        async move { app.execute(session, 1, action).await.unwrap() }
+    });
+    events.recv().await.unwrap().respond(Ok(()));
+    opened.notified().await;
+    app.suspend_session_now(session).unwrap();
+    resume_open.send(()).unwrap();
+    let result = execution.await.unwrap();
+    assert!(result.succeeded(), "{:?}", result.error);
+    assert_eq!(result.output_text.as_deref(), Some("Opened"));
+    assert!(port.writes.lock().unwrap().is_empty());
+    assert_eq!(
+        app.resolver
+            .history
+            .lock()
+            .unwrap()
+            .load_global()
+            .unwrap()
+            .len(),
+        1
     );
 }

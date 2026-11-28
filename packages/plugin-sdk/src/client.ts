@@ -1,6 +1,7 @@
-import {protocol, limits, errorCodes} from './contract.js';
+import {protocol, limits, errorCodes, methodTimeouts} from './contract.js';
 import type {
   Calls,
+  CallResults,
   JsonValue,
   WebInvocation as Invocation,
   WebCurrentApp as CurrentApp,
@@ -18,7 +19,7 @@ export interface HostTransport {
   send(frame: string): void | Promise<void>;
   subscribe(receive: (frame: string) => void): () => void;
 }
-import type {CallOptions} from './api.js';
+import type {CallOptions, ReadTextOptions} from './api.js';
 export type {CallOptions} from './api.js';
 import {HostError} from './errors.js';
 import {inspectText, uploadText} from './text_upload.js';
@@ -171,7 +172,7 @@ export function createHost(transport: HostTransport) {
         protocol,
         requestId: id(),
         method: 'request.cancel',
-        params: {request_id: requestId},
+        params: {requestId},
       }),
       () => {},
     );
@@ -277,7 +278,7 @@ export function createHost(transport: HostTransport) {
     method: M,
     params: Calls[M],
     options?: CallOptions,
-    timeout: number = limits.timeoutMs,
+    timeout: number = methodTimeouts[method],
   ): Promise<Body> {
     if (disposed) return Promise.reject(new HostError('INACTIVE'));
     if (options?.signal?.aborted)
@@ -353,7 +354,7 @@ export function createHost(transport: HostTransport) {
       bytes + 256 <= limits.frameBytes &&
       encoder.encode(JSON.stringify({text})).length + 256 <= limits.frameBytes
     ) {
-      return invoke('clipboard.writeText', {text}, options, limits.timeoutMs);
+      return invoke('clipboard.writeText', {text}, options);
     }
     return uploadText(text, bytes, {
       begin: bytes => invoke('text.begin', {bytes}, options),
@@ -365,6 +366,34 @@ export function createHost(transport: HostTransport) {
     });
   }
   return {
+    url: {
+      open: (url: string, options?: CallOptions) =>
+        invoke<'url.open', void>('url.open', {url}, options),
+    },
+    resources: {
+      stat: (handle: string, options?: CallOptions) =>
+        invoke<'resources.stat', CallResults['resources.stat']>(
+          'resources.stat',
+          {handle},
+          options,
+        ),
+      readText: (handle: string, options?: ReadTextOptions) =>
+        invoke<'resources.readText', string>(
+          'resources.readText',
+          {handle, maxBytes: options?.maxBytes},
+          options,
+        ),
+    },
+    window: {
+      back: (options?: CallOptions) =>
+        invoke<'window.back', void>('window.back', {}, options),
+      close: (options?: CallOptions) =>
+        invoke<'window.close', void>('window.close', {}, options),
+    },
+    preview: {
+      open: (handle: string, options?: CallOptions) =>
+        invoke<'preview.open', void>('preview.open', {handle}, options),
+    },
     ready: (options?: CallOptions) =>
       invoke<'lifecycle.ready', void>('lifecycle.ready', {}, options),
     invocation: {
@@ -391,12 +420,6 @@ export function createHost(transport: HostTransport) {
           contextListeners.delete(receive);
         };
       },
-      getCurrentApp: (options?: CallOptions) =>
-        invoke<'context.getCurrentApp', CurrentApp | null>(
-          'context.getCurrentApp',
-          {},
-          options,
-        ),
     },
     input: {
       get: async () => {
@@ -501,8 +524,6 @@ export const host = {
     get: () => injected().context.get(),
     onChange: (callback: (context: PluginSnapshot['context']) => void) =>
       injected().context.onChange(callback),
-    getCurrentApp: (options?: CallOptions) =>
-      injected().context.getCurrentApp(options),
   },
   input: {
     get: () => injected().input.get(),

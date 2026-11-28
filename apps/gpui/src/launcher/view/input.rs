@@ -58,6 +58,20 @@ impl LauncherView {
         cx: &mut Context<Self>,
     ) {
         self.cancel_activation_prefill();
+        if self.web_surface.interaction.is_some() {
+            if !repeated && !modifiers.modified {
+                match key {
+                    "enter" | "return" => self.respond_web_host_interaction(Ok(()), window, cx),
+                    "escape" => self.respond_web_host_interaction(
+                        Err(anywhere_protocol::web_bridge::WebErrorCode::UserCancelled),
+                        window,
+                        cx,
+                    ),
+                    _ => {}
+                }
+            }
+            return;
+        }
         let input = KeyInput {
             key,
             modifiers,

@@ -1,6 +1,6 @@
 # 第三方 Web 插件 Phase 1 实施手册
 
-配套[架构审查与定案](web-plugin-evolution.md)。以 `964dd1e1` 为审查基线。本页给出实施锁定契约、任务顺序与验收标准，全部 11 项实施任务目前为 Pending。当前已落地行为见[插件开发指南](plugin-development.md)和[Web 插件架构](web-plugin-design.md)。
+配套[架构审查与定案](web-plugin-evolution.md)。以 `964dd1e1` 为审查基线。本页给出实施锁定契约、任务顺序与验收标准，每项桌面验收单独登记，未执行的仍为 Pending。当前已落地行为见[插件开发指南](plugin-development.md)和[Web 插件架构](web-plugin-design.md)。
 
 **零历史兼容原则**：当前仅有仓库内参考包（`json-workspace`、`web-text`、`background-context`），本阶段直接收口到单一契约（`apiVersion: "2"`、`protocol: 2`、全线 `camelCase`、零依赖 Node 22 CLI），不维护 API 1 / Python 打包器 / 旧 SDK 别名双轨兼容。
 
@@ -59,7 +59,7 @@
 ## 01 记录基线与保留回滚
 
 1. 运行下方检查，区分本地环境问题与基线差异，仅在对应改动范围内修正格式；把仓内打包源文本换行固定为 LF 并同步内置包。
-2. 在 `package_tests` 中加入 `A → B → 重复导入 B → 重开 store → 回滚 A`，以及同摘要已停用包和缓存资产损坏用例。调整 `approve` 顺序，先调用 `repository.stage(&package)` 验证完整性：
+2. 在 `package_tests` 中加入 `A → B → 重复导入 B → 重开 store → 回滚 A`，以及同摘要已停用包和缓存资产损坏用例。调整 `approve` 顺序，复用摘要前验证已暂存归档和全部资源：
    - **缓存资产损坏**：保持现有 **fail-closed** 契约（`persistence/web_packages.rs`），拒绝原地覆盖，要求用户卸载或先回滚再重装；
    - **完好且已启用**：做幂等 no-op，保留 `previous`、安装 `source` 与在用窗口，不触发无意义目录重发布；
    - **完好但已停用**：审查卡明确提示“该版本已安装且当前处于停用状态”，主按钮为“批准并启用”；批准后恢复启用并保留 `previous` 与 `source`，取消则保持停用。
@@ -98,7 +98,7 @@ cargo test -p anywhere-core --lib --locked application::web_plugins
 3. ZIP 写入器仅依赖 `node:zlib`（`deflateRawSync` + `crc32`），零第三方依赖：固定 UTF-8 路径与标志 `0x0800`、**禁止设置 Bit 3 Data Descriptor**（对齐 `archive.rs` 头一致性校验）、**禁止写扩展字段**（避免 `preflight.rs` 拒绝 `0x7075`）、固定字节排序、固定时间戳 `(2026,1,1,0,0,0)` 与模式 `0o100644`，压缩比超 200 倍自动回落 Stored，严守 entry 数、单资源、压缩与解压上限，拒绝符号链接、Unicode / 大小写冲突与 Windows 保留名。
 4. 用同一批合法 / 非法夹具对照 Node CLI 与 Rust 检查器，验证固定输入跨平台 ZIP 哈希一致、未构建提示、缺资源报错与二次打包重试。完成条件：仓库外仅用 Node 22 即可生成、构建并打出 Rust 可导入的确定性 `.awplugin`。
 
-入口见[SDK 包清单](../packages/plugin-sdk/package.json)、[现有创建器](../packages/plugin-sdk/tools/create.mjs)、[ZIP 边界](../crates/anywhere-plugin/src/web/preflight.rs)、[归档校验](../crates/anywhere-plugin/src/web/archive.rs)和[仓库外测试脚本](../scripts/check-plugin-starter.sh)。
+入口见[SDK 包清单](../packages/plugin-sdk/package.json)、[Node CLI](../packages/plugin-sdk/tools/anywhere-plugin.mjs)、[ZIP 边界](../crates/anywhere-plugin/src/web/preflight.rs)、[归档校验](../crates/anywhere-plugin/src/web/archive.rs)和[仓库外测试脚本](../scripts/check-plugin-starter.sh)。
 
 ```sh
 scripts/check-web-sdk.sh
@@ -245,6 +245,24 @@ git diff --check
 | 单文件 CSV（读取与预览） | Finder/Explorer 单选读取与预览；测试多选展开项、同路径替换、超过 1 MiB / 16 MiB、15s `resume` 与独立窗口 | 仅单文件通过原生身份校验；`resume` 复用稳定句柄且复验身份；独立窗口共享 `PreviewStore`、关闭预览归还焦点并释放私有快照 |
 | 安装与升级 | 依次走四入口、审查中隐藏清锁、批准 A → B → B → 回滚 A、停用包再导入与损坏缓存重装；双平台系统双击冷/热启动 | 批准前零注册；高风险组合显式告警；重复导入不丢回滚点；停用包走“批准并启用”；损坏缓存 fail-closed；双平台冷/热启动达审查卡 |
 
-完成条件：候选 App、SDK、Node CLI 与仓内三个示例包均从同一提交重建，自动化与双平台必测项均有可查证结果；缺少实机时可交接工程通过状态，桌面验收栏保留 Pending。
+完成条件：候选 App、SDK、Node CLI、三个仓内参考包和两个试点包均从同一提交重建，自动化与双平台必测项均有可查证结果；缺少实机时可交接工程通过状态，桌面验收栏保留 Pending。
 
 每项交接使用单行记录，至少包含「编号 / 受测提交 / 局部命令与结果 / macOS 桌验 / Windows 桌验 / 仍待处理项」，涉及新增能力时附 SDK 版本与包摘要。解包开发模式、自定义宿主动作菜单与动态搜索保留在后续规划。
+
+
+## 实现交接
+
+以下记录针对从 `b1f5d4f1` 快进取得的开发工作区。macOS WKWebView 与 Windows WebView2
+物理验收单独记录，当前均为 Pending。Release 发布由维护者流程完成。试点归档可用
+`python3 scripts/build-web-examples.py` 生成，输出位于 `build/web-examples/`。
+
+| 任务 | 工作区状态与验证入口 | macOS 桌验 | Windows 桌验 |
+| --- | --- | --- | --- |
+| 01 | 已实现。包审批回归覆盖重启回滚、停用重启用、损坏缓存和文档保留 | Pending | Pending |
+| 02–04 | 已实现。API 2 与生成检查、Node 22 五种参考及试点包验证、四种仓库外模板的 Mock、打包和隔离宿主审批 | Pending | Pending |
+| 05 | 已实现。JSON Workspace 同一快捷键规格计算键帽并匹配监听，保留中英文标题的命令身份 | Pending | Pending |
+| 06 | 已实现。真实执行入口验证反馈、失败诊断及 Usage；诊断默认只保存类别和导出名 | Pending | Pending |
+| 07 | 已实现。合成平台验证规范化 URL、互斥、许可释放、失效拒绝和后台失焦尾声 | Pending | Pending |
+| 08–09 | 已实现。原生身份和只读边界回归在 macOS 执行，Windows 编译；原生预览请求由合成宿主确认 | Pending | Pending |
+| 10 | 已实现。四个入口复用批准卡，安装及取消回归覆盖存储；系统打开与窗口焦点按桌验矩阵复测 | Pending | Pending |
+| 11 | 已实现 SDK 归档、校验和、隔离导入门禁和 CI 上传配置 | Pending | Pending |

@@ -72,6 +72,7 @@ impl IconLoader {
 
 #[derive(Default)]
 pub(super) struct PreviewState {
+    pub(super) web_owner: Option<String>,
     pub(super) host: Option<PreviewHost>,
     pub(super) busy: bool,
     pub(super) generation: u64,

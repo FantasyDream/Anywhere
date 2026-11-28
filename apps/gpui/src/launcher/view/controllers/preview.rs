@@ -1,4 +1,6 @@
 use super::*;
+use anywhere_core::application::web_plugins::HostInteraction;
+use anywhere_protocol::web_bridge::WebErrorCode;
 
 impl LauncherView {
     pub(super) fn schedule_selected_preview(&mut self, cx: &mut Context<Self>) {
@@ -71,6 +73,11 @@ impl LauncherView {
             Screen::Clipboard | Screen::ClipboardShelf => {
                 self.clipboard.selected_id().map(PreviewTarget::Clipboard)
             }
+            Screen::WebTool => self
+                .web_surface
+                .document
+                .as_ref()
+                .map(|document| PreviewTarget::WebDocument(document.handle.clone())),
             _ => None,
         }
     }
@@ -128,6 +135,36 @@ impl LauncherView {
         request: PreviewRequest,
         cx: &mut Context<Self>,
     ) {
+        self.show_preview_with_reply(preview, request, None, cx);
+    }
+
+    pub(super) fn show_web_preview(
+        &mut self,
+        preview: crate::host::PreviewFile,
+        interaction: HostInteraction,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(target @ PreviewTarget::WebDocument(_)) = self.current_preview_target() else {
+            interaction.respond(Err(WebErrorCode::Expired));
+            return;
+        };
+        self.preview.request_generation = self.preview.request_generation.wrapping_add(1);
+        let request = PreviewRequest {
+            generation: self.preview.request_generation,
+            session_generation: self.live_state.generation,
+            screen: self.screen,
+            target,
+        };
+        self.show_preview_with_reply(preview, request, Some(interaction), cx);
+    }
+
+    fn show_preview_with_reply(
+        &mut self,
+        preview: crate::host::PreviewFile,
+        request: PreviewRequest,
+        interaction: Option<HostInteraction>,
+        cx: &mut Context<Self>,
+    ) {
         self.notice = None;
         tracing::debug!(
             preview_id = %preview.id,
@@ -135,9 +172,15 @@ impl LauncherView {
             "quick_look_show_started"
         );
         let owner_title = if self.screen == Screen::ClipboardShelf {
-            crate::CLIPBOARD_SHELF_TITLE
+            crate::CLIPBOARD_SHELF_TITLE.into()
+        } else if self.standalone_tool {
+            self.web_surface
+                .document
+                .as_ref()
+                .map(|document| document.title.clone())
+                .unwrap_or_else(|| crate::PRODUCT_NAME.into())
         } else {
-            crate::PRODUCT_NAME
+            crate::PRODUCT_NAME.into()
         };
         let live = self.live.clone();
         cx.notify();
@@ -150,7 +193,11 @@ impl LauncherView {
             let (mut host, generation) = loop {
                 let reservation = this
                     .update(cx, |this, cx| {
-                        if !this.preview_request_is_current(&request) {
+                        if !this.preview_request_is_current(&request)
+                            || interaction
+                                .as_ref()
+                                .is_some_and(|interaction| !interaction.is_current())
+                        {
                             return Ok(PreviewReservation::Stale);
                         }
                         if this.preview.busy {
@@ -172,6 +219,9 @@ impl LauncherView {
                 match reservation {
                     Ok(PreviewReservation::Ready(host, generation)) => break (host, generation),
                     Ok(PreviewReservation::Stale) => {
+                        if let Some(interaction) = interaction {
+                            interaction.respond(Err(WebErrorCode::Expired));
+                        }
                         if let Some(live) = &live {
                             let _ = live.release_preview(preview.id);
                         }
@@ -183,6 +233,9 @@ impl LauncherView {
                             .await;
                     }
                     Err(error) => {
+                        if let Some(interaction) = interaction {
+                            interaction.respond(Err(WebErrorCode::UnsupportedMethod));
+                        }
                         if let Some(live) = &live {
                             let _ = live.release_preview(preview.id);
                         }
@@ -200,7 +253,7 @@ impl LauncherView {
                     }
                 }
             };
-            let result = host.show(preview.id.clone(), &preview.paths, owner_title);
+            let result = host.show(preview.id.clone(), &preview.paths, &owner_title);
             let owns_panel = host.owns_panel();
             tracing::debug!(
                 preview_id = %preview.id,
@@ -212,6 +265,9 @@ impl LauncherView {
                 .update(cx, |this, cx| {
                     if generation != this.preview.generation
                         || !this.preview_request_is_current(&request)
+                        || interaction
+                            .as_ref()
+                            .is_some_and(|interaction| !interaction.is_current())
                     {
                         return false;
                     }
@@ -220,11 +276,17 @@ impl LauncherView {
                     match &result {
                         Ok(previous) => {
                             this.preview.open = true;
+                            this.preview.web_owner = match &request.target {
+                                PreviewTarget::WebDocument(handle) => Some(handle.clone()),
+                                _ => None,
+                            };
                             if let Some(live) = this.live.clone() {
                                 if let Some(previous) = previous {
                                     let _ = live.release_preview(previous.clone());
                                 }
-                                let _ = live.retain_preview(preview.id.clone());
+                                if interaction.is_none() {
+                                    let _ = live.retain_preview(preview.id.clone());
+                                }
                             }
                             this.set_notice(
                                 l10n::previewing_title(this.locale, &preview.title),
@@ -253,6 +315,14 @@ impl LauncherView {
                     true
                 })
                 .unwrap_or(false);
+            if let Some(interaction) = interaction {
+                let response = match (&result, applied) {
+                    (Ok(_), true) => Ok(()),
+                    (_, false) => Err(WebErrorCode::Expired),
+                    (Err(error), true) => Err(web_preview_error(error)),
+                };
+                interaction.respond(response);
+            }
             if result.is_err() {
                 if let Some(live) = &live {
                     let _ = live.release_preview(preview.id);
@@ -376,6 +446,12 @@ impl LauncherView {
                 if let (Some(live), Some(resource_id)) = (self.live.clone(), resource_id.as_ref()) {
                     let _ = live.release_preview(resource_id.clone());
                 }
+                let web_owner = self.preview.web_owner.take();
+                if *application_active {
+                    if let Some(handle) = web_owner {
+                        self.restore_web_preview_focus(&handle, cx);
+                    }
+                }
                 self.preview.open = false;
                 self.notice = None;
                 cx.notify();
@@ -393,6 +469,7 @@ impl LauncherView {
         let was_open = self.preview.open;
         self.preview.generation = self.preview.generation.wrapping_add(1);
         let generation = self.preview.generation;
+        let web_owner = self.preview.web_owner.take();
         self.preview.open = false;
         if was_open {
             self.notice = None;
@@ -412,11 +489,25 @@ impl LauncherView {
                 let resource_id = host.close();
                 view.update(cx, |this, cx| {
                     this.finish_preview_close(Some(host), resource_id, cx);
+                    if let Some(handle) = web_owner {
+                        this.restore_web_preview_focus(&handle, cx);
+                    }
                 });
             }
         })
         .detach();
         was_open
+    }
+
+    fn restore_web_preview_focus(&self, handle: &str, cx: &Context<Self>) {
+        if self.presence.presented
+            && self.screen == Screen::WebTool
+            && event_handle_matches(self, handle)
+        {
+            if let Some(web_view) = &self.web_surface.view {
+                let _ = web_view.read(cx).raw().focus();
+            }
+        }
     }
 
     pub(super) fn reserve_preview_for_close(&mut self, generation: u64) -> Option<PreviewHost> {
@@ -517,4 +608,15 @@ impl LauncherView {
         }
         KeyFlow::Continue
     }
+}
+
+fn web_preview_error(_error: &anyhow::Error) -> WebErrorCode {
+    #[cfg(windows)]
+    if let Some(error) = _error.downcast_ref::<crate::platform::WindowsPreviewError>() {
+        return match error {
+            crate::platform::WindowsPreviewError::NotRunning => WebErrorCode::UnsupportedMethod,
+            crate::platform::WindowsPreviewError::ExistingWindow => WebErrorCode::Busy,
+        };
+    }
+    WebErrorCode::HostFailure
 }

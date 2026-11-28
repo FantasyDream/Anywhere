@@ -2170,6 +2170,8 @@ fn list_rows_across_pages_keep_height_title_alignment_and_non_overlapping_action
                     rollback: false,
                     builtin: false,
                     permission_count: 1,
+                    open_action_id: None,
+                    diagnostics: vec![],
                 },
                 crate::host::WebPackage {
                     id: "pkg-b".into(),
@@ -2182,6 +2184,8 @@ fn list_rows_across_pages_keep_height_title_alignment_and_non_overlapping_action
                     rollback: false,
                     builtin: false,
                     permission_count: 1,
+                    open_action_id: None,
+                    diagnostics: vec![],
                 },
             ]);
             view.web.selected = 0;
@@ -4738,6 +4742,8 @@ fn web_package_review_actions_stay_inside_the_window(cx: &mut TestAppContext) {
                 digest: "0123456789abcdef".into(),
                 permissions: vec!["Read Launcher search text".into()],
                 updating: false,
+                same_version: None,
+                details: Default::default(),
             });
             cx.notify();
         });

@@ -108,7 +108,10 @@ fn initialize_menu_tree(
     let mut pending = vec![(root, 0_usize)];
     let mut remaining = MAX_MENU_ITEMS;
     while let Some((menu, depth)) = pending.pop() {
-        ensure!(depth < MAX_MENU_DEPTH, "Windows menu exceeds its depth limit");
+        ensure!(
+            depth < MAX_MENU_DEPTH,
+            "Windows menu exceeds its depth limit"
+        );
         let count = unsafe { GetMenuItemCount(menu) };
         let count = usize::try_from(count).context("could not count Windows menu items")?;
         remaining = remaining
@@ -611,6 +614,9 @@ mod tests {
         };
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].menu_path, ["Help", "Dynamic action"]);
-        assert_eq!(items[0].identifiers, [None, Some("win32.command:77".into())]);
+        assert_eq!(
+            items[0].identifiers,
+            [None, Some("win32.command:77".into())]
+        );
     }
 }

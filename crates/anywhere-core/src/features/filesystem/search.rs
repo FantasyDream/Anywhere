@@ -505,6 +505,7 @@ pub fn result_actions(
                 Some(
                     "core.file.open"
                         | "core.file.reveal"
+                        | "core.file.inspect_web_package"
                         | "core.file.copy"
                         | "core.directory.open"
                         | "core.directory.copy"

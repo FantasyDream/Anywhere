@@ -91,8 +91,7 @@ pub struct ActionShortcutBinding {
 }
 
 const DEFAULT_CURRENT_APP_SHORTCUT: &str = "control+alt+Space";
-const DEFAULT_UNIVERSAL_SHORTCUT: &str =
-    crate::platform::capabilities::DEFAULT_UNIVERSAL_SHORTCUT;
+const DEFAULT_UNIVERSAL_SHORTCUT: &str = crate::platform::capabilities::DEFAULT_UNIVERSAL_SHORTCUT;
 const LEGACY_CURRENT_APP_SHORTCUT: &str = "meta+alt+Space";
 const LEGACY_UNIVERSAL_SHORTCUT: &str = "meta+Space";
 

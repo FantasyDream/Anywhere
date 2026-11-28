@@ -614,6 +614,7 @@ impl LauncherView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
+        self.retire_package_review();
         self.shortcuts.recording = None;
         self.settings_editor.action_picker_open = false;
         self.shortcuts.pending_action = None;

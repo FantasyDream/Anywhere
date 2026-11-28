@@ -235,7 +235,15 @@ fn inject_document_head(body: &str, injection: &str) -> String {
 }
 
 pub fn bootstrap_script(language: &str) -> String {
-    format!("{}\n{BOOTSTRAP}", locale_script(language))
+    let platform = if cfg!(target_os = "macos") {
+        "macos"
+    } else {
+        "windows"
+    };
+    format!(
+        "Object.defineProperty(window, '__anywherePlatform', {{value:{platform:?}}});\n{}\n{BOOTSTRAP}",
+        locale_script(language)
+    )
 }
 
 pub(crate) fn is_host_escape_frame(frame: &str) -> bool {

@@ -261,7 +261,7 @@ pub(crate) fn install_component_theme(cx: &mut GpuiApp) {
     gpui_kit::component::Theme::update(cx, configure_component_theme);
 }
 
-pub fn run(cx: &mut GpuiApp) {
+pub fn run(cx: &mut GpuiApp, packages: tokio::sync::mpsc::Receiver<std::path::PathBuf>) {
     gpui_kit::init(cx);
     crate::ui::load_fonts(cx);
     crate::platform::initialize_desktop(cx);
@@ -323,7 +323,7 @@ pub fn run(cx: &mut GpuiApp) {
     let launcher_window = window_handle;
     install_status_and_shell_events(launcher_window, &shell, status_actions, cx);
     if let Some(startup_receiver) = startup_receiver {
-        spawn_runtime_startup(startup_receiver, window_handle, shell.clone(), cx);
+        spawn_runtime_startup(startup_receiver, window_handle, shell.clone(), packages, cx);
     }
     spawn_status_action_loop(status_receiver, window_handle, shell.clone(), cx);
     spawn_platform_event_loop(window_handle, shell, preview, cx);
@@ -472,6 +472,7 @@ fn spawn_runtime_startup(
     mut startup_receiver: tokio::sync::mpsc::Receiver<RuntimeStartup>,
     startup_window: AnyWindowHandle,
     startup_shell: gpui_kit::Entity<ProductShell>,
+    packages: tokio::sync::mpsc::Receiver<std::path::PathBuf>,
     cx: &mut GpuiApp,
 ) {
     cx.spawn(async move |cx| {
@@ -544,6 +545,12 @@ fn spawn_runtime_startup(
                     .is_ok();
                 if attached {
                     install_global_hotkeys(cx, startup_window, &startup_shell);
+                    spawn_package_open_loop(
+                        packages,
+                        startup_window,
+                        startup_shell.downgrade(),
+                        cx,
+                    );
                 }
             }
             RuntimeStartup::Failed(error) => {
@@ -556,6 +563,33 @@ fn spawn_runtime_startup(
                         });
                     });
                 });
+            }
+        }
+    })
+    .detach();
+}
+
+fn spawn_package_open_loop(
+    mut packages: tokio::sync::mpsc::Receiver<std::path::PathBuf>,
+    window: AnyWindowHandle,
+    shell: gpui_kit::WeakEntity<ProductShell>,
+    cx: &mut gpui_kit::AsyncApp,
+) {
+    cx.spawn(async move |cx| {
+        while let Some(path) = packages.recv().await {
+            let opened = window.update(cx, |_, window, cx| {
+                shell
+                    .update(cx, |shell, cx| {
+                        shell.launcher.update(cx, |launcher, cx| {
+                            launcher.open_package_review(path, window, cx)
+                        })
+                    })
+                    .unwrap_or(false)
+            });
+            match opened {
+                Ok(true) => crate::platform::show_main_window(),
+                Ok(false) => {}
+                Err(_) => break,
             }
         }
     })

@@ -92,20 +92,20 @@ pub fn valid_id(id: &str) -> bool {
 mod tests {
     use super::*;
     fn frame(method: &str, params: &str) -> String {
-        format!(r#"{{"protocol":1,"requestId":"r1","method":"{method}","params":{params}}}"#)
+        format!(r#"{{"protocol":2,"requestId":"r1","method":"{method}","params":{params}}}"#)
     }
     #[test]
     fn rejects_identity_gesture_unknown_methods_duplicate_fields_and_extra_params() {
         for raw in [
             frame("host.confirm", r#"{"approved":true}"#),
             frame("clipboard.readText", r#"{"userGesture":true}"#),
-            frame("context.getCurrentApp", r#"{"pluginId":"other"}"#),
+            frame("app.getSource", r#"{"pluginId":"other"}"#),
             frame("storage.get", r#"{"key":"a","namespace":"other"}"#),
             frame("storage.get", r#"{"key":"a","key":"b"}"#),
             frame("invocation.get", "{}")
-                .replace("\"protocol\":1", "\"protocol\":1,\"protocol\":1"),
+                .replace("\"protocol\":2", "\"protocol\":2,\"protocol\":2"),
             frame("invocation.get", "{}")
-                .replace("\"protocol\":1", "\"runtimeId\":\"forged\",\"protocol\":1"),
+                .replace("\"protocol\":2", "\"runtimeId\":\"forged\",\"protocol\":2"),
         ] {
             assert!(parse(&raw).is_err(), "accepted {raw}");
         }
@@ -128,7 +128,7 @@ mod tests {
             &serde_json::json!({"key":"a","value": vec![0;1025]}).to_string()
         ))
         .is_err());
-        let raw = frame("invocation.get", "{}").replace("\"protocol\":1", "\"protocol\":2");
+        let raw = frame("invocation.get", "{}").replace("\"protocol\":2", "\"protocol\":1");
         assert_eq!(
             parse(&raw).err().unwrap().code,
             WebErrorCode::IncompatibleProtocol

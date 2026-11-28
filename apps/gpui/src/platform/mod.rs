@@ -10,10 +10,15 @@ pub struct ApplicationInstance {
     _guard: windows::InstanceGuard,
 }
 
-pub fn acquire_application_instance() -> Option<ApplicationInstance> {
+pub fn acquire_application_instance(
+    package: Option<&std::path::Path>,
+    open_packages: tokio::sync::mpsc::Sender<std::path::PathBuf>,
+) -> Option<ApplicationInstance> {
+    #[cfg(not(windows))]
+    let _ = (package, open_packages);
     Some(ApplicationInstance {
         #[cfg(windows)]
-        _guard: windows::acquire_instance()?,
+        _guard: windows::acquire_instance(package, open_packages)?,
     })
 }
 

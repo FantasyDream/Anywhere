@@ -70,6 +70,15 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Check SDK Mock and deterministic ZIP on Windows
+        run: |
+          npm --prefix packages/plugin-sdk ci --ignore-scripts --registry=https://registry.npmjs.org
+          npm --prefix packages/plugin-sdk run build
+          node --test packages/plugin-sdk/test/phase-1.test.mjs
       - name: Check Windows GPUI and platform targets
         run: cargo clippy -p anywhere-gpui -p anywhere-platform --all-targets --locked -- -D warnings
       - name: Run shared Core, GPUI and Windows platform regressions

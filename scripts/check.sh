@@ -21,6 +21,7 @@ python3 scripts/generate-runtime-policies.py --check
 cargo run -p anywhere-core --example generate_feature_catalog --locked -- --check
 cargo run -p anywhere-protocol --features web-schema --example generate_web_plugin_schema --locked -- --check
 cargo run -p anywhere-protocol --features web-schema --example generate_web_sdk_contract --locked -- --check
+cargo run -p anywhere-plugin --example generate_web_path_folding --locked -- --check
 python3 scripts/check-docs.py
 python3 -m unittest discover -s scripts/tests -p test_docs.py
 scripts/check-macos-menu.sh

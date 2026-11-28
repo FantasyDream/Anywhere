@@ -38,11 +38,11 @@ test('explicit APIs frame requests and do not expose generic host invocation', a
   );
   const client = createHost(fake.transport);
   assert.equal(client.invoke, undefined);
-  assert.deepEqual(await client.context.getCurrentApp(), {
+  assert.deepEqual(await client.app.getSource(), {
     id: 'captured.app',
     name: 'Captured',
   });
-  assert.equal(fake.calls[0].method, 'context.getCurrentApp');
+  assert.equal(fake.calls[0].method, 'app.getSource');
   assert.deepEqual(Object.keys(fake.calls[0]).sort(), [
     'method',
     'params',
@@ -69,7 +69,7 @@ test('queue is bounded and disposing rejects every pending or queued promise', a
   assert.deepEqual(
     fake.calls
       .filter(c => c.method === 'request.cancel')
-      .map(c => c.params.request_id),
+      .map(c => c.params.requestId),
     fake.calls.slice(0, 8).map(c => c.requestId),
   );
 });
@@ -396,7 +396,7 @@ test('cancellation releases transport capacity before sending queued work', asyn
   const transportPending = new Set();
   const fake = mock((call, reply) => {
     if (call.method === 'request.cancel') {
-      transportPending.delete(call.params.request_id);
+      transportPending.delete(call.params.requestId);
     } else if (transportPending.size === 8) {
       throw new Error('BUSY');
     } else if (call.params.key === 'queued') {
