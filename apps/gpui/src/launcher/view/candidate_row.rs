@@ -144,13 +144,7 @@ impl LauncherView {
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(move |this, _, _, cx| {
-                    this.mark_scope_user_controlled();
-                    if this.screen == Screen::FileSearch {
-                        this.file_search.browsing = true;
-                        this.file_search.advance_from = None;
-                    }
-                    this.model.select_row(index);
-                    this.notice = None;
+                    this.select_candidate_with_pointer(index);
                     cx.notify();
                 }),
             )
@@ -160,10 +154,8 @@ impl LauncherView {
                     cx.listener(move |this, _, window, cx| {
                         window.prevent_default();
                         cx.stop_propagation();
-                        this.mark_scope_user_controlled();
-                        this.model.select_row(index);
+                        this.select_candidate_with_pointer(index);
                         this.reveal_result_row(index);
-                        this.notice = None;
                         if is_menu {
                             this.browse_selected_menu(cx);
                         } else {
@@ -186,6 +178,16 @@ impl LauncherView {
                 this.activate_selection(cx);
             }))
             .test_support()
+    }
+
+    fn select_candidate_with_pointer(&mut self, index: usize) {
+        self.mark_scope_user_controlled();
+        if self.screen == Screen::FileSearch {
+            self.file_search.browsing = true;
+            self.file_search.advance_from = None;
+        }
+        self.model.select_row(index);
+        self.notice = None;
     }
 
     fn candidate_row_actions(

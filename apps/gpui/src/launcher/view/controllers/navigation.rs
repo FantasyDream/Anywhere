@@ -218,6 +218,7 @@ impl LauncherView {
         }
         if self.input_mode == InputMode::Environment {
             self.select_root_mode(InputMode::Search, cx);
+            self.focus_launcher_input(window, cx);
             return;
         }
         self.prepare_hide(cx);
