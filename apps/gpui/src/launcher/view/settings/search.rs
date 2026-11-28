@@ -1,6 +1,74 @@
 use super::*;
 
+fn display_path_string(path: &std::path::Path) -> String {
+    let raw = path.to_string_lossy();
+    crate::launcher::presentation::readable_file_path(&raw).to_owned()
+}
+
 impl LauncherView {
+    fn choose_application_search_paths(
+        &mut self,
+        folders: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.settings_editor.model.saving {
+            return;
+        }
+        let title = if folders {
+            l10n::windows_add_application_folders(self.locale)
+        } else {
+            l10n::windows_add_application_shortcuts(self.locale)
+        };
+        let dialog = rfd::AsyncFileDialog::new()
+            .set_title(title.clone())
+            .set_parent(window);
+        let operation = self.begin_settings_operation();
+        let window_handle = self.window_handle;
+        cx.notify();
+        cx.spawn(async move |this, cx| {
+            let selected = if folders {
+                dialog.pick_folders().await
+            } else {
+                dialog
+                    .add_filter(
+                        title,
+                        crate::platform::capabilities::APPLICATION_SEARCH_FILE_EXTENSIONS,
+                    )
+                    .pick_files()
+                    .await
+            };
+            let _ = cx.update_window(window_handle, |_, _, cx| {
+                let _ = this.update(cx, |this, cx| {
+                    if operation != this.settings_editor.save_generation {
+                        return;
+                    }
+                    this.settings_editor.model.saving = false;
+                    if this.screen == Screen::Settings {
+                        if let Some(selected) = selected {
+                            let selected_paths = selected
+                                .iter()
+                                .map(|item| display_path_string(item.path()))
+                                .collect::<Vec<_>>();
+                            let paths = &mut this.settings_editor.draft.application_search_paths;
+                            *paths = unique_trimmed(
+                                paths
+                                    .iter()
+                                    .map(String::as_str)
+                                    .chain(selected_paths.iter().map(String::as_str)),
+                            );
+                        } else if this.settings_editor.close_pending && !this.settings_dirty(cx) {
+                            this.finish_settings_exit_after_save(cx);
+                        }
+                    }
+                    this.resume_queued_draft_save(cx);
+                    cx.notify();
+                });
+            });
+        })
+        .detach();
+    }
+
     fn choose_search_directories(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.settings_editor.model.saving {
             return;
@@ -28,7 +96,7 @@ impl LauncherView {
                 Some(selected) => {
                     let selected = selected
                         .into_iter()
-                        .map(|folder| folder.path().display().to_string())
+                        .map(|folder| display_path_string(folder.path()))
                         .collect::<Vec<_>>();
                     let roots =
                         unique_trimmed(existing.iter().chain(&selected).map(String::as_str));
@@ -57,6 +125,7 @@ impl LauncherView {
                     if this.screen == Screen::Settings {
                         this.finish_search_directory_selection(&existing, result, window, cx);
                     }
+                    this.resume_queued_draft_save(cx);
                     cx.notify();
                 });
             });
@@ -81,8 +150,12 @@ impl LauncherView {
                         .as_ref(),
                 ) == previous_roots =>
             {
+                let roots = roots
+                    .iter()
+                    .map(|root| display_path_string(std::path::Path::new(root)))
+                    .collect::<Vec<_>>();
                 self.settings_editor.draft.file_search_roots = roots.clone();
-                set_input_value(
+                set_textarea_value(
                     &self.settings_editor.file_roots_input,
                     roots.join("\n"),
                     window,
@@ -108,122 +181,141 @@ impl LauncherView {
         }
     }
 
+    fn file_search_engine_settings(
+        &self,
+        engines: &'static [FileSearchEngine],
+        cx: &Context<Self>,
+    ) -> Div {
+        let locale = self.locale;
+        let selected = self.settings_editor.draft.file_search_engine;
+        let label =
+            move |engine| crate::platform::capabilities::file_search_engine_label(engine, locale);
+        let view = cx.weak_entity();
+        self.settings_row_bare(
+            l10n::search_engine(locale),
+            l10n::search_engine_description(locale),
+            Button::new("cycle-file-engine")
+                .disabled(self.settings_editor.model.saving)
+                .secondary()
+                .label(label(selected))
+                .dropdown_caret(true)
+                .dropdown_menu(move |mut menu, _, _| {
+                    for &engine in engines {
+                        let view = view.clone();
+                        menu = menu.item(
+                            PopupMenuItem::new(label(engine))
+                                .checked(engine == selected)
+                                .on_click(move |_, _, cx| {
+                                    let _ = view.update(cx, |this, cx| {
+                                        this.save_instant_preferences(
+                                            |preferences| preferences.file_search_engine = engine,
+                                            cx,
+                                        );
+                                    });
+                                }),
+                        );
+                    }
+                    menu
+                }),
+        )
+    }
+
     pub(in crate::launcher::view) fn search_settings(&mut self, cx: &mut Context<Self>) -> Div {
-        let engine = match self.settings_editor.draft.file_search_engine {
-            FileSearchEngine::Ripgrep => l10n::search_engine_ripgrep(self.locale),
-            FileSearchEngine::Combined => l10n::search_engine_combined(self.locale),
-            _ => l10n::search_engine_system_index(self.locale),
-        };
+        use crate::platform::capabilities;
+        let engines = capabilities::file_search_engines();
         div()
             .flex()
             .flex_col()
             .gap(px(metrics::SPACE_LG))
-            .child(self.settings_rows_card(vec![
-                    self.settings_row_bare(
-                        l10n::file_search(self.locale),
-                        l10n::search_file_names_in_the_file_search(self.locale),
-                        Switch::new("file-search-enabled")
-                            .checked(self.settings_editor.draft.file_search_enabled)
-                            .on_change(cx.listener(|this, checked, _, cx| {
-                                this.settings_editor.draft.file_search_enabled = *checked;
-                                cx.notify();
-                            })),
-                    ),
-                    self.settings_row_bare(
-                        l10n::search_engine(self.locale),
-                        l10n::search_engine_description(self.locale),
-                        Button::new("cycle-file-engine")
-                            .secondary()
-                            .label(engine)
-                            .dropdown_caret(true)
-                            .dropdown_menu({
-                                let view = cx.weak_entity();
-                                let locale = self.locale;
-                                let selected = self.settings_editor.draft.file_search_engine;
-                                move |mut menu, _, _| {
-                                    for (engine, label) in [
-                                        (
-                                            FileSearchEngine::SystemIndex,
-                                            l10n::search_engine_system_index(locale),
-                                        ),
-                                        (
-                                            FileSearchEngine::Ripgrep,
-                                            l10n::search_engine_ripgrep(locale),
-                                        ),
-                                        (
-                                            FileSearchEngine::Combined,
-                                            l10n::search_engine_combined(locale),
-                                        ),
-                                    ] {
-                                        let view = view.clone();
-                                        menu = menu.item(
-                                            PopupMenuItem::new(label)
-                                                .checked(engine == selected)
-                                                .on_click(move |_, _, cx| {
-                                                    let _ = view.update(cx, |this, cx| {
-                                                        this.settings_editor
-                                                            .draft
-                                                            .file_search_engine = engine;
-                                                        cx.notify();
-                                                    });
-                                                }),
-                                        );
-                                    }
-                                    menu
-                                }
-                            }),
-                    ),
-                    self.settings_row_bare(
-                        l10n::include_hidden_files(self.locale),
-                        l10n::include_dotfiles_and_files_in_hidden_directories(self.locale),
-                        Switch::new("file-search-hidden")
-                            .checked(self.settings_editor.draft.file_search_include_hidden)
-                            .on_change(cx.listener(|this, checked, _, cx| {
-                                this.settings_editor.draft.file_search_include_hidden = *checked;
-                                cx.notify();
-                            })),
-                    ),
-                    self.settings_stack_row(
-                        l10n::directory_access(self.locale),
-                        l10n::file_search_access_message(self.locale),
-                        div()
-                            .flex()
-                            .items_center()
-                            .flex_wrap()
-                            .gap(px(metrics::SPACE_SM))
-                            .child(
-                                Button::new("authorize-search-directories")
-                                    .secondary()
-                                    .label(l10n::authorize_search_directories(self.locale))
-                                    .disabled(self.settings_editor.model.saving)
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.choose_search_directories(window, cx);
-                                    })),
-                            )
-                            .child(
-                                Button::new("open-full-disk-access")
-                                    .ghost()
-                                    .label(l10n::full_disk_access(self.locale))
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        if !open_privacy_settings(
-                                            PrivacySettingsPane::FullDiskAccess,
-                                        ) {
-                                            this.set_notice(
-                                                l10n::open_system_settings_failed(this.locale),
-                                                components::NoticeKind::Error,
-                                            );
-                                            cx.notify();
-                                        }
-                                    })),
-                            ),
-                    ),
-                ]))
+            .when(
+                !capabilities::APPLICATION_SEARCH_FILE_EXTENSIONS.is_empty(),
+                |page| page.child(self.application_search_paths_settings(cx)),
+            )
+            .child(
+                self.settings_rows_card(
+                    std::iter::once(
+                        self.settings_row_bare(
+                            l10n::file_search(self.locale),
+                            l10n::search_file_names_in_the_file_search(self.locale),
+                            Switch::new("file-search-enabled")
+                                .disabled(self.settings_editor.model.saving)
+                                .checked(self.settings_editor.draft.file_search_enabled)
+                                .accessibility_label(l10n::file_search(self.locale))
+                                .on_change(cx.listener(|this, checked, _, cx| {
+                                    this.save_instant_preferences(
+                                        |preferences| preferences.file_search_enabled = *checked,
+                                        cx,
+                                    );
+                                })),
+                        ),
+                    )
+                    .chain(
+                        (engines.len() > 1).then(|| self.file_search_engine_settings(engines, cx)),
+                    )
+                    .chain([
+                        self.settings_row_bare(
+                            l10n::include_hidden_files(self.locale),
+                            l10n::include_dotfiles_and_files_in_hidden_directories(self.locale),
+                            Switch::new("file-search-hidden")
+                                .disabled(self.settings_editor.model.saving)
+                                .checked(self.settings_editor.draft.file_search_include_hidden)
+                                .accessibility_label(l10n::include_hidden_files(self.locale))
+                                .on_change(cx.listener(|this, checked, _, cx| {
+                                    this.save_instant_preferences(
+                                        |preferences| {
+                                            preferences.file_search_include_hidden = *checked
+                                        },
+                                        cx,
+                                    );
+                                })),
+                        ),
+                        self.settings_stack_row(
+                            l10n::directory_access(self.locale),
+                            capabilities::file_search_access_description(self.locale),
+                            div()
+                                .flex()
+                                .items_center()
+                                .flex_wrap()
+                                .gap(px(metrics::SPACE_SM))
+                                .child(
+                                    Button::new("authorize-search-directories")
+                                        .secondary()
+                                        .label(l10n::authorize_search_directories(self.locale))
+                                        .disabled(self.settings_editor.model.saving)
+                                        .on_click(cx.listener(|this, _, window, cx| {
+                                            this.choose_search_directories(window, cx);
+                                        })),
+                                )
+                                .when(capabilities::FILE_SEARCH_PRIVACY_SETTINGS, |row| {
+                                    row.child(
+                                        Button::new("open-full-disk-access")
+                                            .ghost()
+                                            .label(l10n::full_disk_access(self.locale))
+                                            .on_click(cx.listener(|this, _, _, cx| {
+                                                if !open_privacy_settings(
+                                                    PrivacySettingsPane::FullDiskAccess,
+                                                ) {
+                                                    this.set_notice(
+                                                        l10n::open_system_settings_failed(
+                                                            this.locale,
+                                                        ),
+                                                        components::NoticeKind::Error,
+                                                    );
+                                                    cx.notify();
+                                                }
+                                            })),
+                                    )
+                                }),
+                        ),
+                    ]),
+                ),
+            )
             .child(self.settings_list_editor_card(
                 l10n::authorized_directories(self.locale),
                 l10n::authorized_directories_help(self.locale),
                 &self.settings_editor.file_roots_input,
                 "file-search-roots",
-                "/Users/me/Documents, /Users/me/Projects",
+                capabilities::FILE_SEARCH_PATH_EXAMPLES,
                 false,
                 cx,
             ))
@@ -247,12 +339,119 @@ impl LauncherView {
             ))
     }
 
+    fn application_search_paths_settings(&self, cx: &Context<Self>) -> Div {
+        let controls = div()
+            .flex()
+            .flex_col()
+            .gap(px(metrics::SPACE_SM))
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .gap(px(metrics::SPACE_SM))
+                    .children(
+                        [
+                            (
+                                "application-search-add-folders",
+                                l10n::windows_add_application_folders(self.locale),
+                                true,
+                            ),
+                            (
+                                "application-search-add-shortcuts",
+                                l10n::windows_add_application_shortcuts(self.locale),
+                                false,
+                            ),
+                        ]
+                        .into_iter()
+                        .map(|(id, label, folders)| {
+                            Button::new(id)
+                                .secondary()
+                                .label(label)
+                                .disabled(self.settings_editor.model.saving)
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    this.choose_application_search_paths(folders, window, cx);
+                                }))
+                        }),
+                    ),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .gap(px(metrics::SPACE_XS))
+                    .children(
+                        self.settings_editor
+                            .draft
+                            .application_search_paths
+                            .iter()
+                            .enumerate()
+                            .map(|(index, path)| {
+                                let selected = path.clone();
+                                let id = SharedString::from(format!(
+                                    "application-search-remove-{index}"
+                                ));
+                                self.settings_list_chip(
+                                    format_path_middle_truncated(path),
+                                    path.clone(),
+                                    Button::new(id)
+                                        .ghost()
+                                        .icon(IconName::X)
+                                        .accessibility_label(l10n::remove(self.locale))
+                                        .disabled(self.settings_editor.model.saving)
+                                        .on_click(cx.listener(move |this, _, _, cx| {
+                                            this.settings_editor
+                                                .draft
+                                                .application_search_paths
+                                                .retain(|path| path != &selected);
+                                            cx.notify();
+                                        })),
+                                )
+                            }),
+                    ),
+            );
+        self.settings_rows_card([self.settings_stack_row(
+            l10n::windows_application_search_paths(self.locale),
+            l10n::windows_application_search_paths_help(self.locale),
+            controls,
+        )])
+    }
+
+    fn settings_list_chip(
+        &self,
+        label: String,
+        full_value: String,
+        remove: impl IntoElement,
+    ) -> impl IntoElement {
+        div()
+            .id(SharedString::from(full_value.clone()))
+            .max_w_full()
+            .h(px(metrics::CONTROL_HEIGHT))
+            .px(px(metrics::SPACE_XS))
+            .rounded(px(metrics::CONTROL_RADIUS))
+            .bg(theme::selected())
+            .border(px(metrics::DIVIDER_WIDTH))
+            .border_color(theme::control_border())
+            .flex()
+            .items_center()
+            .gap(px(metrics::SPACE_XS))
+            .tooltip(components::text_tooltip(full_value))
+            .child(
+                div()
+                    .min_w_0()
+                    .truncate()
+                    .caption_text()
+                    .text_color(theme::primary())
+                    .child(label),
+            )
+            .child(remove)
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn settings_list_editor_card(
         &self,
         title: String,
         description: String,
-        input: &Entity<InputState>,
+        input: &Entity<TextareaState>,
         id: &'static str,
         placeholder: &'static str,
         use_app_ids: bool,
@@ -264,11 +463,15 @@ impl LauncherView {
         } else {
             lines(raw.as_ref())
         };
-        let mut wrapper = div()
-            .flex()
-            .flex_col()
-            .gap(px(metrics::SPACE_SM))
-            .child(self.settings_input_row(title, description, input, id, placeholder));
+        let input_index = match id {
+            "file-search-roots" => 0,
+            "file-search-exclusions" => 1,
+            _ => 2,
+        };
+        let quick_input = self.settings_editor.quick_add_inputs[input_index].clone();
+        let list_input = input.clone();
+        let expanded = self.settings_editor.bulk_editor == Some(id);
+        let mut controls = div().flex().flex_col().gap(px(metrics::SPACE_SM));
         if !items.is_empty() {
             let input_entity = input.clone();
             let chips = div()
@@ -283,51 +486,100 @@ impl LauncherView {
                     } else {
                         format_path_middle_truncated(entry)
                     };
-                    div()
-                        .id(SharedString::from(format!("{id}-chip-{index}")))
-                        .h(px(metrics::CONTROL_HEIGHT))
-                        .px(px(metrics::SPACE_SM))
-                        .rounded(px(metrics::CONTROL_RADIUS))
-                        .bg(theme::selected())
-                        .border(px(metrics::DIVIDER_WIDTH))
-                        .border_color(theme::control_border())
-                        .flex()
-                        .items_center()
-                        .gap(px(metrics::SPACE_XS))
-                        .child(
-                            div()
-                                .text_size(px(metrics::CAPTION_SIZE))
-                                .text_color(theme::primary())
-                                .child(label),
-                        )
-                        .child(
-                            div()
-                                .id(SharedString::from(format!("{id}-remove-{index}")))
-                                .role(gpui_kit::Role::Button)
-                                .aria_label(l10n::delete(self.locale))
-                                .cursor_pointer()
-                                .rounded(px(metrics::TOOLTIP_RADIUS))
-                                .hover(|style| style.bg(theme::hover()))
-                                .on_click(cx.listener(move |_, _, window, cx| {
-                                    let current = input_entity.read(cx).value();
-                                    let mut next = if use_app_ids {
-                                        excluded_app_ids(current.as_ref())
-                                    } else {
-                                        lines(current.as_ref())
-                                    };
-                                    next.retain(|item| item != &target);
-                                    set_input_value(&input_entity, next.join("\n"), window, cx);
-                                    cx.notify();
-                                }))
-                                .child(
-                                    Icon::new(IconName::X)
-                                        .size(px(metrics::CAPTION_SIZE))
-                                        .text_color(theme::muted()),
-                                ),
-                        )
+                    self.settings_list_chip(
+                        label,
+                        entry.clone(),
+                        Button::new(SharedString::from(format!("{id}-remove-{index}")))
+                            .ghost()
+                            .icon(IconName::X)
+                            .accessibility_label(l10n::remove(self.locale))
+                            .on_click(cx.listener(move |_, _, window, cx| {
+                                let current = input_entity.read(cx).value();
+                                let mut next = if use_app_ids {
+                                    excluded_app_ids(current.as_ref())
+                                } else {
+                                    lines(current.as_ref())
+                                };
+                                next.retain(|item| item != &target);
+                                set_textarea_value(&input_entity, next.join("\n"), window, cx);
+                                cx.notify();
+                            })),
+                    )
                 }));
-            wrapper = wrapper.child(chips);
+            controls = controls.child(chips);
         }
-        wrapper
+        controls = controls
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(metrics::SPACE_SM))
+                    .child(
+                        div().flex_1().min_w_0().child(
+                            Input::new(&quick_input)
+                                .id(SharedString::from(format!("{id}-quick-add")))
+                                .aria_label(l10n::quick_add(self.locale))
+                                .cleanable(true)
+                                .w_full(),
+                        ),
+                    )
+                    .child(
+                        Button::new(SharedString::from(format!("{id}-add")))
+                            .ghost()
+                            .icon(IconName::Plus)
+                            .accessibility_label(l10n::quick_add(self.locale))
+                            .tooltip(l10n::quick_add(self.locale))
+                            .on_click(cx.listener(move |_, _, window, cx| {
+                                let addition = quick_input.read(cx).value();
+                                if addition.trim().is_empty() {
+                                    return;
+                                }
+                                let current = list_input.read(cx).value();
+                                let combined = format!("{current}\n{addition}");
+                                let entries = if use_app_ids {
+                                    excluded_app_ids(&combined)
+                                } else {
+                                    lines(&combined)
+                                };
+                                set_textarea_value(&list_input, entries.join("\n"), window, cx);
+                                set_input_value(&quick_input, "", window, cx);
+                                cx.notify();
+                            })),
+                    ),
+            )
+            .child(
+                Button::new(SharedString::from(format!("{id}-toggle-bulk")))
+                    .ghost()
+                    .icon(if expanded {
+                        IconName::ChevronDown
+                    } else {
+                        IconName::ChevronRight
+                    })
+                    .label(l10n::bulk_text_editing(self.locale))
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.settings_editor.bulk_editor = (!expanded).then_some(id);
+                        if this.settings_editor.bulk_editor.is_some() {
+                            let input = match input_index {
+                                0 => &this.settings_editor.file_roots_input,
+                                1 => &this.settings_editor.file_exclusions_input,
+                                _ => &this.settings_editor.excluded_apps_input,
+                            };
+                            input.update(cx, |input, cx| input.focus(window, cx));
+                        }
+                        cx.notify();
+                    })),
+            )
+            .when(expanded, |controls| {
+                controls.child(
+                    div().id(id).w_full().test_support().child(
+                        Textarea::new(input)
+                            .appearance(true)
+                            .text_size(px(metrics::BODY_SIZE))
+                            .aria_label(placeholder)
+                            .h(px(metrics::CONTROL_HEIGHT * 3.)),
+                    ),
+                )
+            });
+        self.settings_rows_card([self.settings_stack_row(title, description, controls)])
     }
 }

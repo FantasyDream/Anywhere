@@ -1,5 +1,5 @@
 //! One bounded Spotlight filename query. No shell, private index or content read.
-use crate::FileSearchHit;
+use crate::{FileSearchEngine, FileSearchHit};
 use anyhow::{bail, Context, Result};
 use std::{
     collections::BTreeSet,
@@ -19,6 +19,15 @@ const MAX_BYTES: usize = 256 * 1024;
 #[cfg(test)]
 const MAX_PATH_BYTES: usize = 16 * 1024;
 const TIMEOUT: Duration = Duration::from_secs(2);
+
+pub(crate) const SUPPORTED_ENGINES: &[FileSearchEngine] = &[
+    FileSearchEngine::SystemIndex,
+    FileSearchEngine::Ripgrep,
+    FileSearchEngine::Combined,
+    FileSearchEngine::DirectScan,
+];
+
+pub(crate) const DEFAULT_ENGINE: FileSearchEngine = FileSearchEngine::SystemIndex;
 
 pub(super) fn search(
     query: &str,
@@ -49,7 +58,10 @@ pub(super) fn search_with_options(
 ) -> Result<Vec<FileSearchHit>> {
     use crate::FileSearchEngine;
     match options.engine {
-        FileSearchEngine::SystemIndex => index_search(query, limit, options, cancelled, TIMEOUT),
+        FileSearchEngine::DirectScan => Ok(Vec::new()),
+        FileSearchEngine::SystemIndex | FileSearchEngine::Everything => {
+            index_search(query, limit, options, cancelled, TIMEOUT)
+        }
         FileSearchEngine::Ripgrep => {
             crate::file_search::ripgrep(query, limit, options, cancelled, TIMEOUT)
         }

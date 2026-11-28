@@ -16,7 +16,7 @@ pub(super) struct KeyInput<'a> {
 fn ignore_repeated_key(
     repeated: bool,
     key: &str,
-    command: bool,
+    primary: bool,
     screen: Screen,
     recording_shortcut: bool,
     shortcut: Option<&str>,
@@ -24,11 +24,11 @@ fn ignore_repeated_key(
 ) -> bool {
     repeated
         && (matches!(key, "enter" | "return")
-            || (command && matches!(screen, Screen::Clipboard | Screen::ClipboardShelf))
-            || (command
+            || (primary && matches!(screen, Screen::Clipboard | Screen::ClipboardShelf))
+            || (primary
                 && key.eq_ignore_ascii_case("y")
                 && matches!(screen, Screen::Launcher | Screen::FileSearch))
-            || (command && key.eq_ignore_ascii_case("k") && screen == Screen::Tasks)
+            || (primary && key.eq_ignore_ascii_case("k") && screen == Screen::Tasks)
             || (key == "space" && matches!(screen, Screen::Clipboard | Screen::ClipboardShelf))
             || (screen == Screen::Settings && (recording_shortcut || key == "escape"))
             || shortcut.is_some_and(|shortcut| {
@@ -58,6 +58,20 @@ impl LauncherView {
         cx: &mut Context<Self>,
     ) {
         self.cancel_activation_prefill();
+        if self.web_surface.interaction.is_some() {
+            if !repeated && !modifiers.modified {
+                match key {
+                    "enter" | "return" => self.respond_web_host_interaction(Ok(()), window, cx),
+                    "escape" => self.respond_web_host_interaction(
+                        Err(anywhere_protocol::web_bridge::WebErrorCode::UserCancelled),
+                        window,
+                        cx,
+                    ),
+                    _ => {}
+                }
+            }
+            return;
+        }
         let input = KeyInput {
             key,
             modifiers,
@@ -94,10 +108,7 @@ impl LauncherView {
     ) -> KeyFlow {
         if self.screen != Screen::Launcher
             || self.root_navigation_open
-            || !input.modifiers.command
-            || input.modifiers.shift
-            || input.modifiers.alt
-            || input.modifiers.control
+            || !input.modifiers.primary_only()
         {
             return KeyFlow::Continue;
         }
@@ -125,7 +136,7 @@ impl LauncherView {
         if ignore_repeated_key(
             input.repeated,
             input.key,
-            input.modifiers.command,
+            input.modifiers.primary(),
             self.screen,
             self.shortcuts.recording.is_some(),
             input.shortcut.as_deref(),
@@ -160,11 +171,29 @@ impl LauncherView {
             cx.notify();
             return KeyFlow::Handled;
         };
-        let target = self
-            .shortcuts
-            .recording
-            .take()
-            .unwrap_or(ShortcutSlot::CurrentApp);
+        let target = self.shortcuts.recording.expect("recording active");
+        if matches!(target, ShortcutSlot::CurrentApp | ShortcutSlot::Universal) {
+            let other = match target {
+                ShortcutSlot::CurrentApp => &self.shortcuts.universal_input,
+                _ => &self.shortcuts.current_input,
+            };
+            if other.read(cx).value().as_ref() == shortcut
+                || self
+                    .settings_editor
+                    .draft
+                    .action_shortcuts
+                    .iter()
+                    .any(|binding| binding.global && binding.shortcut == shortcut)
+            {
+                self.set_notice(
+                    l10n::shortcut_already_used(self.locale),
+                    components::NoticeKind::Warning,
+                );
+                cx.notify();
+                return KeyFlow::Handled;
+            }
+        }
+        self.shortcuts.recording = None;
         match target {
             ShortcutSlot::CurrentApp => {
                 set_input_value(&self.shortcuts.current_input, shortcut, window, cx);
@@ -251,15 +280,38 @@ impl LauncherView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> KeyFlow {
-        if input.modifiers.command
+        if input.modifiers.primary()
             && input.modifiers.shift
             && !input.modifiers.alt
-            && !input.modifiers.control
             && input.key.eq_ignore_ascii_case("o")
             && self.can_open_tool_window()
         {
             self.open_tool_window(window, cx);
             return KeyFlow::Handled;
+        }
+        if self.screen == Screen::WebPackages {
+            if let Some(id) = self.web_surface.uninstall_target.clone() {
+                let cancel = &self.settings_editor.confirm_cancel_focus;
+                let accept = &self.settings_editor.confirm_accept_focus;
+                if is_scope_tab_shortcut(input.key, input.modifiers) {
+                    let next = if accept.is_focused(window) {
+                        cancel
+                    } else {
+                        accept
+                    };
+                    next.focus(window, cx);
+                } else if !input.modifiers.modified && !input.repeated {
+                    match input.key {
+                        "escape" => self.close_web_uninstall_prompt(window, cx),
+                        "enter" | "return" if accept.is_focused(window) => {
+                            self.confirm_web_uninstall(&id, window, cx);
+                        }
+                        "enter" | "return" => self.close_web_uninstall_prompt(window, cx),
+                        _ => {}
+                    }
+                }
+                return KeyFlow::Handled;
+            }
         }
         let had_candidates = self.page_actions_visible();
         if self.handle_app_history_overlay_keys(input, cx) == KeyFlow::Handled
@@ -268,7 +320,13 @@ impl LauncherView {
             || self.handle_web_overlay_keys(input, window, cx) == KeyFlow::Handled
         {
             if had_candidates && !self.page_actions_visible() && input.key == "escape" {
-                self.refocus_active_editor(window, cx);
+                if self.screen == Screen::Tasks {
+                    if let Some(focus) = self.tasks_actions_return_focus.take() {
+                        focus.focus(window, cx);
+                    }
+                } else if self.screen != Screen::WebTool {
+                    self.refocus_active_editor(window, cx);
+                }
             }
             KeyFlow::Handled
         } else {
@@ -282,12 +340,9 @@ impl LauncherView {
         cx: &mut Context<Self>,
     ) -> KeyFlow {
         if let Some(shortcut) = input.shortcut.as_deref() {
-            let save_shortcut = if cfg!(target_os = "macos") {
-                "meta+KeyS"
-            } else {
-                "control+KeyS"
-            };
-            if self.screen == Screen::Settings && shortcut == save_shortcut {
+            if self.screen == Screen::Settings
+                && shortcut == crate::platform::settings_save_shortcut()
+            {
                 return KeyFlow::Continue;
             }
             if let Some(binding) = self
@@ -311,7 +366,7 @@ impl LauncherView {
         cx: &mut Context<Self>,
     ) -> KeyFlow {
         if self.screen == Screen::ClipboardShelf
-            && input.modifiers.command
+            && input.modifiers.primary_only()
             && self.handle_shelf_command_key(input.key, cx) == KeyFlow::Handled
         {
             return KeyFlow::Handled;
@@ -365,6 +420,13 @@ impl LauncherView {
                 cx.notify();
             }
             "tab"
+                if !modified
+                    && self.launcher_empty_action()
+                        == Some(LauncherEmptyAction::SearchAllScopes) =>
+            {
+                self.use_launcher_empty_action(window, cx);
+            }
+            "tab"
                 if is_scope_tab_shortcut(input.key, input.modifiers)
                     && !self.model.object_actions_active
                     && self.model.menu_path().is_none()
@@ -381,6 +443,9 @@ impl LauncherView {
                 self.request_live_update(cx);
                 self.notice = None;
                 cx.notify();
+            }
+            "enter" | "return" if self.launcher_empty_action().is_some() => {
+                self.use_launcher_empty_action(window, cx);
             }
             "enter" | "return" => self.activate_selection(cx),
             "escape" => self.escape_launcher_root(window, cx),

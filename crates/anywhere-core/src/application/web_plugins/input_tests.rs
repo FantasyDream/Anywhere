@@ -22,7 +22,7 @@ fn context_only_web_commands_cannot_be_offered_or_executed_without_their_object(
     let package = package_manifest(
         json!({
             "schemaVersion":1, "id":"dev.example.tool", "name":"Example", "version":"1.0.0",
-            "apiVersion":"1", "platforms":["macos"], "entry":"index.html",
+            "apiVersion":"2", "platforms":["macos"], "entry":"index.html",
             "permissions":[{"name":"context.read", "types":[kind]}],
             "commands":[{"id":"open", "title":"Unescape", "entrypoint":"workspace",
                          "accepts":[kind], "requireContext":true}]

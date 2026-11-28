@@ -56,6 +56,8 @@ fn review_cancellation_only_retires_the_matching_token() {
     let mut store =
         WebPackageStore::open(root.path().join("store"), WebPlatform::Macos, &app).unwrap();
     let old = store.inspect(&path).unwrap();
+    assert!(store.inspect(&path).is_err());
+    store.cancel_review(&old.token);
     let current = store.inspect(&path).unwrap();
     assert_ne!(old.token, current.token);
     store.cancel_review(&old.token);
@@ -74,7 +76,7 @@ fn review_cancellation_only_retires_the_matching_token() {
 }
 
 #[test]
-fn a_failed_new_inspection_releases_the_previous_review() {
+fn another_inspection_requires_the_previous_review_to_be_cancelled() {
     let root = tempfile::tempdir().unwrap();
     let app = app();
     let mut store =
@@ -87,11 +89,13 @@ fn a_failed_new_inspection_releases_the_previous_review() {
     let review = store.inspect(&path).unwrap();
     fs::write(&path, b"not a package").unwrap();
     assert!(store.inspect(&path).is_err());
+    store.cancel_review(&review.token);
+    assert!(store.inspect(&path).is_err());
     assert!(store.approve(&app, &review.token).is_err());
     assert!(store.statuses().is_empty());
 }
 #[test]
-fn updates_require_review_and_rollback_restores_previously_approved_bytes() {
+fn repeated_import_preserves_the_rollback_point_after_restart() {
     let root = tempfile::tempdir().unwrap();
     let app = app();
     let path = root.path().join("import.awplugin");
@@ -113,9 +117,42 @@ fn updates_require_review_and_rollback_restores_previously_approved_bytes() {
     store.approve(&app, &review.token).unwrap();
     assert!(store.resource(old.digest(), "index.html").is_err());
     assert_eq!(store.resource(next.digest(), "index.html").unwrap(), b"new");
+    let repeated = store.inspect(&path).unwrap();
+    store.approve(&app, &repeated.token).unwrap();
+    drop(store);
+    let mut store =
+        WebPackageStore::open(root.path().join("store"), WebPlatform::Macos, &app).unwrap();
     store.rollback(&app, &review.id).unwrap();
     assert_eq!(store.resource(old.digest(), "index.html").unwrap(), b"old");
     assert!(store.resource(next.digest(), "index.html").is_err());
+}
+
+#[test]
+fn same_digest_review_can_reenable_a_disabled_package_and_keep_rollback() {
+    let root = tempfile::tempdir().unwrap();
+    let app = app();
+    let location = root.path().join("store");
+    let path = root.path().join("import.awplugin");
+    let mut store = WebPackageStore::open(location.clone(), WebPlatform::Macos, &app).unwrap();
+    let old = package(serde_json::json!([]), serde_json::json!([]), "old");
+    let updated = package(serde_json::json!([]), serde_json::json!([]), "updated");
+    for package in [&old, &updated] {
+        archive(package, &path);
+        let review = store.inspect(&path).unwrap();
+        store.approve(&app, &review.token).unwrap();
+    }
+    let id = &updated.manifest().id;
+    store.set_enabled(&app, id, false).unwrap();
+    let review = store.inspect(&path).unwrap();
+    store.cancel_review(&review.token);
+    assert!(!store.statuses()[0].enabled);
+    let review = store.inspect(&path).unwrap();
+    store.approve(&app, &review.token).unwrap();
+    drop(store);
+    let mut store = WebPackageStore::open(location, WebPlatform::Macos, &app).unwrap();
+    assert!(store.statuses()[0].enabled);
+    store.rollback(&app, id).unwrap();
+    assert_eq!(store.resource(old.digest(), "index.html").unwrap(), b"old");
 }
 #[test]
 fn persistence_failure_restores_existing_catalog_and_permissions() {
@@ -248,6 +285,8 @@ async fn unchanged_enable_preserves_document_and_execution_catalog() {
         .bind_web_document(&invocation, WebPlatform::Macos)
         .unwrap();
     store.set_enabled(&app, &review.id, true).unwrap();
+    let repeated = store.inspect(&path).unwrap();
+    store.approve(&app, &repeated.token).unwrap();
     app.validate_web_document(&binding, source(&binding))
         .unwrap();
     assert!(store.set_enabled(&app, "missing", true).is_err());
@@ -272,6 +311,14 @@ fn reinstall_cannot_silently_reuse_damaged_extracted_assets() {
     let review = store.inspect(&path).unwrap();
     assert!(store.approve(&app, &review.token).is_err());
     assert!(store.resource(package.digest(), "index.html").is_err());
+    let staged = location.join(package.digest());
+    fs::remove_dir_all(&staged).unwrap();
+    let review = store.inspect(&path).unwrap();
+    assert!(store.approve(&app, &review.token).is_err());
+    assert!(
+        !staged.exists(),
+        "repeat approval must not repair a missing cache"
+    );
     // Normal uninstall/reinstall removes the damaged cache and restores verified bytes.
     store.uninstall(&app, &review.id).unwrap();
     let review = store.inspect(&path).unwrap();

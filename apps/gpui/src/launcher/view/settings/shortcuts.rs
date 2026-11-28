@@ -278,12 +278,12 @@ impl LauncherView {
         let title = title.into();
         let recording = self.shortcuts.recording == Some(slot);
         let shortcut = input.read(cx).value();
-        let shortcut_label = crate::platform::macos_shortcut_label(&shortcut)
-            .unwrap_or_else(|| shortcut.to_string());
+        let shortcut_label =
+            crate::platform::shortcut_label(&shortcut).unwrap_or_else(|| shortcut.to_string());
         let shortcut_action_label =
             format!("{}: {}", l10n::record_shortcut(self.locale), shortcut_label);
-        div()
-            .h(px(42.))
+        let row = div()
+            .min_h(px(metrics::SETTINGS_ROW_MIN_HEIGHT))
             .px(px(metrics::SPACE_MD))
             .flex()
             .items_center()
@@ -298,46 +298,98 @@ impl LauncherView {
                     .child(title),
             )
             .child(
-                div().flex_none().flex().items_center().justify_end().child(
-                    Button::new(SharedString::from(format!("{id}-record")))
-                        .ghost()
-                        .accessibility_label(shortcut_action_label.clone())
-                        .tooltip(shortcut_action_label)
-                        .w(px(132.))
-                        .h(px(26.))
-                        .px(px(metrics::SPACE_SM))
-                        .rounded(px(8.))
-                        .border(px(metrics::DIVIDER_WIDTH))
-                        .border_color(if recording {
-                            theme::accent()
+                div()
+                    .flex_none()
+                    .flex()
+                    .items_center()
+                    .justify_end()
+                    .gap(px(metrics::SPACE_XS))
+                    .child(
+                        Button::new(SharedString::from(format!("{id}-record")))
+                            .ghost()
+                            .accessibility_label(shortcut_action_label.clone())
+                            .tooltip(shortcut_action_label)
+                            .w(px(132.))
+                            .h(px(metrics::FILTER_HEIGHT))
+                            .px(px(metrics::SPACE_SM))
+                            .rounded(px(metrics::CONTROL_RADIUS))
+                            .border(px(metrics::DIVIDER_WIDTH))
+                            .border_color(if recording {
+                                theme::accent()
+                            } else {
+                                theme::divider()
+                            })
+                            .bg(if recording {
+                                theme::button_selection()
+                            } else {
+                                theme::transparent()
+                            })
+                            .text_size(px(metrics::LABEL_SIZE))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(if recording {
+                                theme::accent()
+                            } else {
+                                theme::secondary()
+                            })
+                            .cursor_pointer()
+                            .label(if recording {
+                                l10n::press_ashortcut(self.locale)
+                            } else {
+                                shortcut_label
+                            })
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.shortcuts.recording = Some(slot);
+                                this.notice = None;
+                                cx.notify();
+                            })),
+                    )
+                    .child(
+                        Button::new(SharedString::from(format!("{id}-reset")))
+                            .ghost()
+                            .icon(IconName::RotateCcw)
+                            .accessibility_label(l10n::reset_shortcut(self.locale))
+                            .tooltip(l10n::reset_shortcut(self.locale))
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                let defaults = HostPreferences::default();
+                                let (input, value) = match slot {
+                                    ShortcutSlot::CurrentApp => (
+                                        &this.shortcuts.current_input,
+                                        defaults.current_app_shortcut,
+                                    ),
+                                    _ => (
+                                        &this.shortcuts.universal_input,
+                                        defaults.universal_shortcut,
+                                    ),
+                                };
+                                this.shortcuts.recording = None;
+                                this.notice = None;
+                                set_input_value(input, value, window, cx);
+                                cx.notify();
+                            })),
+                    ),
+            );
+        div()
+            .flex()
+            .flex_col()
+            .child(row)
+            .when(recording, |container| {
+                container.child(
+                    div()
+                        .px(px(metrics::SPACE_MD))
+                        .pb(px(metrics::SPACE_SM))
+                        .caption_text()
+                        .text_color(if self.notice.is_some() {
+                            theme::warning()
                         } else {
-                            theme::divider()
+                            theme::muted()
                         })
-                        .bg(if recording {
-                            theme::button_selection()
-                        } else {
-                            theme::transparent()
-                        })
-                        .text_size(px(12.))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(if recording {
-                            theme::accent()
-                        } else {
-                            theme::secondary()
-                        })
-                        .cursor_pointer()
-                        .label(if recording {
-                            l10n::press_ashortcut(self.locale)
-                        } else {
-                            shortcut_label
-                        })
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.shortcuts.recording = Some(slot);
-                            this.notice = None;
-                            cx.notify();
-                        })),
-                ),
-            )
+                        .child(
+                            self.notice
+                                .clone()
+                                .unwrap_or_else(|| l10n::cancel_recording_esc(self.locale)),
+                        ),
+                )
+            })
     }
 
     fn render_context_shortcut_builder(
@@ -411,7 +463,7 @@ impl LauncherView {
                                 draft
                                     .shortcut
                                     .as_deref()
-                                    .and_then(crate::platform::macos_shortcut_label)
+                                    .and_then(crate::platform::shortcut_label)
                                     .unwrap_or_else(|| l10n::record_shortcut(self.locale))
                             })
                             .on_click(cx.listener(|this, _, _, cx| {
@@ -447,25 +499,11 @@ impl LauncherView {
                     .text_color(theme::secondary())
                     .child(l10n::add_action_shortcut(self.locale)),
             )
-            .child(
-                div()
-                    .h(px(34.))
-                    .rounded(px(metrics::CONTROL_RADIUS))
-                    .bg(theme::field())
-                    .px(px(metrics::SPACE_SM))
-                    .flex()
-                    .items_center()
-                    .child(
-                        Input::new(&self.shortcuts.action_input)
-                            .id("settings-context-action-shortcut-search")
-                            .appearance(false)
-                            .bordered(false)
-                            .focus_bordered(false)
-                            .cleanable(true)
-                            .text_size(px(metrics::BODY_SIZE))
-                            .w_full(),
-                    ),
-            )
+            .child(components::search_field(
+                "settings-context-action-shortcut-search",
+                &self.shortcuts.action_input,
+                l10n::find_an_action(self.locale),
+            ))
             .child(
                 div()
                     .max_h(px(190.))
@@ -554,7 +592,7 @@ impl LauncherView {
         let binding_for_edit = binding.clone();
         let action_for_edit = action.clone();
         let action_label = shortcut_action_title(&action, self.locale);
-        let shortcut_label = crate::platform::macos_shortcut_label(&binding.shortcut)
+        let shortcut_label = crate::platform::shortcut_label(&binding.shortcut)
             .unwrap_or_else(|| binding.shortcut.clone());
         let action_missing = !catalog_empty
             && !self
@@ -755,18 +793,11 @@ impl LauncherView {
                     .bg(theme::field())
                     .border(px(metrics::CONTROL_BORDER_WIDTH))
                     .border_color(theme::control_border())
-                    .child(
-                        Input::new(&self.shortcuts.action_input)
-                            .id("settings-action-shortcut-search")
-                            .aria_label(l10n::find_an_action(self.locale))
-                            .appearance(false)
-                            .bordered(false)
-                            .focus_bordered(false)
-                            .cleanable(true)
-                            .text_size(px(metrics::BODY_SIZE))
-                            .text_color(theme::primary())
-                            .w_full(),
-                    ),
+                    .child(components::search_field(
+                        "settings-action-shortcut-search",
+                        &self.shortcuts.action_input,
+                        l10n::find_an_action(self.locale),
+                    )),
             )
             .child(
                 div()
@@ -929,7 +960,7 @@ impl LauncherView {
             .shortcuts
             .pending_value
             .as_deref()
-            .and_then(crate::platform::macos_shortcut_label)
+            .and_then(crate::platform::shortcut_label)
             .unwrap_or_else(|| {
                 self.shortcuts
                     .pending_value

@@ -1,16 +1,18 @@
 //! Owned, non-interactive child processes. No shell interpolation or unbounded pipe reads.
 mod tooling;
 use tooling::tool_directories;
-pub use tooling::{find_executable, java_environment, wrapped_tool};
+pub use tooling::{find_executable, java_environment, resolve_node_package_manager, wrapped_tool};
 #[cfg(unix)]
 #[path = "process/unix.rs"]
 mod backend;
-#[cfg(not(unix))]
+#[cfg(windows)]
+#[path = "process/windows.rs"]
+mod backend;
+#[cfg(not(any(unix, windows)))]
 #[path = "process/unsupported.rs"]
 mod backend;
 use anyhow::{bail, Context, Result};
 use std::{
-    io::Read,
     path::PathBuf,
     process::{Child, Command, ExitStatus, Stdio},
 };
@@ -27,6 +29,7 @@ pub struct ProcessRequest {
 /// The worker owns the child from spawn through reaping. Cancellation never uses a stale PID.
 pub struct OwnedProcess {
     child: Child,
+    state: backend::State,
     finished: bool,
 }
 
@@ -54,23 +57,31 @@ impl OwnedProcess {
             .stderr(Stdio::piped());
         backend::configure(&mut command)?;
         let child = command.spawn().context("could not start task")?;
-        let process = Self {
-            child,
-            finished: false,
+        let state = match backend::attach(&child) {
+            Ok(state) => state,
+            Err(error) => {
+                let mut child = child;
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(error);
+            }
         };
-        backend::prepare_pipes(&process.child)?;
-        Ok(process)
+        Ok(Self {
+            child,
+            state,
+            finished: false,
+        })
     }
 
     pub fn read_stdout(&mut self, buffer: &mut [u8]) -> Result<usize> {
-        read_available(
+        backend::read_pipe(
             self.child.stdout.as_mut().context("stdout missing")?,
             buffer,
         )
     }
 
     pub fn read_stderr(&mut self, buffer: &mut [u8]) -> Result<usize> {
-        read_available(
+        backend::read_pipe(
             self.child.stderr.as_mut().context("stderr missing")?,
             buffer,
         )
@@ -96,7 +107,7 @@ impl OwnedProcess {
     }
 
     fn kill_group(&mut self) -> Result<()> {
-        backend::kill_tree(&mut self.child)
+        backend::kill_tree(&mut self.child, &mut self.state)
     }
 }
 
@@ -106,20 +117,5 @@ impl Drop for OwnedProcess {
             let _ = self.kill_group();
             let _ = self.child.wait();
         }
-    }
-}
-
-fn read_available(reader: &mut impl Read, buffer: &mut [u8]) -> Result<usize> {
-    match reader.read(buffer) {
-        Ok(size) => Ok(size),
-        Err(error)
-            if matches!(
-                error.kind(),
-                std::io::ErrorKind::WouldBlock | std::io::ErrorKind::Interrupted
-            ) =>
-        {
-            Ok(0)
-        }
-        Err(error) => Err(error.into()),
     }
 }

@@ -41,7 +41,7 @@ impl Application {
         let child = Arc::new(Self {
             tool_windows: Default::default(),
             object_selection_order: Default::default(),
-            previews: Default::default(),
+            previews: self.previews.clone(),
             web_rpc_workers: self.web_rpc_workers.clone(),
             web_plugins: Arc::new(Mutex::new(web)),
             executions: self.executions.clone(),

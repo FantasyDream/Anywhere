@@ -6,6 +6,7 @@ pub const TEXT: &str = "text/plain;charset=utf-8";
 pub const FILES: &str = "application/x-anywhere-file-list+json";
 pub const MAX_PAYLOAD_BYTES: usize = 16 * 1024 * 1024;
 pub const MAX_FORMATS: usize = 64;
+pub(crate) const MAX_FILE_LIST_ITEMS: usize = 4096;
 // Dynamic macOS UTIs encode application data flavors and can exceed 256 bytes.
 pub const MAX_FORMAT_NAME_BYTES: usize = 4096;
 
@@ -76,7 +77,7 @@ impl ClipboardPayload {
         };
         let paths: Vec<String> = serde_json::from_slice(&format.data)?;
         ensure!(
-            !paths.is_empty() && paths.len() <= 4096,
+            !paths.is_empty() && paths.len() <= MAX_FILE_LIST_ITEMS,
             ContextReadError::TooManyItems
         );
         ensure!(

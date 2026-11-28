@@ -1,8 +1,8 @@
-# 开发包与发布检查
+# macOS 开发包与发布检查
 
 当前为 macOS 15+ GPUI 开发预览。脚本提供本机架构 App、持久本机签名、ZIP 与
 SHA-256 校验；正式发行所需的 Developer ID、公证、干净机器升级和完整物理
-辅助技术矩阵尚未完成。
+辅助技术矩阵尚未完成。Windows x64 的 ZIP 构建见 [Windows 指南](windows.md#构建与打包)，运行状态和剩余分发工作见 [Windows 功能进度](windows-progress.md)。
 
 ## 1. 确认范围与版本
 
@@ -92,6 +92,14 @@ otool -L build/Anywhere-preview.app/Contents/MacOS/Anywhere
 
 记录设备、macOS、架构、构建号、数据目录、真实输入与未验证项。只使用脱敏材料；
 不要让自动化意外执行真实业务动作。未执行项按清单记录为 Pending 或 Blocked。
+
+## 插件 SDK 资产
+
+从同一工作树运行 `scripts/package-plugin-sdk.sh`，该命令核对 `npm pack --json`
+列出的内容并生成 SHA-256。macOS Checks 工作流上传 `Anywhere-plugin-sdk-<commit>`
+产物。发布 API 2 宿主时，从该提交的 Actions 产物下载 SDK，将 `.tgz` 与
+`.tgz.sha256` 一起附到对应 GitHub Release，说明支持 API 2 / 协议 2，并使用该
+Release 下载的归档重跑 [仓库外模板检查](../scripts/check-plugin-starter.sh)。将下载路径设置为 `ANYWHERE_SDK_ARCHIVE`。
 
 ## 5. GitHub 打包
 

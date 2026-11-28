@@ -92,6 +92,41 @@ pub fn search(locale: Locale) -> String {
     }
 }
 
+pub fn windows_application_search_paths(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Application search locations".to_string(),
+        Locale::Zh => "应用搜索位置".to_string(),
+    }
+}
+
+pub fn windows_application_search_paths_help(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Add folders, shortcuts (.lnk or .url), or programs (.exe). Folders and their launchable items appear in application search.".to_string(),
+        Locale::Zh => "添加文件夹、快捷方式（.lnk 或 .url）或程序（.exe）。搜索可找到文件夹及其中可启动的条目。".to_string(),
+    }
+}
+
+pub fn windows_add_application_folders(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Add folders".to_string(),
+        Locale::Zh => "添加文件夹".to_string(),
+    }
+}
+
+pub fn windows_add_application_shortcuts(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Add shortcuts or programs".to_string(),
+        Locale::Zh => "添加快捷方式或程序".to_string(),
+    }
+}
+
+pub fn windows_application_search_path_error(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Add up to 64 absolute paths to folders, shortcuts or programs.".to_string(),
+        Locale::Zh => "请填写文件夹、快捷方式或程序的绝对路径，最多 64 项。".to_string(),
+    }
+}
+
 pub fn clipboard(locale: Locale) -> String {
     match locale {
         Locale::En => "Clipboard".to_string(),
@@ -129,8 +164,8 @@ pub fn theme(locale: Locale) -> String {
 
 pub fn theme_description(locale: Locale) -> String {
     match locale {
-        Locale::En => "Choose a light or dark appearance, or match macOS".to_string(),
-        Locale::Zh => "使用浅色或深色外观，也可跟随 macOS".to_string(),
+        Locale::En => "Choose a light or dark appearance, or follow the system setting".to_string(),
+        Locale::Zh => "选择浅色、深色或跟随系统外观".to_string(),
     }
 }
 
@@ -285,6 +320,20 @@ pub fn close(locale: Locale) -> String {
     match locale {
         Locale::En => "Close".to_string(),
         Locale::Zh => "关闭".to_string(),
+    }
+}
+
+pub fn minimize_window(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Minimize window".to_string(),
+        Locale::Zh => "最小化窗口".to_string(),
+    }
+}
+
+pub fn toggle_window_size(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Toggle window size".to_string(),
+        Locale::Zh => "切换窗口大小".to_string(),
     }
 }
 
@@ -526,10 +575,24 @@ pub fn context_description(locale: Locale) -> String {
     }
 }
 
+pub fn windows_context_description(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Current App reads the foreground app, Explorer folder and selection, browser page URL, and focused text selection.".to_string(),
+        Locale::Zh => "当前应用可读取前台应用、资源管理器目录与选中文件、浏览器当前网页和焦点选区文本。".to_string(),
+    }
+}
+
 pub fn finder_selection(locale: Locale) -> String {
     match locale {
         Locale::En => "Finder selection".to_string(),
         Locale::Zh => "访达选中项".to_string(),
+    }
+}
+
+pub fn explorer_selection(locale: Locale) -> String {
+    match locale {
+        Locale::En => "File Explorer selection".to_string(),
+        Locale::Zh => "文件资源管理器选中项".to_string(),
     }
 }
 
@@ -1507,6 +1570,34 @@ pub fn approve_and_install(locale: Locale) -> String {
     }
 }
 
+pub fn approve_and_enable(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Approve and enable".to_string(),
+        Locale::Zh => "批准并启用".to_string(),
+    }
+}
+
+pub fn approve(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Approve".to_string(),
+        Locale::Zh => "批准".to_string(),
+    }
+}
+
+pub fn plugin_version_installed(locale: Locale) -> String {
+    match locale {
+        Locale::En => "This version is already installed and enabled.".to_string(),
+        Locale::Zh => "该版本已安装且当前已启用。".to_string(),
+    }
+}
+
+pub fn plugin_version_disabled(locale: Locale) -> String {
+    match locale {
+        Locale::En => "This version is already installed and currently disabled.".to_string(),
+        Locale::Zh => "该版本已安装且当前处于停用状态。".to_string(),
+    }
+}
+
 pub fn web_tools(locale: Locale) -> String {
     match locale {
         Locale::En => "Web tools".to_string(),
@@ -1734,6 +1825,15 @@ pub fn too_many_items_help(locale: Locale) -> String {
     match locale {
         Locale::En => "Select up to 32 items in Finder, then reopen Anywhere.".to_string(),
         Locale::Zh => "请在访达中选择不超过 32 个项目，然后重新唤醒 Anywhere。".to_string(),
+    }
+}
+
+pub fn windows_too_many_items_help(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Select up to 64 items in File Explorer, then reopen Anywhere.".to_string(),
+        Locale::Zh => {
+            "请在文件资源管理器中选择不超过 64 个项目，然后重新唤醒 Anywhere。".to_string()
+        }
     }
 }
 
@@ -2040,6 +2140,13 @@ pub fn file_search_access_message(locale: Locale) -> String {
     }
 }
 
+pub fn windows_file_search_access_message(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Choose folders Anywhere may search. Combined mode uses Everything, Windows Search, and Ripgrep automatically while direct traversal completes. Windows file permissions still apply.".to_string(),
+        Locale::Zh => "选择允许 Anywhere 搜索的文件夹。组合模式会自动协同 Everything、Windows 搜索索引与 Ripgrep，并由直接遍历补全结果，搜索仍受 Windows 文件权限约束。".to_string(),
+    }
+}
+
 pub fn permission_current_app(locale: Locale) -> String {
     match locale {
         Locale::En => "Current application name".to_string(),
@@ -2079,6 +2186,150 @@ pub fn browser_page_description(locale: Locale) -> String {
     match locale {
         Locale::En => "Use the active Safari, Chrome, or Edge tab’s web address".to_string(),
         Locale::Zh => "使用 Safari、Chrome 或 Edge 当前标签页的网页地址".to_string(),
+    }
+}
+
+pub fn plugin_open_url_title(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Open this link?".to_string(),
+        Locale::Zh => "打开此链接？".to_string(),
+    }
+}
+
+pub fn plugin_open_url(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Open link".to_string(),
+        Locale::Zh => "打开链接".to_string(),
+    }
+}
+
+pub fn show_link_details(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Show full destination".to_string(),
+        Locale::Zh => "展开完整地址".to_string(),
+    }
+}
+
+pub fn show_link_query_details(locale: Locale, bytes: &str) -> String {
+    let values = &[("bytes", bytes.to_string())];
+    match locale {
+        Locale::En => fill("Show full destination ({bytes} query bytes)", values),
+        Locale::Zh => fill("展开完整地址（查询参数 {bytes} 字节）", values),
+    }
+}
+
+pub fn hide_link_details(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Hide full destination".to_string(),
+        Locale::Zh => "收起完整地址".to_string(),
+    }
+}
+
+pub fn plugin_review_pending(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Finish or cancel the current package review first.".to_string(),
+        Locale::Zh => "请先完成或取消当前插件审查。".to_string(),
+    }
+}
+
+pub fn open_approved_tool(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Open tool".to_string(),
+        Locale::Zh => "立即打开".to_string(),
+    }
+}
+
+pub fn plugin_command_count(locale: Locale, count: &str) -> String {
+    let values = &[("count", count.to_string())];
+    match locale {
+        Locale::En => fill("{count} commands", values),
+        Locale::Zh => fill("{count} 条命令", values),
+    }
+}
+
+pub fn plugin_background_activity(locale: Locale, resolvers: &str, actions: &str) -> String {
+    let values = &[
+        ("resolvers", resolvers.to_string()),
+        ("actions", actions.to_string()),
+    ];
+    match locale {
+        Locale::En => fill(
+            "Background activity · {resolvers} resolvers and {actions} actions",
+            values,
+        ),
+        Locale::Zh => fill("后台活动 · {resolvers} 个解析器和 {actions} 条动作", values),
+    }
+}
+
+pub fn plugin_added_grants(locale: Locale, grants: &str) -> String {
+    let values = &[("grants", grants.to_string())];
+    match locale {
+        Locale::En => fill("New permissions\n{grants}", values),
+        Locale::Zh => fill("新增权限\n{grants}", values),
+    }
+}
+
+pub fn plugin_removed_grants(locale: Locale, grants: &str) -> String {
+    let values = &[("grants", grants.to_string())];
+    match locale {
+        Locale::En => fill("Removed permissions\n{grants}", values),
+        Locale::Zh => fill("移除权限\n{grants}", values),
+    }
+}
+
+pub fn plugin_scope_changed(locale: Locale, old: &str, new: &str) -> String {
+    let values = &[("old", old.to_string()), ("new", new.to_string())];
+    match locale {
+        Locale::En => fill("Changed scope\n{old} → {new}", values),
+        Locale::Zh => fill("权限范围变化\n{old} → {new}", values),
+    }
+}
+
+pub fn plugin_data_external_risk(locale: Locale) -> String {
+    match locale {
+        Locale::En => {
+            "This plugin can read local data and include it in a link it asks you to open."
+                .to_string()
+        }
+        Locale::Zh => "此插件能够读取本地数据，并可将数据加入请求您打开的链接。".to_string(),
+    }
+}
+
+pub fn plugin_any_origin_risk(locale: Locale) -> String {
+    match locale {
+        Locale::En => "The plugin can request to open any HTTP(S) site.".to_string(),
+        Locale::Zh => "插件可请求打开任意 HTTP(S) 站点。".to_string(),
+    }
+}
+
+pub fn plugin_http_risk(locale: Locale) -> String {
+    match locale {
+        Locale::En => {
+            "An HTTP destination may send link details over an unencrypted connection.".to_string()
+        }
+        Locale::Zh => "HTTP 站点可能通过未加密的连接传送链接内容。".to_string(),
+    }
+}
+
+pub fn permission_open_url(locale: Locale, origins: &str) -> String {
+    let values = &[("origins", origins.to_string())];
+    match locale {
+        Locale::En => fill("Open a URL with confirmation at {origins}", values),
+        Locale::Zh => fill("经确认后打开以下站点的链接：{origins}", values),
+    }
+}
+
+pub fn permission_read_selection(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Read the selected local file".to_string(),
+        Locale::Zh => "读取选中的本地文件".to_string(),
+    }
+}
+
+pub fn permission_preview_selection(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Preview the selected local file".to_string(),
+        Locale::Zh => "预览选中的本地文件".to_string(),
     }
 }
 
@@ -2686,8 +2937,11 @@ pub fn search_engine(locale: Locale) -> String {
 
 pub fn search_engine_description(locale: Locale) -> String {
     match locale {
-        Locale::En => "System Index, Ripgrep, or Combined".to_string(),
-        Locale::Zh => "系统索引、Ripgrep 或组合模式".to_string(),
+        Locale::En => {
+            "Choose which engine supplies early file matches before direct scan completes"
+                .to_string()
+        }
+        Locale::Zh => "选择在完整遍历完成前提供首批文件候选的引擎".to_string(),
     }
 }
 
@@ -2695,6 +2949,20 @@ pub fn search_engine_system_index(locale: Locale) -> String {
     match locale {
         Locale::En => "System Index".to_string(),
         Locale::Zh => "系统索引".to_string(),
+    }
+}
+
+pub fn search_engine_windows_index(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Windows Search".to_string(),
+        Locale::Zh => "Windows 搜索索引".to_string(),
+    }
+}
+
+pub fn search_engine_everything(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Everything".to_string(),
+        Locale::Zh => "Everything".to_string(),
     }
 }
 
@@ -2709,6 +2977,13 @@ pub fn search_engine_combined(locale: Locale) -> String {
     match locale {
         Locale::En => "Combined".to_string(),
         Locale::Zh => "组合模式".to_string(),
+    }
+}
+
+pub fn search_engine_direct_scan(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Direct Scan".to_string(),
+        Locale::Zh => "直接扫描".to_string(),
     }
 }
 
@@ -2983,6 +3258,23 @@ pub fn preview_unavailable_with(locale: Locale, error: &str) -> String {
     }
 }
 
+pub fn windows_quick_look_unavailable(locale: Locale) -> String {
+    match locale {
+        Locale::En => {
+            "QuickLook for Windows is unavailable. Make sure it is running and try again."
+                .to_string()
+        }
+        Locale::Zh => "Windows 版 QuickLook 当前不可用。请确认它已运行，然后重试。".to_string(),
+    }
+}
+
+pub fn windows_quick_look_existing_window(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Close the other QuickLook window and try the preview again.".to_string(),
+        Locale::Zh => "请关闭另一个 QuickLook 窗口，然后重试预览。".to_string(),
+    }
+}
+
 pub fn could_not_activate_anywhere(locale: Locale, error: &str) -> String {
     let values = &[("error", error.to_string())];
     match locale {
@@ -3162,5 +3454,148 @@ pub fn search_directory_unavailable(locale: Locale) -> String {
     }
 }
 
+pub fn clear_search_esc(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Clear search · Esc".to_string(),
+        Locale::Zh => "清空搜索 · Esc".to_string(),
+    }
+}
+
+pub fn hide_window_esc(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Hide window · Esc".to_string(),
+        Locale::Zh => "隐藏窗口 · Esc".to_string(),
+    }
+}
+
+pub fn search_files_for(locale: Locale, query: &str) -> String {
+    let values = &[("query", query.to_string())];
+    match locale {
+        Locale::En => fill("Search files for “{query}”", values),
+        Locale::Zh => fill("在文件中搜索「{query}」", values),
+    }
+}
+
+pub fn search_all_scopes(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Search all scopes".to_string(),
+        Locale::Zh => "切换到全部范围搜索".to_string(),
+    }
+}
+
+pub fn settings_saved(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Settings saved".to_string(),
+        Locale::Zh => "已保存设置".to_string(),
+    }
+}
+
+pub fn discard_changes(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Discard changes".to_string(),
+        Locale::Zh => "放弃更改".to_string(),
+    }
+}
+
+pub fn bulk_text_editing(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Bulk text editing".to_string(),
+        Locale::Zh => "批量文本编辑".to_string(),
+    }
+}
+
+pub fn reset_shortcut(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Restore default shortcut".to_string(),
+        Locale::Zh => "恢复默认快捷键".to_string(),
+    }
+}
+
+pub fn cancel_recording_esc(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Press Esc to cancel".to_string(),
+        Locale::Zh => "按 Esc 取消".to_string(),
+    }
+}
+
+pub fn plugin_removal_title(locale: Locale, name: &str) -> String {
+    let values = &[("name", name.to_string())];
+    match locale {
+        Locale::En => fill("Remove {name}?", values),
+        Locale::Zh => fill("移除「{name}」？", values),
+    }
+}
+
+pub fn plugin_removal_detail(locale: Locale) -> String {
+    match locale {
+        Locale::En => "This removes the installed plugin and its permissions.".to_string(),
+        Locale::Zh => "将移除已安装的插件及其权限。".to_string(),
+    }
+}
+
+pub fn clipboard_entry_deleted(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Clipboard entry deleted".to_string(),
+        Locale::Zh => "已删除剪贴板条目".to_string(),
+    }
+}
+
+pub fn copy_directory(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Copy directory".to_string(),
+        Locale::Zh => "复制目录".to_string(),
+    }
+}
+
+pub fn open_working_directory(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Open working directory".to_string(),
+        Locale::Zh => "打开工作目录".to_string(),
+    }
+}
+
+pub fn clipboard_preview_page(locale: Locale, page: i64) -> String {
+    let values = &[("page", page.to_string())];
+    match locale {
+        Locale::En => fill("Preview page {page}", values),
+        Locale::Zh => fill("预览第 {page} 页", values),
+    }
+}
+
+pub fn quick_add(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Add an item".to_string(),
+        Locale::Zh => "添加条目".to_string(),
+    }
+}
+
+pub fn source_mode_automatic(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Automatic".to_string(),
+        Locale::Zh => "自动".to_string(),
+    }
+}
+
+pub fn source_mode_custom(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Custom".to_string(),
+        Locale::Zh => "自定义".to_string(),
+    }
+}
+
+pub fn source_mode_disabled(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Disabled".to_string(),
+        Locale::Zh => "停用".to_string(),
+    }
+}
+
+pub fn shortcut_already_used(locale: Locale) -> String {
+    match locale {
+        Locale::En => "This shortcut is already in use.".to_string(),
+        Locale::Zh => "此快捷键已被占用。".to_string(),
+    }
+}
+
 /// Stable message count for generated-resource verification.
-pub const MESSAGE_COUNT: usize = 430;
+pub const MESSAGE_COUNT: usize = 488;

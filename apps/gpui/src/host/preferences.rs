@@ -91,7 +91,7 @@ pub struct ActionShortcutBinding {
 }
 
 const DEFAULT_CURRENT_APP_SHORTCUT: &str = "control+alt+Space";
-const DEFAULT_UNIVERSAL_SHORTCUT: &str = "alt+Space";
+const DEFAULT_UNIVERSAL_SHORTCUT: &str = crate::platform::capabilities::DEFAULT_UNIVERSAL_SHORTCUT;
 const LEGACY_CURRENT_APP_SHORTCUT: &str = "meta+alt+Space";
 const LEGACY_UNIVERSAL_SHORTCUT: &str = "meta+Space";
 
@@ -104,6 +104,7 @@ pub struct HostPreferences {
     pub ui_language: UiLanguage,
     pub ui_theme: UiTheme,
     pub excluded_apps: Vec<String>,
+    pub application_search_paths: Vec<String>,
     pub capture_finder_selection: bool,
     pub capture_selected_text: bool,
     pub capture_browser_current_page: bool,
@@ -126,12 +127,13 @@ impl Default for HostPreferences {
             ui_language: UiLanguage::System,
             ui_theme: UiTheme::System,
             excluded_apps: Vec::new(),
-            capture_finder_selection: true,
-            capture_selected_text: true,
-            capture_browser_current_page: true,
+            application_search_paths: Vec::new(),
+            capture_finder_selection: crate::platform::capabilities::DESKTOP_CONTEXT_CAPTURE,
+            capture_selected_text: crate::platform::capabilities::DESKTOP_CONTEXT_CAPTURE,
+            capture_browser_current_page: crate::platform::capabilities::DESKTOP_CONTEXT_CAPTURE,
             capture_clipboard: true,
             file_search_enabled: false,
-            file_search_engine: anywhere_platform::FileSearchEngine::SystemIndex,
+            file_search_engine: crate::platform::capabilities::default_file_search_engine(),
             file_search_include_hidden: false,
             file_search_roots: Vec::new(),
             file_search_excluded_names: Vec::new(),
@@ -184,6 +186,19 @@ impl HostPreferences {
 
     pub fn validate(&self) -> Result<()> {
         let locale = self.ui_language.locale();
+        if !crate::platform::capabilities::APPLICATION_SEARCH_FILE_EXTENSIONS.is_empty() {
+            anyhow::ensure!(
+                self.application_search_paths.len() <= 64
+                    && self.application_search_paths.iter().all(|value| {
+                        let path = Path::new(value);
+                        path.is_absolute()
+                            && value.len()
+                                <= anywhere_protocol::policy::MAX_SEARCH_PATH_BYTES as usize
+                            && !value.chars().any(char::is_control)
+                    }),
+                l10n::windows_application_search_path_error(locale)
+            );
+        }
         anyhow::ensure!(
             self.file_search_roots.len() <= 8
                 && self.file_search_excluded_names.len()
@@ -536,10 +551,37 @@ mod tests {
         let mut preferences = HostPreferences::default();
         preferences.file_search_roots.push("relative".to_owned());
         assert!(preferences.validate().is_err());
-        preferences.file_search_roots = vec!["/tmp/../scope".to_owned()];
+        let absolute_scope = if cfg!(windows) {
+            r"C:\tmp\..\scope"
+        } else {
+            "/tmp/../scope"
+        };
+        preferences.file_search_roots = vec![absolute_scope.to_owned()];
         assert!(preferences.validate().is_ok());
         preferences.file_search_excluded_names = vec!["../cache".to_owned()];
         assert!(preferences.validate().is_err());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_application_search_paths_accept_drive_roots() {
+        let preferences = HostPreferences {
+            application_search_paths: [r"C:\", r"D:\", r"E:\"]
+                .into_iter()
+                .map(str::to_owned)
+                .collect(),
+            ..HostPreferences::default()
+        };
+        assert!(preferences.validate().is_ok());
+
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("settings.json");
+        preferences.save(&path).unwrap();
+        let loaded = HostPreferences::load(&path).unwrap();
+        assert_eq!(
+            loaded.application_search_paths,
+            preferences.application_search_paths
+        );
     }
 
     #[test]

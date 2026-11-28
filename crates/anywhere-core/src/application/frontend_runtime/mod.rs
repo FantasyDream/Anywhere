@@ -3,18 +3,20 @@
 //! Frontend bridges may convert these domain values to their own transport DTOs,
 //! but business policy, storage ownership and document lifecycles stay here.
 
-#[cfg(target_os = "macos")]
-use crate::application::web_plugins::WebPackageStore;
 use crate::{
     application::{
         builtin_registry,
         settings_service::SettingsService,
-        web_plugins::{WebDocumentBinding, WebMessageSource, WebPackageReview, WebPackageStatus},
+        web_plugins::{
+            WebDispatchOutcome, WebDocumentBinding, WebHostAction, WebMessageSource,
+            WebPackageReview, WebPackageStatus, WebPackageStore,
+        },
         Application,
     },
     persistence::usage::SqliteUsageRepository,
 };
 use anyhow::{Context, Result};
+use anywhere_protocol::web_plugin::WebPlatform;
 use std::{
     fmt,
     path::{Path, PathBuf},
@@ -114,11 +116,19 @@ pub struct WebDocumentView {
 pub struct ApplicationRuntime {
     application: Arc<Application>,
     settings: Arc<Mutex<SettingsService>>,
-    #[cfg(target_os = "macos")]
     web_packages: Arc<Mutex<Option<WebPackageStore>>>,
+    web_platform: Option<WebPlatform>,
     document: Mutex<Option<WebDocumentBinding>>,
     opening: tokio::sync::Mutex<()>,
     paths: RuntimePaths,
+}
+
+fn resolve_web_platform(platform: &dyn anywhere_platform::Platform) -> Option<WebPlatform> {
+    match platform.web_platform_id() {
+        Some("macos") => Some(WebPlatform::Macos),
+        Some("windows") => Some(WebPlatform::Windows),
+        _ => None,
+    }
 }
 
 impl ApplicationRuntime {
@@ -154,29 +164,32 @@ impl ApplicationRuntime {
             )?,
         )?;
 
-        #[cfg(target_os = "macos")]
-        let web_packages = {
-            let store = match WebPackageStore::open_with_builtins(
-                paths.data_directory.join("web-packages"),
-                anywhere_protocol::web_plugin::WebPlatform::Macos,
-                crate::application::web_plugins::BUILTIN_WEB_PACKAGES,
-                application.as_ref(),
-            ) {
-                Ok(store) => Some(store),
-                Err(error) => {
-                    tracing::warn!(%error, "web_packages_unavailable");
-                    application.publish_web_catalog(Default::default())?;
-                    None
-                }
-            };
-            Mutex::new(store)
+        let web_platform = resolve_web_platform(application.platform());
+        let web_packages = match web_platform {
+            Some(platform) => {
+                let store = match WebPackageStore::open_with_builtins(
+                    paths.data_directory.join("web-packages"),
+                    platform,
+                    crate::application::web_plugins::BUILTIN_WEB_PACKAGES,
+                    application.as_ref(),
+                ) {
+                    Ok(store) => Some(store),
+                    Err(error) => {
+                        tracing::warn!(%error, "web_packages_unavailable");
+                        application.publish_web_catalog(Default::default())?;
+                        None
+                    }
+                };
+                Mutex::new(store)
+            }
+            None => Mutex::new(None),
         };
 
         Ok(Arc::new(Self {
             application,
             settings: Arc::new(Mutex::new(settings)),
-            #[cfg(target_os = "macos")]
             web_packages: Arc::new(web_packages),
+            web_platform,
             document: Mutex::new(None),
             opening: tokio::sync::Mutex::new(()),
             paths,
@@ -194,8 +207,8 @@ impl ApplicationRuntime {
                 application,
                 settings: self.settings.clone(),
                 paths: self.paths.clone(),
-                #[cfg(target_os = "macos")]
                 web_packages: self.web_packages.clone(),
+                web_platform: self.web_platform,
                 document: Default::default(),
                 opening: Default::default(),
             }),
@@ -228,7 +241,6 @@ impl ApplicationRuntime {
         })
     }
 
-    #[cfg(target_os = "macos")]
     pub fn web_packages(&self) -> RuntimeResult<MutexGuard<'_, Option<WebPackageStore>>> {
         self.web_packages.lock().map_err(|_| {
             RuntimeError::new(
@@ -261,7 +273,6 @@ impl ApplicationRuntime {
             })
     }
 
-    #[cfg(target_os = "macos")]
     pub fn web_package_statuses(&self) -> Result<Vec<WebPackageStatus>> {
         self.web_packages()?
             .as_ref()
@@ -269,12 +280,6 @@ impl ApplicationRuntime {
             .map(WebPackageStore::statuses)
     }
 
-    #[cfg(not(target_os = "macos"))]
-    pub fn web_package_statuses(&self) -> Result<Vec<WebPackageStatus>> {
-        anyhow::bail!("Web tools are not enabled on this platform")
-    }
-
-    #[cfg(target_os = "macos")]
     pub fn inspect_web_package(&self, path: &Path) -> Result<WebPackageReview> {
         self.web_packages()?
             .as_mut()
@@ -282,12 +287,6 @@ impl ApplicationRuntime {
             .inspect(path)
     }
 
-    #[cfg(not(target_os = "macos"))]
-    pub fn inspect_web_package(&self, _: &Path) -> Result<WebPackageReview> {
-        anyhow::bail!("Web tools are not enabled on this platform")
-    }
-
-    #[cfg(target_os = "macos")]
     pub fn cancel_web_review(&self, token: &str) -> Result<()> {
         self.web_packages()?
             .as_mut()
@@ -296,12 +295,6 @@ impl ApplicationRuntime {
         Ok(())
     }
 
-    #[cfg(not(target_os = "macos"))]
-    pub fn cancel_web_review(&self, _: &str) -> Result<()> {
-        anyhow::bail!("Web tools are not enabled on this platform")
-    }
-
-    #[cfg(target_os = "macos")]
     pub fn approve_web_package(&self, token: &str) -> Result<Vec<WebPackageStatus>> {
         self.web_packages()?
             .as_mut()
@@ -310,12 +303,6 @@ impl ApplicationRuntime {
         self.web_package_statuses()
     }
 
-    #[cfg(not(target_os = "macos"))]
-    pub fn approve_web_package(&self, _: &str) -> Result<Vec<WebPackageStatus>> {
-        anyhow::bail!("Web tools are not enabled on this platform")
-    }
-
-    #[cfg(target_os = "macos")]
     pub fn change_web_package(
         &self,
         id: &str,
@@ -342,30 +329,23 @@ impl ApplicationRuntime {
         self.web_package_statuses()
     }
 
-    #[cfg(not(target_os = "macos"))]
-    pub fn change_web_package(
-        &self,
-        _: &str,
-        _: WebPackageOperation,
-    ) -> Result<Vec<WebPackageStatus>> {
-        anyhow::bail!("Web tools are not enabled on this platform")
-    }
-
     pub async fn open_web_document(
         &self,
         invocation_id: &str,
         resume_handle: Option<&str>,
     ) -> Result<WebDocumentBinding> {
+        let platform = self
+            .web_platform
+            .context("Web tools are not enabled on this platform")?;
         let _opening = self.opening.lock().await;
         let binding = match resume_handle {
             Some(handle) => self.application.resume_web_document(
                 &self.document(handle).map_err(anyhow::Error::new)?,
-                anywhere_protocol::web_plugin::WebPlatform::Macos,
+                platform,
             )?,
-            None => self.application.bind_web_document(
-                invocation_id,
-                anywhere_protocol::web_plugin::WebPlatform::Macos,
-            )?,
+            None => self
+                .application
+                .bind_web_document(invocation_id, platform)?,
         };
         *self
             .document
@@ -431,11 +411,11 @@ impl ApplicationRuntime {
         origin: &str,
         main_frame: bool,
         frame: &str,
-    ) -> Result<String> {
+    ) -> Result<WebDispatchOutcome> {
         let binding = self.document(handle).map_err(anyhow::Error::new)?;
         Ok(self
             .application
-            .dispatch_web_message(
+            .dispatch_web_outcome(
                 &binding,
                 WebMessageSource {
                     runtime_id: binding.runtime_id(),
@@ -448,7 +428,24 @@ impl ApplicationRuntime {
             .await)
     }
 
-    #[cfg(target_os = "macos")]
+    /// Recheck the binding immediately before the frontend applies a window intent.
+    pub fn validate_web_host_action(&self, action: &WebHostAction) -> Result<()> {
+        let binding = self.document(&action.handle)?;
+        anyhow::ensure!(
+            binding.document_epoch() == action.document_epoch,
+            "Web document changed"
+        );
+        self.application.validate_web_document(
+            &binding,
+            WebMessageSource {
+                runtime_id: binding.runtime_id(),
+                document_epoch: binding.document_epoch(),
+                origin: binding.origin(),
+                main_frame: true,
+            },
+        )
+    }
+
     pub fn web_resource(&self, handle: &str, path: &str) -> Result<Vec<u8>> {
         let binding = self.document(handle).map_err(anyhow::Error::new)?;
         let source = || WebMessageSource {
@@ -465,11 +462,6 @@ impl ApplicationRuntime {
             .resource(binding.content_digest(), path)?;
         self.application.validate_web_document(&binding, source())?;
         Ok(bytes)
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    pub fn web_resource(&self, _: &str, _: &str) -> Result<Vec<u8>> {
-        anyhow::bail!("Web tools are not enabled on this platform")
     }
 
     pub async fn wait_web_state(&self, handle: &str, after: u64) -> Result<Option<String>> {

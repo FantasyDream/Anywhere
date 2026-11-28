@@ -1,9 +1,11 @@
 //! Bounded scheduling and cancellation around the capability planner.
 use super::{
     broker::{error, Plan, Source},
+    interaction::PendingPreview,
+    resources::MAX_PREVIEW_BYTES,
     rpc_state::{RequestControl, RequestTicket},
     transfer::failure,
-    WebDocumentBinding, WebMessageSource,
+    WebDispatchOutcome, WebDocumentBinding, WebHostAction, WebHostActionKind, WebMessageSource,
 };
 use crate::{application::Application, persistence::module_storage::ModuleStorageHost};
 use anywhere_protocol::web_bridge::*;
@@ -66,6 +68,18 @@ impl Application {
         source: WebMessageSource<'_>,
         raw: &str,
     ) -> String {
+        self.dispatch_web_outcome(binding, source, raw)
+            .await
+            .reply_frame
+    }
+
+    /// Dispatch a frame with any qualified native window intent.
+    pub async fn dispatch_web_outcome(
+        &self,
+        binding: &WebDocumentBinding,
+        source: WebMessageSource<'_>,
+        raw: &str,
+    ) -> WebDispatchOutcome {
         let parsed = anywhere_plugin::web::wire::parse(raw);
         let hint = parsed
             .as_ref()
@@ -93,6 +107,7 @@ impl Application {
             Some(id),
         )
         .await
+        .reply_frame
     }
 
     async fn dispatch_web_request(
@@ -101,45 +116,24 @@ impl Application {
         source: WebMessageSource<'_>,
         parsed: WebResult<anywhere_plugin::web::wire::Request>,
         hint: Option<String>,
-    ) -> String {
+    ) -> WebDispatchOutcome {
         let source = Source::new(source);
-        let admission = (|| {
-            let mut web = self
-                .web_plugins
-                .lock()
-                .map_err(|_| error(WebErrorCode::HostFailure))?;
-            web.rpc(binding, source.get())?;
-            let parsed = parsed?;
-            let request = web
-                .rpc(binding, source.get())?
-                .admit_call(&parsed.id, &parsed.call)?;
-            Ok::<_, WebError>((request, parsed.call))
-        })();
-        let (request, call) = match admission {
+        let (request, call) = match self.admit_web_request(binding, &source, parsed) {
             Ok(value) => value,
-            Err(error) => return failure(hint.as_deref(), error),
+            Err(error) => return failure(hint.as_deref(), error).into(),
         };
-        // Cancellation is never queued behind the operation it is meant to cancel.
-        if matches!(call, WebCall::Cancel { .. }) {
-            let mut web = match crate::core::sync::lock_or_deny(&self.web_plugins, "web_plugins") {
-                Ok(web) => web,
-                Err(_) => return failure(Some(&request.id), error(WebErrorCode::HostFailure)),
-            };
-            let result = web
-                .prepare_call(binding, &source, &request, call)
-                .and_then(|plan| {
-                    if let Plan::Value(v) = plan {
-                        Ok(v)
-                    } else {
-                        Err(error(WebErrorCode::HostFailure))
-                    }
-                });
-            return web.finish_call(binding, &source, &request, result);
+        let window_action = match call {
+            WebCall::WindowBack {} => Some(WebHostActionKind::Back),
+            WebCall::WindowClose {} => Some(WebHostActionKind::Close),
+            _ => None,
+        };
+        if window_action.is_some() || matches!(call, WebCall::Cancel { .. }) {
+            return self.dispatch_immediate(binding, &source, request, call, window_action);
         }
         let permit = tokio::select! {
             _ = request.control.cancelled() => {
                 return self.finish_web_reply(binding, &source, &request,
-                    Err(error(WebErrorCode::Cancelled)));
+                    Err(error(WebErrorCode::Cancelled))).into();
             }
             permit = tokio::time::timeout_at(
                 request.control.deadline,
@@ -149,12 +143,14 @@ impl Application {
         let permit = match permit {
             Ok(Ok(p)) => p,
             _ => {
-                return self.finish_web_reply(
-                    binding,
-                    &source,
-                    &request,
-                    Err(error(WebErrorCode::Timeout)),
-                )
+                return self
+                    .finish_web_reply(
+                        binding,
+                        &source,
+                        &request,
+                        Err(error(WebErrorCode::Timeout)),
+                    )
+                    .into()
             }
         };
         request
@@ -164,6 +160,7 @@ impl Application {
         let web = self.web_plugins.clone();
         let history = self.resolver.history.clone();
         let platform = self.platform.clone();
+        let previews = self.previews.clone();
         let worker_binding = binding.clone();
         let worker_source = source.clone();
         let worker_request = request.clone();
@@ -176,8 +173,29 @@ impl Application {
             worker_request.control.check()?;
             let value = match plan {
                 Plan::Value(value) => value,
-                Plan::Snapshot | Plan::Context | Plan::Input | Plan::SetInput(_) => {
-                    return Ok(Work::Host(plan))
+                Plan::Snapshot
+                | Plan::Context
+                | Plan::Input
+                | Plan::SetInput(_)
+                | Plan::OpenUrl(_) => return Ok(Work::Host(plan)),
+                Plan::Stat(file) => serde_json::to_value(file.stat(&worker_request.control)?)
+                    .map_err(|_| error(WebErrorCode::HostFailure))?,
+                Plan::ReadText(file, limit) => {
+                    Value::String(file.text(limit, &worker_request.control)?)
+                }
+                Plan::Preview(file) => {
+                    let bytes = file.bytes(MAX_PREVIEW_BYTES, &worker_request.control)?;
+                    worker_request.control.check()?;
+                    let snapshot = crate::core::sync::lock_or_deny(&previews, "previews")
+                        .and_then(|mut store| store.web_snapshot(&file.name, &bytes))
+                        .map_err(|err| {
+                            if err.to_string().contains("too many active previews") {
+                                error(WebErrorCode::Busy)
+                            } else {
+                                error(WebErrorCode::HostFailure)
+                            }
+                        })?;
+                    return Ok(Work::Preview(PendingPreview::new(previews, snapshot)));
                 }
                 Plan::FrontmostApp => {
                     let app = platform
@@ -246,7 +264,13 @@ impl Application {
         let result = tokio::time::timeout_at(request.control.deadline, worker).await;
         match result {
             Ok(Ok(Ok(Work::Host(plan)))) => {
+                let mut committed_handoff = false;
                 let result = match plan {
+                    Plan::OpenUrl(url) => {
+                        let outcome = self.confirm_web_url(binding, &source, &request, url).await;
+                        committed_handoff = outcome.is_ok();
+                        outcome
+                    }
                     Plan::SetInput(text) => {
                         self.set_web_input(binding, source.get(), text, &request.control)
                             .await
@@ -261,7 +285,14 @@ impl Application {
                         .map_err(|_| error(WebErrorCode::HostFailure))
                     }),
                 };
-                self.finish_web_reply(binding, &source, &request, result)
+                self.finish_web_reply_inner(binding, &source, &request, result, committed_handoff)
+            }
+            Ok(Ok(Ok(Work::Preview(preview)))) => {
+                let result = self
+                    .show_web_preview(binding, &source, &request, preview)
+                    .await;
+                let committed = result.is_ok();
+                self.finish_web_reply_inner(binding, &source, &request, result, committed)
             }
             Ok(Ok(Ok(Work::Value(value)))) => {
                 self.finish_web_reply(binding, &source, &request, Ok(value))
@@ -280,7 +311,67 @@ impl Application {
                 Err(error(WebErrorCode::Timeout)),
             ),
         }
+        .into()
     }
+    fn admit_web_request(
+        &self,
+        binding: &WebDocumentBinding,
+        source: &Source,
+        parsed: WebResult<anywhere_plugin::web::wire::Request>,
+    ) -> WebResult<(RequestTicket, WebCall)> {
+        let mut web = self
+            .web_plugins
+            .lock()
+            .map_err(|_| error(WebErrorCode::HostFailure))?;
+        let invocation = web
+            .authorize(binding, source.get())
+            .map_err(|_| error(WebErrorCode::UntrustedDocument))?;
+        if invocation.is_draining() {
+            return Err(error(WebErrorCode::Inactive));
+        }
+        let parsed = parsed?;
+        let request = web
+            .rpc(binding, source.get())?
+            .admit_call(&parsed.id, &parsed.call)?;
+        Ok((request, parsed.call))
+    }
+
+    // Cancellation and native window intents require no data worker.
+    fn dispatch_immediate(
+        &self,
+        binding: &WebDocumentBinding,
+        source: &Source,
+        request: RequestTicket,
+        call: WebCall,
+        window_action: Option<WebHostActionKind>,
+    ) -> WebDispatchOutcome {
+        let mut web = match crate::core::sync::lock_or_deny(&self.web_plugins, "web_plugins") {
+            Ok(web) => web,
+            Err(_) => return failure(Some(&request.id), error(WebErrorCode::HostFailure)).into(),
+        };
+        let result = web
+            .prepare_call(binding, source, &request, call)
+            .and_then(|plan| {
+                if let Plan::Value(v) = plan {
+                    Ok(v)
+                } else {
+                    Err(error(WebErrorCode::HostFailure))
+                }
+            });
+        let (reply_frame, accepted) = web.finish_call(binding, source, &request, result);
+        WebDispatchOutcome {
+            reply_frame,
+            host_action: window_action
+                .filter(|_| accepted)
+                .map(|kind| WebHostAction {
+                    kind,
+                    request_id: request.id,
+                    handle: binding.runtime_id().into(),
+                    document_epoch: binding.document_epoch(),
+                }),
+        }
+    }
+
     fn finish_web_reply(
         &self,
         binding: &WebDocumentBinding,
@@ -288,14 +379,34 @@ impl Application {
         request: &RequestTicket,
         result: WebResult<Value>,
     ) -> String {
+        self.finish_web_reply_inner(binding, source, request, result, false)
+    }
+
+    fn finish_web_reply_inner(
+        &self,
+        binding: &WebDocumentBinding,
+        source: &Source,
+        request: &RequestTicket,
+        result: WebResult<Value>,
+        committed: bool,
+    ) -> String {
         match crate::core::sync::lock_or_deny(&self.web_plugins, "web_plugins") {
-            Ok(mut web) => web.finish_call(binding, source, request, result),
+            Ok(mut web) => {
+                web.clear_handoff_request(binding, &request.id);
+                if committed {
+                    web.finish_call_after_commit(binding, source, request, result)
+                        .0
+                } else {
+                    web.finish_call(binding, source, request, result).0
+                }
+            }
             Err(_) => failure(Some(&request.id), error(WebErrorCode::HostFailure)),
         }
     }
 }
 enum Work {
     Host(Plan),
+    Preview(PendingPreview),
     Value(Value),
 }
 

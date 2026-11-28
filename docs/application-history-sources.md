@@ -30,7 +30,7 @@
 }
 ```
 
-`applications` 是匹配安装应用的身份列表；当前 macOS 适配使用 bundle ID。它属于来源配置，转换脚本不能覆盖。宿主根据该列表与本次冻结的 Application Context 匹配 Action；不会读取实时焦点反推应用。只有找到唯一应用才允许打开；缺失或多个安装实例时不猜测。首轮没有提供安装实例选择器。
+`applications` 是匹配安装应用的身份列表；macOS 使用 bundle ID。Windows 将已知可执行文件名映射为相同的来源身份，例如 `Code.exe` 映射到 `com.microsoft.VSCode`，前台识别和安装索引共用映射。它属于来源配置，转换脚本不能覆盖。宿主根据该列表与本次冻结的 Application Context 匹配 Action；不会读取实时焦点反推应用。只有找到唯一应用才允许打开；缺失或多个安装实例时不猜测。首轮没有提供安装实例选择器。
 
 `transform.js`：
 
@@ -109,7 +109,7 @@ export function transform(input) {
 
 两组合计最多 8 条规则、每条最多 8 层；每个根目录的通配枚举共享 512 个条目预算，禁止绝对路径、`..`、递归 `**` 以及逃出该根目录的符号链接。同组多个候选按文件修改时间降序、路径升序选择一份，不合并历史；这只是配置选择，不代表精确识别当前 IDE 安装版本。需要固定版本时使用自定义路径。
 
-默认目录依据 [JetBrains 文档](https://www.jetbrains.com/help/idea/directories-used-by-the-ide-to-store-settings-caches-plugins-and-logs.html)和 [VS Code 用户数据路径实现](https://github.com/microsoft/vscode/blob/main/src/vs/platform/environment/node/userDataPath.ts)。便携版、`--user-data-dir`、`idea.config.path`、非标准配置与超出枚举预算的目录仍使用自定义路径。每来源暂时仅支持一个文件，不宣称已支持多安装 / Profile 选择；Windows / Linux 默认根目录保留实现，原生运行未验收。可使用自建合成文件验证。
+默认目录依据 [JetBrains 文档](https://www.jetbrains.com/help/idea/directories-used-by-the-ide-to-store-settings-caches-plugins-and-logs.html)和 [VS Code 用户数据路径实现](https://github.com/microsoft/vscode/blob/main/src/vs/platform/environment/node/userDataPath.ts)。便携版、`--user-data-dir`、`idea.config.path`、非标准配置与超出枚举预算的目录仍使用自定义路径。每来源暂时仅支持一个文件，不宣称已支持多安装 / Profile 选择；Windows 的安装索引已观察到 VS Code 身份映射，默认路径及原应用打开尚待桌验，可用自建项目按 [Windows 验收](test-acceptance-windows.md#应用历史git-与任务)复验。Linux 的默认配置根可用于共享层检查。
 
 ### 适配范围与证据
 

@@ -5,6 +5,7 @@
 //! in-memory snapshot. The first snapshot never waits for a scan.
 use anywhere_platform::{ApplicationCatalog as InstalledApplicationCatalog, BundleApplication};
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 /// An installed application available for direct launch.
@@ -132,7 +133,11 @@ pub struct ScanReport {
 }
 
 pub fn scan(platform: &dyn InstalledApplicationCatalog) -> ScanReport {
-    let found = platform.installed_applications();
+    scan_paths(platform, &[])
+}
+
+fn scan_paths(platform: &dyn InstalledApplicationCatalog, paths: &[PathBuf]) -> ScanReport {
+    let found = platform.installed_applications_with_paths(paths);
     let input = found.applications.len();
     let applications = index_from(found.applications);
     ScanReport {
@@ -148,9 +153,12 @@ pub enum ScanStatus {
 }
 
 /// Background scan. A failed task is not an empty catalog.
-pub async fn scan_async(platform: Arc<dyn InstalledApplicationCatalog>) -> ScanStatus {
+pub async fn scan_async(
+    platform: Arc<dyn InstalledApplicationCatalog>,
+    paths: Arc<[PathBuf]>,
+) -> ScanStatus {
     let started = std::time::Instant::now();
-    match tokio::task::spawn_blocking(move || scan(platform.as_ref())).await {
+    match tokio::task::spawn_blocking(move || scan_paths(platform.as_ref(), &paths)).await {
         Ok(report) => {
             tracing::info!(
                 duration_us = started.elapsed().as_micros() as u64,

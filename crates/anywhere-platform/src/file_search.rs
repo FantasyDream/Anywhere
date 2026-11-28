@@ -1,7 +1,7 @@
 //! Bounded, cancellable filename enumeration; never reads file contents.
 use crate::{
     process::{OwnedProcess, ProcessRequest},
-    FileSearchHit, FileSearchOptions,
+    FileIndexResults, FileSearchEngine, FileSearchHit, FileSearchOptions,
 };
 use anyhow::{bail, Context, Result};
 use std::{
@@ -14,6 +14,55 @@ const MAX_OUTPUT: usize = 8 * 1024 * 1024;
 const MAX_PATH: usize = 16 * 1024;
 const MAX_ENTRIES: usize = 50_000;
 pub(crate) const NOISE_DIRECTORIES: &[&str] = &["Library", "node_modules", "target", "build"];
+
+/// Platform-neutral request passed to every [`FileSearchBackend`] implementation.
+pub struct FileSearchQuery<'a> {
+    pub text: &'a str,
+    pub roots: &'a [PathBuf],
+    pub limit: usize,
+    pub options: &'a FileSearchOptions,
+    pub timeout: Duration,
+}
+
+/// Pluggable file search backend (Spotlight, Everything, Windows Search, Ripgrep, etc.).
+pub trait FileSearchBackend: Send + Sync {
+    fn engine(&self) -> FileSearchEngine;
+    fn is_available(&self) -> bool;
+    fn search(
+        &self,
+        query: &FileSearchQuery<'_>,
+        cancelled: &(dyn Fn() -> bool + Sync),
+    ) -> Result<FileIndexResults>;
+}
+
+/// Cross-platform Ripgrep (`rg --files`) backend.
+pub struct RipgrepBackend;
+
+impl FileSearchBackend for RipgrepBackend {
+    fn engine(&self) -> FileSearchEngine {
+        FileSearchEngine::Ripgrep
+    }
+
+    fn is_available(&self) -> bool {
+        crate::process::find_executable("rg").is_some()
+    }
+
+    fn search(
+        &self,
+        query: &FileSearchQuery<'_>,
+        cancelled: &(dyn Fn() -> bool + Sync),
+    ) -> Result<FileIndexResults> {
+        let mut options = query.options.clone();
+        if !query.roots.is_empty() {
+            options.roots = query.roots.to_vec();
+        }
+        let hits = ripgrep(query.text, query.limit, &options, cancelled, query.timeout)?;
+        Ok(FileIndexResults {
+            truncated: hits.len() >= query.limit,
+            hits,
+        })
+    }
+}
 
 pub(crate) fn roots(options: &FileSearchOptions) -> Result<Vec<PathBuf>> {
     let roots = if options.roots.is_empty() {
@@ -44,18 +93,22 @@ pub(crate) fn roots(options: &FileSearchOptions) -> Result<Vec<PathBuf>> {
         .collect()
 }
 
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub(crate) fn searchable_path(path: &Path, include_hidden: bool) -> bool {
-    path.is_absolute()
-        && !path.components().any(|part| {
-            let Component::Normal(name) = part else {
-                return false;
-            };
-            let name = name.to_string_lossy();
-            (!include_hidden && name.starts_with('.'))
-                || NOISE_DIRECTORIES.contains(&name.as_ref())
-                || name.ends_with(".app")
-                || name.ends_with(".framework")
-        })
+    path.is_absolute() && searchable_components(path, include_hidden)
+}
+
+fn searchable_components(path: &Path, include_hidden: bool) -> bool {
+    !path.components().any(|part| {
+        let Component::Normal(name) = part else {
+            return false;
+        };
+        let name = name.to_string_lossy();
+        (!include_hidden && name.starts_with('.'))
+            || NOISE_DIRECTORIES.contains(&name.as_ref())
+            || name.ends_with(".app")
+            || name.ends_with(".framework")
+    })
 }
 
 pub(crate) fn accept_path(
@@ -63,23 +116,21 @@ pub(crate) fn accept_path(
     options: &FileSearchOptions,
     root: &Path,
 ) -> Option<FileSearchHit> {
-    if !searchable_path(path, options.include_hidden) {
-        return None;
-    }
     let path = path.canonicalize().ok()?;
-    if !path.starts_with(root) || !searchable_path(&path, options.include_hidden) {
+    let relative = path.strip_prefix(root).ok()?;
+    if !searchable_components(relative, options.include_hidden) {
         return None;
     }
     let metadata = path.metadata().ok()?;
     if !metadata.is_file() && !metadata.is_dir() {
         return None;
     }
-    let directories = if metadata.is_dir() {
-        path.as_path()
+    let relative_directories = if metadata.is_dir() {
+        relative
     } else {
-        path.parent()?
+        relative.parent().unwrap_or_else(|| Path::new(""))
     };
-    if directories.components().any(|part| match part {
+    if relative_directories.components().any(|part| match part {
         Component::Normal(name) => options
             .excluded_directory_names
             .iter()
@@ -168,11 +219,15 @@ fn scan(
             arguments.extend(["--glob".into(), format!("!**/*.{extension}/**")]);
         }
         arguments.extend(["--".into(), ".".into()]);
+        #[cfg(windows)]
+        let work_directory = dunce::simplified(&root).to_path_buf();
+        #[cfg(not(windows))]
+        let work_directory = root.clone();
         let mut child = OwnedProcess::spawn(&ProcessRequest {
             title: "File search".into(),
             program: program.to_path_buf(),
             arguments,
-            directory: root.clone(),
+            directory: work_directory,
             environment: Default::default(),
         })?;
         let mut pending = Vec::new();
@@ -253,7 +308,45 @@ fn scan(
     Ok(hits)
 }
 
-#[cfg(any(target_os = "macos", all(test, unix)))]
+#[cfg(all(test, windows))]
+mod windows_tests {
+    use super::*;
+
+    #[test]
+    fn ripgrep_backend_finds_matching_files_on_windows_when_rg_is_installed() {
+        if !RipgrepBackend.is_available() {
+            return;
+        }
+        let root = tempfile::tempdir().unwrap();
+        let canonical = root.path().canonicalize().unwrap();
+        let match_file = canonical.join("quarterly_report_2026.txt");
+        let ignored_dir = canonical.join("node_modules");
+        std::fs::create_dir(&ignored_dir).unwrap();
+        std::fs::write(&match_file, "ok").unwrap();
+        std::fs::write(ignored_dir.join("quarterly_report_2026.txt"), "noise").unwrap();
+        let options = FileSearchOptions {
+            roots: vec![canonical.clone()],
+            engine: FileSearchEngine::Ripgrep,
+            ..Default::default()
+        };
+        let query = FileSearchQuery {
+            text: "quarterly report",
+            roots: std::slice::from_ref(&canonical),
+            limit: 16,
+            options: &options,
+            timeout: Duration::from_secs(5),
+        };
+        let result = RipgrepBackend.search(&query, &|| false).unwrap();
+        assert_eq!(
+            result.hits,
+            vec![FileSearchHit {
+                path: match_file,
+                is_directory: false,
+            }]
+        );
+    }
+}
+
 pub(crate) fn merge(
     index: Result<Vec<FileSearchHit>>,
     scan: Result<Vec<FileSearchHit>>,

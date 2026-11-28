@@ -44,9 +44,11 @@ async fn home_path_inputs_offer_file_and_directory_actions_for_the_expanded_targ
                     .await
                     .unwrap()
                     .succeeded());
+                let canonical_target = target.canonicalize().unwrap();
+                let expected_copy = anywhere_platform::paths::display_path(&canonical_target);
                 assert_eq!(
                     platform.copies.lock().unwrap().last().unwrap(),
-                    target.canonicalize().unwrap().to_str().unwrap()
+                    expected_copy.to_str().unwrap()
                 );
             }
         }
@@ -495,7 +497,10 @@ async fn finder_multiselection_keeps_collection_and_uses_one_action() {
     let paths: Vec<String> = serde_json::from_str(&copied[0]).unwrap();
     assert_eq!(
         paths,
-        vec![first.to_string_lossy(), second.to_string_lossy()]
+        vec![
+            anywhere_platform::paths::display_path(&first).to_string_lossy(),
+            anywhere_platform::paths::display_path(&second).to_string_lossy()
+        ]
     );
 }
 

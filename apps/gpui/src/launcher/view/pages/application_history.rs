@@ -6,80 +6,16 @@ impl LauncherView {
         &mut self,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let selected_source = self
-            .app_history
-            .selected_source
-            .as_deref()
-            .and_then(|selected| {
-                self.app_history
-                    .sources
-                    .iter()
-                    .find(|source| source.id == selected)
-            });
-        let page_title = selected_source
-            .map(|source| source.title.clone())
-            .unwrap_or_else(|| l10n::app_history(self.locale));
-        let content = if self.app_history.object_actions_active {
-            self.render_history_object_actions_panel(cx)
-        } else if self.app_history.page_actions_open {
-            components::action_candidates(
-                "app-history-page-actions-panel",
-                l10n::actions(self.locale),
-            )
-            .debug_selector(|| "app-history-page-actions-panel".into())
-            .child(
-                components::action_candidate(
-                    "app-history-page-refresh",
-                    l10n::refresh(self.locale),
-                    IconName::RefreshCw,
-                    true,
-                    true,
-                )
-                .on_click(
-                    cx.listener(|this, _, _, cx| this.refresh_app_history_from_page_menu(cx)),
-                ),
-            )
-            .into_any_element()
-        } else if self.app_history.fallback_actions_open {
-            let title = self
-                .app_history
-                .selected_item()
-                .map(|item| item.title.clone())
-                .unwrap_or_else(|| l10n::actions(self.locale));
-            components::action_candidates("app-history-fallback-actions-panel", title)
-                .test_support()
-                .debug_selector(|| "app-history-fallback-actions-panel".into())
-                .children(
-                    [
-                        (IconName::Copy, l10n::app_history_copy_target(self.locale)),
-                        (IconName::RefreshCw, l10n::refresh(self.locale)),
-                    ]
-                    .into_iter()
-                    .enumerate()
-                    .map(|(index, (icon, label))| {
-                        components::action_candidate(
-                            format!("app-history-fallback-action-{index}"),
-                            label,
-                            icon,
-                            self.app_history.fallback_action_selected == index,
-                            true,
-                        )
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.execute_fallback_app_history_action(index, cx)
-                        }))
-                    }),
-                )
-                .into_any_element()
-        } else {
-            self.render_history_results(cx)
-        };
+        let panel = self.render_history_actions(cx);
+        let content = self.render_history_results(cx);
+        let page_title = l10n::app_history(self.locale);
         let actions = components::page_actions_button(
             "app-history-page-actions",
             l10n::actions(self.locale),
             self.app_history.page_actions_open,
         )
         .on_click(cx.listener(|this, _, _, cx| this.toggle_app_history_page_actions(cx)));
-        let trailing = self.render_history_header_trailing(&page_title, actions, cx);
+        let trailing = self.render_history_header_trailing(actions, cx);
         let page = self
             .render_page_shell_with_trailing(
                 SharedString::from(page_title),
@@ -112,12 +48,79 @@ impl LauncherView {
             .size_full()
             .relative()
             .child(page)
+            .when_some(panel, |page, panel| {
+                page.child(self.render_action_overlay(panel, cx))
+            })
             .into_any_element()
+    }
+
+    fn render_history_actions(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if self.app_history.object_actions_active {
+            Some(self.render_history_object_actions_panel(cx))
+        } else if self.app_history.page_actions_open {
+            Some(
+                components::action_popover(
+                    "app-history-page-actions-panel",
+                    l10n::actions(self.locale),
+                )
+                .debug_selector(|| "app-history-page-actions-panel".into())
+                .child(
+                    components::action_popover_row(
+                        "app-history-page-refresh",
+                        l10n::refresh(self.locale),
+                        IconName::RefreshCw,
+                        true,
+                        true,
+                        None,
+                    )
+                    .on_click(
+                        cx.listener(|this, _, _, cx| this.refresh_app_history_from_page_menu(cx)),
+                    ),
+                )
+                .into_any_element(),
+            )
+        } else if self.app_history.fallback_actions_open {
+            let title = self
+                .app_history
+                .selected_item()
+                .map(|item| item.title.clone())
+                .unwrap_or_else(|| l10n::actions(self.locale));
+            Some(
+                components::action_popover("app-history-fallback-actions-panel", title)
+                    .test_support()
+                    .debug_selector(|| "app-history-fallback-actions-panel".into())
+                    .children(
+                        [
+                            (IconName::Copy, l10n::app_history_copy_target(self.locale)),
+                            (IconName::RefreshCw, l10n::refresh(self.locale)),
+                        ]
+                        .into_iter()
+                        .enumerate()
+                        .map(|(index, (icon, label))| {
+                            components::action_popover_row(
+                                format!("app-history-fallback-action-{index}"),
+                                label,
+                                icon,
+                                self.app_history.fallback_action_selected == index,
+                                true,
+                                None,
+                            )
+                            .on_click(cx.listener(
+                                move |this, _, _, cx| {
+                                    this.execute_fallback_app_history_action(index, cx)
+                                },
+                            ))
+                        }),
+                    )
+                    .into_any_element(),
+            )
+        } else {
+            None
+        }
     }
 
     fn render_history_header_trailing(
         &self,
-        current_title: &str,
         actions: impl IntoElement,
         cx: &Context<Self>,
     ) -> AnyElement {
@@ -140,7 +143,16 @@ impl LauncherView {
             .child(
                 Button::new("app-history-source-switcher")
                     .ghost()
-                    .label(current_title.to_owned())
+                    .icon(IconName::Layers)
+                    .accessibility_label(l10n::app_history(self.locale))
+                    .tooltip(
+                        self.app_history
+                            .sources
+                            .iter()
+                            .find(|source| Some(&source.id) == selected_id.as_ref())
+                            .map(|source| source.title.clone())
+                            .unwrap_or_else(|| l10n::app_history(self.locale)),
+                    )
                     .dropdown_caret(true)
                     .dropdown_menu(move |mut menu, _, _| {
                         for (source_id, source_title) in &enabled_sources {
@@ -205,7 +217,7 @@ impl LauncherView {
             components::footer_action_button(
                 "app-history-footer-refresh",
                 l10n::refresh(self.locale),
-                "⌘R",
+                crate::platform::primary_shortcut_label("R"),
                 false,
             )
             .on_click(cx.listener(|this, _, _, cx| this.refresh_app_history_from_page_menu(cx)))
@@ -215,7 +227,7 @@ impl LauncherView {
             components::footer_action_button(
                 "app-history-footer-actions",
                 l10n::actions(self.locale),
-                "⌘K",
+                crate::platform::primary_shortcut_label("K"),
                 false,
             )
             .on_click(cx.listener(|this, _, _, cx| {
@@ -243,14 +255,12 @@ impl LauncherView {
     }
 
     fn render_history_results(&self, cx: &mut Context<Self>) -> AnyElement {
-        if self.app_history.items.is_empty() {
+        if self.app_history.items.is_empty() && self.app_history.loading {
+            components::loading_state(l10n::loading(self.locale)).into_any_element()
+        } else if self.app_history.items.is_empty() {
             self.empty_state_with_icon(
                 IconName::Clock,
-                if self.app_history.loading {
-                    l10n::loading(self.locale)
-                } else {
-                    l10n::no_matching_entries(self.locale)
-                },
+                l10n::no_matching_entries(self.locale),
                 self.app_history.notice_text(self.locale),
             )
         } else {
@@ -269,7 +279,7 @@ impl LauncherView {
                         }),
                     )
                     .size_full()
-                    .px(px(10.))
+                    .px(px(metrics::LIST_PADDING_X))
                     .track_scroll(&self.scrolls.tool_lists.history),
                 )
                 .vertical_scrollbar(&self.scrolls.history_base())
@@ -288,11 +298,20 @@ impl LauncherView {
             .map(|item| item.title.clone())
             .unwrap_or_default();
         let selected = history.object_action_selected;
+        let fallback = history.object_actions_fallback_copy();
+        let row_count = history.object_actions.len()
+            + usize::from(fallback)
+            + usize::from(!history.object_actions_loading);
+        let available = metrics::POPOVER_MAX_HEIGHT
+            - metrics::MENU_HEADER_HEIGHT
+            - 2. * metrics::CONTROL_BORDER_WIDTH;
+        let list_height = (row_count as f32 * metrics::MENU_ROW_HEIGHT).min(available);
         let scroll = &self.scrolls.history_actions;
         let mut rows = div()
             .id("history-object-action-list")
             .test_support()
             .size_full()
+            .min_h_0()
             .flex()
             .flex_col()
             .overflow_y_scroll()
@@ -304,12 +323,13 @@ impl LauncherView {
                 .unwrap_or(&action.title)
                 .clone();
             rows = rows.child(
-                components::action_candidate(
+                components::action_popover_row(
                     format!("history-object-action-{index}"),
                     title,
                     IconName::ChevronRight,
                     selected == index,
                     action.enabled,
+                    None,
                 )
                 .when(action.enabled, |row| {
                     row.on_click(cx.listener(move |this, _, _, cx| {
@@ -319,7 +339,6 @@ impl LauncherView {
                 }),
             );
         }
-        let fallback = history.object_actions_fallback_copy();
         for (index, id, icon, label, visible) in [
             (
                 0,
@@ -338,7 +357,7 @@ impl LauncherView {
         ] {
             if visible {
                 rows = rows.child(
-                    components::action_candidate(id, label, icon, selected == index, true)
+                    components::action_popover_row(id, label, icon, selected == index, true, None)
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.app_history.object_action_selected = index;
                             this.execute_selected_app_history_action(cx);
@@ -346,7 +365,7 @@ impl LauncherView {
                 );
             }
         }
-        components::action_candidates("history-object-actions", title)
+        components::action_popover("history-object-actions", title)
             .debug_selector(|| "history-object-actions".into())
             .when(history.object_actions_loading, |panel| {
                 panel.child(div().caption_text().child(l10n::loading(self.locale)))
@@ -354,8 +373,8 @@ impl LauncherView {
             .child(
                 div()
                     .relative()
-                    .flex_1()
-                    .min_h_0()
+                    .h(px(list_height))
+                    .flex_none()
                     .child(rows)
                     .vertical_scrollbar(scroll),
             )

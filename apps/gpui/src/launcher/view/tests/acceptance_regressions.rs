@@ -200,6 +200,8 @@ fn web_package_review_isolates_the_package_list_and_cancels_first(cx: &mut TestA
                         rollback: false,
                         builtin: false,
                         permission_count: 0,
+                        open_action_id: None,
+                        diagnostics: vec![],
                     })
                     .to_vec(),
             );
@@ -212,6 +214,8 @@ fn web_package_review_isolates_the_package_list_and_cancels_first(cx: &mut TestA
                     digest: "digest".into(),
                     permissions: vec![],
                     updating: false,
+                    same_version: None,
+                    details: Default::default(),
                 }),
                 cx,
             );

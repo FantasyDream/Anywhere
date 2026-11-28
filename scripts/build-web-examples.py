@@ -14,11 +14,16 @@ BUILTIN_WEB_PLUGINS = (ROOT /
 BUILTIN_IDS = {'dev.anywhere.json-workspace'}
 
 
+NPM = shutil.which('npm') or 'npm'
+
+
 def run(args, path):
+    if args and args[0] == 'npm':
+        args = [NPM, *args[1:]]
     subprocess.run(args, cwd=path, check=True)
 
 
-run(['python3', 'scripts/generate-design-tokens.py', '--check'], ROOT)
+run([sys.executable, 'scripts/generate-design-tokens.py', '--check'], ROOT)
 sdk = ROOT / 'packages/plugin-sdk'
 if '--sdk-ready' not in sys.argv:
     run([
@@ -34,13 +39,18 @@ run([
 run(['npm', 'test'], json_tool)
 run(['npm', 'run', 'build'], json_tool)
 text_tool = ROOT / 'plugins/examples/web-text'
-shutil.copytree(sdk / 'dist',
-                text_tool / 'dist/sdk',
-                dirs_exist_ok=True,
-                ignore=shutil.ignore_patterns('*.map', '*.d.ts'))
-shutil.copytree(sdk / 'styles',
-                text_tool / 'dist/sdk/styles',
-                dirs_exist_ok=True)
+csv_tool = ROOT / 'plugins/examples/selected-csv'
+for directory in [text_tool, csv_tool]:
+    (directory / 'dist/sdk/mock.js').unlink(missing_ok=True)
+    shutil.copytree(sdk / 'dist',
+                    directory / 'dist/sdk',
+                    dirs_exist_ok=True,
+                    ignore=shutil.ignore_patterns('*.map', '*.d.ts', 'mock.js'))
+    shutil.copytree(sdk / 'styles',
+                    directory / 'dist/sdk/styles',
+                    dirs_exist_ok=True)
+issue_tool = ROOT / 'plugins/examples/issue-link'
+run(['node', 'build.mjs'], issue_tool)
 background_tool = ROOT / 'plugins/examples/background-context'
 run([
     'npm', 'ci', '--registry=https://registry.npmjs.org', '--ignore-scripts',
@@ -48,11 +58,13 @@ run([
 ], background_tool)
 run(['npm', 'run', 'check'], background_tool)
 run(['npm', 'run', 'build'], background_tool)
-for directory in [json_tool, text_tool, background_tool]:
-    manifest = json.loads((directory / 'manifest.json').read_text())
+for directory in [json_tool, text_tool, background_tool, issue_tool, csv_tool]:
+    manifest = json.loads(
+        (directory / 'manifest.json').read_text(encoding='utf-8'))
     destination = OUT / (manifest['id'] + '.awplugin')
     run([
-        'python3', sdk / 'tools/package.py', directory, '--output', destination
+        'node', sdk / 'tools/anywhere-plugin.mjs', 'pack', directory,
+        '--output', destination
     ], ROOT)
     if manifest['id'] in BUILTIN_IDS and '--sync-builtin' in sys.argv:
         BUILTIN_WEB_PLUGINS.mkdir(parents=True, exist_ok=True)

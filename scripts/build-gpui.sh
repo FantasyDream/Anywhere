@@ -37,6 +37,8 @@ cp apps/gpui/macos/Info.plist "$APP/Contents/Info.plist"
 cp resources/icon/Anywhere.icns "$APP/Contents/Resources/Anywhere.icns"
 ditto resources/native-localizations "$APP/Contents/Resources"
 cp LICENSE "$APP/Contents/Resources/Licenses/Anywhere.txt"
+cp resources/licenses/noto-sans-sc.txt resources/licenses/fira-mono.txt \
+  "$APP/Contents/Resources/Licenses/"
 
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" \
   "$APP/Contents/Info.plist"

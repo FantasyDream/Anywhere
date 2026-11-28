@@ -9,4 +9,3 @@ cargo build -p anywhere-core --example web_sdk_conformance --locked
 sdk_test_target="$(cargo metadata --locked --no-deps --format-version 1 | python3 -c 'import json,sys; print(json.load(sys.stdin)["target_directory"])')"
 sdk_test_suffix="$(node -p 'process.platform === "win32" ? ".exe" : ""')"
 ANYWHERE_WEB_BRIDGE_TEST_BIN="$sdk_test_target/debug/examples/web_sdk_conformance$sdk_test_suffix" npm --prefix packages/plugin-sdk test
-python3 -m unittest discover -s packages/plugin-sdk/test -p '*_test.py'

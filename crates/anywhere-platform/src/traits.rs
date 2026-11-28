@@ -4,8 +4,8 @@
 //! still injects one adapter through [`Platform`].
 use super::{
     catalog, clipboard, file_search, git, ApplicationInfo, BundleApplication, ClipboardSnapshot,
-    ContextReadError, FileSearchEngine, FileSearchHit, FileSearchOptions, GitOperation, GitOutput,
-    InstalledApplications, MenuDiscovery, MenuLocator,
+    ContextReadError, FileIndexResults, FileSearchEngine, FileSearchHit, FileSearchOptions,
+    GitOperation, GitOutput, InstalledApplications, MenuDiscovery, MenuLocator,
 };
 use anyhow::{bail, Result};
 use std::path::{Path, PathBuf};
@@ -32,6 +32,10 @@ pub trait ApplicationCatalog: Send + Sync {
     /// [`Self::bundle_application`]. A later indexer replaces this method only.
     fn installed_applications(&self) -> InstalledApplications {
         catalog::from_roots(self)
+    }
+
+    fn installed_applications_with_paths(&self, _paths: &[PathBuf]) -> InstalledApplications {
+        self.installed_applications()
     }
 
     /// Metadata for one application entry (bundle, executable, or shortcut).
@@ -70,6 +74,11 @@ pub trait ApplicationHost: Send + Sync {
 
     /// Short version string for cache invalidation. `None` when unknown.
     fn application_version(&self, _bundle_id: &str) -> Option<String> {
+        None
+    }
+
+    /// Canonical Web plugin platform identifier (`"macos"` or `"windows"`), if supported.
+    fn web_platform_id(&self) -> Option<&'static str> {
         None
     }
 }
@@ -171,6 +180,54 @@ pub trait FileSearchHost: Send + Sync {
         false
     }
 
+    /// Engines this platform adapter supports, in display order.
+    fn supported_file_search_engines(&self) -> &'static [FileSearchEngine] {
+        &[
+            FileSearchEngine::SystemIndex,
+            FileSearchEngine::Ripgrep,
+            FileSearchEngine::Combined,
+            FileSearchEngine::DirectScan,
+        ]
+    }
+
+    /// Recommended default engine for this platform adapter.
+    fn default_file_search_engine(&self) -> FileSearchEngine {
+        FileSearchEngine::SystemIndex
+    }
+
+    /// Optional scoped index for a provisional filename result batch.
+    fn file_search_index(&self) -> Option<&dyn FileSearchIndex> {
+        None
+    }
+
+    /// Unified provisional filename query across platform-native indexes and scanners.
+    ///
+    /// Core still verifies every returned path against the authorized scope and completes
+    /// authoritative bounded traversal unless the query is cancelled.
+    fn search_provisional(
+        &self,
+        query: &str,
+        roots: &[PathBuf],
+        options: &FileSearchOptions,
+        cancelled: &(dyn Fn() -> bool + Sync),
+    ) -> Result<FileIndexResults> {
+        if options.engine == FileSearchEngine::DirectScan || cancelled() {
+            return Ok(FileIndexResults::default());
+        }
+        if let Some(index) = self.file_search_index() {
+            return index.search_index(query, roots, cancelled);
+        }
+        let mut scoped = options.clone();
+        if scoped.roots.is_empty() && !roots.is_empty() {
+            scoped.roots = roots.to_vec();
+        }
+        let hits = self.search_files_with_options(query, 64, &scoped, cancelled)?;
+        Ok(FileIndexResults {
+            hits,
+            truncated: false,
+        })
+    }
+
     /// Read the system index; callers own cancellation and result limits.
     fn search_files(
         &self,
@@ -188,6 +245,9 @@ pub trait FileSearchHost: Send + Sync {
         options: &FileSearchOptions,
         cancelled: &(dyn Fn() -> bool + Sync),
     ) -> Result<Vec<FileSearchHit>> {
+        if options.engine == FileSearchEngine::DirectScan {
+            return Ok(Vec::new());
+        }
         if options.engine == FileSearchEngine::Ripgrep {
             return file_search::ripgrep(
                 query,
@@ -202,6 +262,16 @@ pub trait FileSearchHost: Send + Sync {
         }
         self.search_files(query, limit, cancelled)
     }
+}
+
+/// A local file index. Core verifies candidate paths and completes the search.
+pub trait FileSearchIndex: Send + Sync {
+    fn search_index(
+        &self,
+        query: &str,
+        roots: &[PathBuf],
+        cancelled: &(dyn Fn() -> bool + Sync),
+    ) -> Result<FileIndexResults>;
 }
 
 /// Explicit local and URL opening, including application-targeted handoff.

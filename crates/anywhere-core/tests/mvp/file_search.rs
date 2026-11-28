@@ -1012,24 +1012,36 @@ async fn file_secondary_actions_copy_reveal_and_reject_deleted_targets() {
     let actions = app
         .file_actions(initial.session_id, 1, primary.id.clone())
         .unwrap();
+    let expected_display_path = anywhere_platform::paths::display_path(&path)
+        .to_string_lossy()
+        .into_owned();
     for id in ["core.file.copy", "core.file.reveal"] {
         let action = actions
             .iter()
             .find(|c| c.command_id.as_deref() == Some(id))
             .unwrap();
         assert_eq!(action.execution_context_id, primary.execution_context_id);
+        assert_eq!(
+            action.subtitle.as_deref(),
+            Some(expected_display_path.as_str())
+        );
+        assert_eq!(
+            action.execution_target_label.as_deref(),
+            Some(expected_display_path.as_str())
+        );
         assert!(app
             .execute(initial.session_id, 1, action.id.clone())
             .await
             .unwrap()
             .succeeded());
     }
-    assert!(platform
-        .calls
-        .lock()
-        .unwrap()
-        .iter()
-        .any(|(op, value)| op == "copy" && value == path.to_str().unwrap()));
+    assert!(platform.calls.lock().unwrap().iter().any(|(op, value)| {
+        op == "copy"
+            && value
+                == anywhere_platform::paths::display_path(&path)
+                    .to_str()
+                    .unwrap()
+    }));
     std::fs::remove_file(&path).unwrap();
     let copy = actions
         .iter()
@@ -1046,6 +1058,8 @@ async fn file_secondary_actions_copy_reveal_and_reject_deleted_targets() {
 
 #[test]
 fn search_configuration_is_bounded_and_keeps_unavailable_roots_for_recovery() {
+    let fixture = tempfile::tempdir().unwrap();
+    let unavailable = fixture.path().join("missing");
     let app = app(Arc::new(TestPlatform::default()));
     assert!(app
         .set_file_search(true, vec!["relative".into()], vec![])
@@ -1054,14 +1068,10 @@ fn search_configuration_is_bounded_and_keeps_unavailable_roots_for_recovery() {
         .set_file_search(true, vec![], vec!["nested/name".into()])
         .is_err());
     assert!(app
-        .set_file_search(
-            true,
-            vec!["/missing/search-directory".into()],
-            vec!["logs".into()]
-        )
+        .set_file_search(true, vec![unavailable], vec!["logs".into()])
         .is_ok());
     assert!(app
-        .set_file_search(true, vec!["/tmp".into(); 9], vec![])
+        .set_file_search(true, vec![fixture.path().to_path_buf(); 9], vec![])
         .is_err());
 }
 
@@ -1587,15 +1597,13 @@ async fn complete_engine_appends_all_unindexed_matches_and_retains_execution_tar
         "{:?}",
         copied.error
     );
-    assert_eq!(
-        index.copied.lock().unwrap().as_slice(),
-        &[
-            PathBuf::from(state.candidates[0].subtitle.as_ref().unwrap())
-                .join(&state.candidates[0].title)
-                .to_string_lossy()
-                .into_owned()
-        ]
-    );
+    let expected_copy = anywhere_platform::paths::display_path(Path::new(
+        state.candidates[0].subtitle.as_ref().unwrap(),
+    ))
+    .join(&state.candidates[0].title)
+    .to_string_lossy()
+    .into_owned();
+    assert_eq!(index.copied.lock().unwrap().as_slice(), &[expected_copy]);
     let again = app.load_more_files(id, 1).await.unwrap().unwrap();
     assert_eq!(again.candidates.len(), expected.len());
     app.update_file_search_input(id, "report".into(), 2, FileSearchFilter::Folders)

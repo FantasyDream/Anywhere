@@ -6,7 +6,7 @@ export async function resolve() {
   const value = JSON.parse(input.text);
   return [
     {
-      type: 'plugin.dev.example.json-summary.summary',
+      typeId: 'plugin.dev.example.json-summary.summary',
       value: {kind: 'object', count: Object.keys(value).length},
     },
   ];

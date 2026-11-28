@@ -11,6 +11,7 @@
           },
           "params": {
             "additionalProperties": false,
+            "properties": null,
             "type": "object"
           }
         },
@@ -29,24 +30,7 @@
           },
           "params": {
             "additionalProperties": false,
-            "type": "object"
-          }
-        },
-        "required": [
-          "method",
-          "params"
-        ],
-        "type": "object"
-      },
-      {
-        "additionalProperties": false,
-        "properties": {
-          "method": {
-            "const": "context.getCurrentApp",
-            "type": "string"
-          },
-          "params": {
-            "additionalProperties": false,
+            "properties": null,
             "type": "object"
           }
         },
@@ -65,6 +49,7 @@
           },
           "params": {
             "additionalProperties": false,
+            "properties": null,
             "type": "object"
           }
         },
@@ -83,6 +68,7 @@
           },
           "params": {
             "additionalProperties": false,
+            "properties": null,
             "type": "object"
           }
         },
@@ -101,6 +87,7 @@
           },
           "params": {
             "additionalProperties": false,
+            "properties": null,
             "type": "object"
           }
         },
@@ -119,6 +106,7 @@
           },
           "params": {
             "additionalProperties": false,
+            "properties": null,
             "type": "object"
           }
         },
@@ -163,6 +151,7 @@
           },
           "params": {
             "additionalProperties": false,
+            "properties": null,
             "type": "object"
           }
         },
@@ -181,6 +170,7 @@
           },
           "params": {
             "additionalProperties": false,
+            "properties": null,
             "type": "object"
           }
         },
@@ -199,6 +189,7 @@
           },
           "params": {
             "additionalProperties": false,
+            "properties": null,
             "type": "object"
           }
         },
@@ -472,12 +463,159 @@
           "params": {
             "additionalProperties": false,
             "properties": {
-              "request_id": {
+              "requestId": {
                 "type": "string"
               }
             },
             "required": [
-              "request_id"
+              "requestId"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "method",
+          "params"
+        ],
+        "type": "object"
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "method": {
+            "const": "window.back",
+            "type": "string"
+          },
+          "params": {
+            "additionalProperties": false,
+            "properties": null,
+            "type": "object"
+          }
+        },
+        "required": [
+          "method",
+          "params"
+        ],
+        "type": "object"
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "method": {
+            "const": "window.close",
+            "type": "string"
+          },
+          "params": {
+            "additionalProperties": false,
+            "properties": null,
+            "type": "object"
+          }
+        },
+        "required": [
+          "method",
+          "params"
+        ],
+        "type": "object"
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "method": {
+            "const": "url.open",
+            "type": "string"
+          },
+          "params": {
+            "additionalProperties": false,
+            "properties": {
+              "url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "url"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "method",
+          "params"
+        ],
+        "type": "object"
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "method": {
+            "const": "resources.stat",
+            "type": "string"
+          },
+          "params": {
+            "additionalProperties": false,
+            "properties": {
+              "handle": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "handle"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "method",
+          "params"
+        ],
+        "type": "object"
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "method": {
+            "const": "resources.readText",
+            "type": "string"
+          },
+          "params": {
+            "additionalProperties": false,
+            "properties": {
+              "handle": {
+                "type": "string"
+              },
+              "maxBytes": {
+                "format": "uint",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "handle"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "method",
+          "params"
+        ],
+        "type": "object"
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "method": {
+            "const": "preview.open",
+            "type": "string"
+          },
+          "params": {
+            "additionalProperties": false,
+            "properties": {
+              "handle": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "handle"
             ],
             "type": "object"
           }
@@ -534,6 +672,30 @@
   },
   "invocation": {
     "$defs": {
+      "WebCapabilities": {
+        "description": "Presentation hints. Each broker operation checks the live grant independently.",
+        "properties": {
+          "previewOpen": {
+            "type": "boolean"
+          },
+          "resourceRead": {
+            "type": "boolean"
+          },
+          "urlOpen": {
+            "type": "boolean"
+          },
+          "windowControl": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "urlOpen",
+          "resourceRead",
+          "previewOpen",
+          "windowControl"
+        ],
+        "type": "object"
+      },
       "WebInput": {
         "description": "Minimal input for one explicit invocation; no graph, filesystem paths or AX data.",
         "oneOf": [
@@ -599,14 +761,14 @@
                 "const": "data",
                 "type": "string"
               },
-              "type_id": {
+              "typeId": {
                 "type": "string"
               },
               "value": true
             },
             "required": [
               "kind",
-              "type_id",
+              "typeId",
               "value"
             ],
             "type": "object"
@@ -655,12 +817,20 @@
           },
           "name": {
             "type": "string"
+          },
+          "previewable": {
+            "type": "boolean"
+          },
+          "readable": {
+            "type": "boolean"
           }
         },
         "required": [
           "handle",
           "name",
-          "kind"
+          "kind",
+          "readable",
+          "previewable"
         ],
         "type": "object"
       },
@@ -675,7 +845,10 @@
     },
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "properties": {
-      "command_id": {
+      "capabilities": {
+        "$ref": "#/$defs/WebCapabilities"
+      },
+      "commandId": {
         "type": "string"
       },
       "entrypoint": {
@@ -684,15 +857,16 @@
       "input": {
         "$ref": "#/$defs/WebInput"
       },
-      "plugin_id": {
+      "pluginId": {
         "type": "string"
       }
     },
     "required": [
-      "plugin_id",
-      "command_id",
+      "pluginId",
+      "commandId",
       "entrypoint",
-      "input"
+      "input",
+      "capabilities"
     ],
     "title": "WebInvocation",
     "type": "object"
@@ -706,7 +880,1159 @@
     "timeoutMs": 5000,
     "transferBytes": 2097152
   },
-  "protocol": 1,
+  "methods": {
+    "app.getFrontmost": {
+      "permission": "app.frontmost",
+      "result": {
+        "$defs": {
+          "WebCurrentApp": {
+            "description": "Frozen before activation; process ids, window titles and AX data are excluded.",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "anyOf": [
+          {
+            "$ref": "#/$defs/WebCurrentApp"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Nullable_WebCurrentApp"
+      },
+      "roles": [
+        "webview",
+        "background",
+        "resolver"
+      ],
+      "timeoutMs": 5000
+    },
+    "app.getSource": {
+      "permission": "context.currentApp",
+      "result": {
+        "$defs": {
+          "WebCurrentApp": {
+            "description": "Frozen before activation; process ids, window titles and AX data are excluded.",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "anyOf": [
+          {
+            "$ref": "#/$defs/WebCurrentApp"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Nullable_WebCurrentApp"
+      },
+      "roles": [
+        "webview",
+        "background",
+        "resolver"
+      ],
+      "timeoutMs": 5000
+    },
+    "clipboard.readText": {
+      "permission": "clipboard.readText",
+      "result": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "Nullable_string",
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "roles": [
+        "webview",
+        "background"
+      ],
+      "timeoutMs": 5000
+    },
+    "clipboard.writeText": {
+      "permission": "clipboard.writeText",
+      "result": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "null",
+        "type": "null"
+      },
+      "roles": [
+        "webview",
+        "background"
+      ],
+      "timeoutMs": 5000
+    },
+    "context.get": {
+      "permission": null,
+      "result": {
+        "$defs": {
+          "WebInputReason": {
+            "enum": [
+              "no_object",
+              "permission_denied",
+              "unsupported_type",
+              "too_large"
+            ],
+            "type": "string"
+          },
+          "WebResource": {
+            "properties": {
+              "handle": {
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/WebResourceKind"
+              },
+              "name": {
+                "type": "string"
+              },
+              "previewable": {
+                "type": "boolean"
+              },
+              "readable": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "handle",
+              "name",
+              "kind",
+              "readable",
+              "previewable"
+            ],
+            "type": "object"
+          },
+          "WebResourceKind": {
+            "enum": [
+              "file",
+              "directory",
+              "unknown"
+            ],
+            "type": "string"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "description": "Minimal input for one explicit invocation; no graph, filesystem paths or AX data.",
+        "oneOf": [
+          {
+            "properties": {
+              "kind": {
+                "const": "empty",
+                "type": "string"
+              },
+              "reason": {
+                "$ref": "#/$defs/WebInputReason"
+              }
+            },
+            "required": [
+              "kind",
+              "reason"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "text",
+                "type": "string"
+              },
+              "source": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "source",
+              "text"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "url",
+                "type": "string"
+              },
+              "source": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "source",
+              "url"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "data",
+                "type": "string"
+              },
+              "typeId": {
+                "type": "string"
+              },
+              "value": true
+            },
+            "required": [
+              "kind",
+              "typeId",
+              "value"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "items": {
+                "items": {
+                  "$ref": "#/$defs/WebResource"
+                },
+                "type": "array"
+              },
+              "kind": {
+                "const": "resources",
+                "type": "string"
+              },
+              "source": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "source",
+              "items"
+            ],
+            "type": "object"
+          }
+        ],
+        "title": "WebInput"
+      },
+      "roles": [
+        "webview",
+        "background",
+        "resolver"
+      ],
+      "timeoutMs": 5000
+    },
+    "input.get": {
+      "permission": "input.read",
+      "result": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "string",
+        "type": "string"
+      },
+      "roles": [
+        "webview",
+        "background",
+        "resolver"
+      ],
+      "timeoutMs": 5000
+    },
+    "input.set": {
+      "permission": "input.write",
+      "result": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "null",
+        "type": "null"
+      },
+      "roles": [
+        "webview",
+        "background"
+      ],
+      "timeoutMs": 5000
+    },
+    "invocation.get": {
+      "permission": null,
+      "result": {
+        "$defs": {
+          "WebCapabilities": {
+            "description": "Presentation hints. Each broker operation checks the live grant independently.",
+            "properties": {
+              "previewOpen": {
+                "type": "boolean"
+              },
+              "resourceRead": {
+                "type": "boolean"
+              },
+              "urlOpen": {
+                "type": "boolean"
+              },
+              "windowControl": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "urlOpen",
+              "resourceRead",
+              "previewOpen",
+              "windowControl"
+            ],
+            "type": "object"
+          },
+          "WebInput": {
+            "description": "Minimal input for one explicit invocation; no graph, filesystem paths or AX data.",
+            "oneOf": [
+              {
+                "properties": {
+                  "kind": {
+                    "const": "empty",
+                    "type": "string"
+                  },
+                  "reason": {
+                    "$ref": "#/$defs/WebInputReason"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "reason"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "kind": {
+                    "const": "text",
+                    "type": "string"
+                  },
+                  "source": {
+                    "type": "string"
+                  },
+                  "text": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "source",
+                  "text"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "kind": {
+                    "const": "url",
+                    "type": "string"
+                  },
+                  "source": {
+                    "type": "string"
+                  },
+                  "url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "source",
+                  "url"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "kind": {
+                    "const": "data",
+                    "type": "string"
+                  },
+                  "typeId": {
+                    "type": "string"
+                  },
+                  "value": true
+                },
+                "required": [
+                  "kind",
+                  "typeId",
+                  "value"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "items": {
+                    "items": {
+                      "$ref": "#/$defs/WebResource"
+                    },
+                    "type": "array"
+                  },
+                  "kind": {
+                    "const": "resources",
+                    "type": "string"
+                  },
+                  "source": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "source",
+                  "items"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          "WebInputReason": {
+            "enum": [
+              "no_object",
+              "permission_denied",
+              "unsupported_type",
+              "too_large"
+            ],
+            "type": "string"
+          },
+          "WebResource": {
+            "properties": {
+              "handle": {
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/WebResourceKind"
+              },
+              "name": {
+                "type": "string"
+              },
+              "previewable": {
+                "type": "boolean"
+              },
+              "readable": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "handle",
+              "name",
+              "kind",
+              "readable",
+              "previewable"
+            ],
+            "type": "object"
+          },
+          "WebResourceKind": {
+            "enum": [
+              "file",
+              "directory",
+              "unknown"
+            ],
+            "type": "string"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "capabilities": {
+            "$ref": "#/$defs/WebCapabilities"
+          },
+          "commandId": {
+            "type": "string"
+          },
+          "entrypoint": {
+            "type": "string"
+          },
+          "input": {
+            "$ref": "#/$defs/WebInput"
+          },
+          "pluginId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "pluginId",
+          "commandId",
+          "entrypoint",
+          "input",
+          "capabilities"
+        ],
+        "title": "WebInvocation",
+        "type": "object"
+      },
+      "roles": [
+        "webview",
+        "background"
+      ],
+      "timeoutMs": 5000
+    },
+    "lifecycle.ready": {
+      "permission": null,
+      "result": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "null",
+        "type": "null"
+      },
+      "roles": [
+        "webview"
+      ],
+      "timeoutMs": 5000
+    },
+    "preview.open": {
+      "permission": "preview.open",
+      "result": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "null",
+        "type": "null"
+      },
+      "roles": [
+        "webview"
+      ],
+      "timeoutMs": 5000
+    },
+    "request.cancel": {
+      "permission": null,
+      "result": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "cancelled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "cancelled"
+        ],
+        "title": "CancellationResult",
+        "type": "object"
+      },
+      "roles": [
+        "webview",
+        "background"
+      ],
+      "timeoutMs": 5000
+    },
+    "resources.readText": {
+      "permission": "resources.read",
+      "result": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "string",
+        "type": "string"
+      },
+      "roles": [
+        "webview",
+        "background"
+      ],
+      "timeoutMs": 5000
+    },
+    "resources.stat": {
+      "permission": "resources.read",
+      "result": {
+        "$defs": {
+          "WebResourceKind": {
+            "enum": [
+              "file",
+              "directory",
+              "unknown"
+            ],
+            "type": "string"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "description": "A selected file's safe metadata, with numbers representable in JavaScript.",
+        "properties": {
+          "bytes": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "handle": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/$defs/WebResourceKind"
+          },
+          "modifiedMs": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "handle",
+          "name",
+          "kind"
+        ],
+        "title": "WebResourceStat",
+        "type": "object"
+      },
+      "roles": [
+        "webview",
+        "background"
+      ],
+      "timeoutMs": 5000
+    },
+    "state.get": {
+      "permission": null,
+      "result": {
+        "$defs": {
+          "WebInput": {
+            "description": "Minimal input for one explicit invocation; no graph, filesystem paths or AX data.",
+            "oneOf": [
+              {
+                "properties": {
+                  "kind": {
+                    "const": "empty",
+                    "type": "string"
+                  },
+                  "reason": {
+                    "$ref": "#/$defs/WebInputReason"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "reason"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "kind": {
+                    "const": "text",
+                    "type": "string"
+                  },
+                  "source": {
+                    "type": "string"
+                  },
+                  "text": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "source",
+                  "text"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "kind": {
+                    "const": "url",
+                    "type": "string"
+                  },
+                  "source": {
+                    "type": "string"
+                  },
+                  "url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "source",
+                  "url"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "kind": {
+                    "const": "data",
+                    "type": "string"
+                  },
+                  "typeId": {
+                    "type": "string"
+                  },
+                  "value": true
+                },
+                "required": [
+                  "kind",
+                  "typeId",
+                  "value"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "items": {
+                    "items": {
+                      "$ref": "#/$defs/WebResource"
+                    },
+                    "type": "array"
+                  },
+                  "kind": {
+                    "const": "resources",
+                    "type": "string"
+                  },
+                  "source": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "source",
+                  "items"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          "WebInputReason": {
+            "enum": [
+              "no_object",
+              "permission_denied",
+              "unsupported_type",
+              "too_large"
+            ],
+            "type": "string"
+          },
+          "WebResource": {
+            "properties": {
+              "handle": {
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/WebResourceKind"
+              },
+              "name": {
+                "type": "string"
+              },
+              "previewable": {
+                "type": "boolean"
+              },
+              "readable": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "handle",
+              "name",
+              "kind",
+              "readable",
+              "previewable"
+            ],
+            "type": "object"
+          },
+          "WebResourceKind": {
+            "enum": [
+              "file",
+              "directory",
+              "unknown"
+            ],
+            "type": "string"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "description": "Latest approved view of Launcher state. Native graph data never crosses this boundary.",
+        "properties": {
+          "context": {
+            "$ref": "#/$defs/WebInput"
+          },
+          "input": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "version": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version",
+          "context",
+          "input"
+        ],
+        "title": "PluginSnapshot",
+        "type": "object"
+      },
+      "roles": [
+        "webview",
+        "background",
+        "resolver"
+      ],
+      "timeoutMs": 5000
+    },
+    "state.subscribe": {
+      "permission": null,
+      "result": {
+        "$defs": {
+          "WebInput": {
+            "description": "Minimal input for one explicit invocation; no graph, filesystem paths or AX data.",
+            "oneOf": [
+              {
+                "properties": {
+                  "kind": {
+                    "const": "empty",
+                    "type": "string"
+                  },
+                  "reason": {
+                    "$ref": "#/$defs/WebInputReason"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "reason"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "kind": {
+                    "const": "text",
+                    "type": "string"
+                  },
+                  "source": {
+                    "type": "string"
+                  },
+                  "text": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "source",
+                  "text"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "kind": {
+                    "const": "url",
+                    "type": "string"
+                  },
+                  "source": {
+                    "type": "string"
+                  },
+                  "url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "source",
+                  "url"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "kind": {
+                    "const": "data",
+                    "type": "string"
+                  },
+                  "typeId": {
+                    "type": "string"
+                  },
+                  "value": true
+                },
+                "required": [
+                  "kind",
+                  "typeId",
+                  "value"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "items": {
+                    "items": {
+                      "$ref": "#/$defs/WebResource"
+                    },
+                    "type": "array"
+                  },
+                  "kind": {
+                    "const": "resources",
+                    "type": "string"
+                  },
+                  "source": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "source",
+                  "items"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          "WebInputReason": {
+            "enum": [
+              "no_object",
+              "permission_denied",
+              "unsupported_type",
+              "too_large"
+            ],
+            "type": "string"
+          },
+          "WebResource": {
+            "properties": {
+              "handle": {
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/WebResourceKind"
+              },
+              "name": {
+                "type": "string"
+              },
+              "previewable": {
+                "type": "boolean"
+              },
+              "readable": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "handle",
+              "name",
+              "kind",
+              "readable",
+              "previewable"
+            ],
+            "type": "object"
+          },
+          "WebResourceKind": {
+            "enum": [
+              "file",
+              "directory",
+              "unknown"
+            ],
+            "type": "string"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "description": "Latest approved view of Launcher state. Native graph data never crosses this boundary.",
+        "properties": {
+          "context": {
+            "$ref": "#/$defs/WebInput"
+          },
+          "input": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "version": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version",
+          "context",
+          "input"
+        ],
+        "title": "PluginSnapshot",
+        "type": "object"
+      },
+      "roles": [
+        "webview",
+        "background",
+        "resolver"
+      ],
+      "timeoutMs": 5000
+    },
+    "storage.get": {
+      "permission": "storage.local",
+      "result": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "AnyValue"
+      },
+      "roles": [
+        "webview",
+        "background"
+      ],
+      "timeoutMs": 5000
+    },
+    "storage.remove": {
+      "permission": "storage.local",
+      "result": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "null",
+        "type": "null"
+      },
+      "roles": [
+        "webview",
+        "background"
+      ],
+      "timeoutMs": 5000
+    },
+    "storage.set": {
+      "permission": "storage.local",
+      "result": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "null",
+        "type": "null"
+      },
+      "roles": [
+        "webview",
+        "background"
+      ],
+      "timeoutMs": 5000
+    },
+    "text.begin": {
+      "permission": "clipboard.writeText",
+      "result": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "ticket": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticket"
+        ],
+        "title": "UploadTicket",
+        "type": "object"
+      },
+      "roles": [
+        "webview",
+        "background"
+      ],
+      "timeoutMs": 5000
+    },
+    "text.cancel": {
+      "permission": null,
+      "result": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "null",
+        "type": "null"
+      },
+      "roles": [
+        "webview",
+        "background"
+      ],
+      "timeoutMs": 5000
+    },
+    "text.chunk": {
+      "permission": "clipboard.writeText",
+      "result": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "null",
+        "type": "null"
+      },
+      "roles": [
+        "webview",
+        "background"
+      ],
+      "timeoutMs": 5000
+    },
+    "text.commit": {
+      "permission": "clipboard.writeText",
+      "result": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "null",
+        "type": "null"
+      },
+      "roles": [
+        "webview",
+        "background"
+      ],
+      "timeoutMs": 5000
+    },
+    "text.read": {
+      "permission": null,
+      "result": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "done": {
+            "type": "boolean"
+          },
+          "sequence": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "sequence",
+          "done"
+        ],
+        "title": "TextChunkResult",
+        "type": "object"
+      },
+      "roles": [
+        "webview",
+        "background"
+      ],
+      "timeoutMs": 5000
+    },
+    "url.open": {
+      "permission": "url.open",
+      "result": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "null",
+        "type": "null"
+      },
+      "roles": [
+        "webview",
+        "background"
+      ],
+      "timeoutMs": 30000
+    },
+    "window.back": {
+      "permission": null,
+      "result": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "null",
+        "type": "null"
+      },
+      "roles": [
+        "webview"
+      ],
+      "timeoutMs": 5000
+    },
+    "window.close": {
+      "permission": null,
+      "result": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "null",
+        "type": "null"
+      },
+      "roles": [
+        "webview"
+      ],
+      "timeoutMs": 5000
+    }
+  },
+  "protocol": 2,
   "snapshot": {
     "$defs": {
       "WebInput": {
@@ -774,14 +2100,14 @@
                 "const": "data",
                 "type": "string"
               },
-              "type_id": {
+              "typeId": {
                 "type": "string"
               },
               "value": true
             },
             "required": [
               "kind",
-              "type_id",
+              "typeId",
               "value"
             ],
             "type": "object"
@@ -830,12 +2156,20 @@
           },
           "name": {
             "type": "string"
+          },
+          "previewable": {
+            "type": "boolean"
+          },
+          "readable": {
+            "type": "boolean"
           }
         },
         "required": [
           "handle",
           "name",
-          "kind"
+          "kind",
+          "readable",
+          "previewable"
         ],
         "type": "object"
       },

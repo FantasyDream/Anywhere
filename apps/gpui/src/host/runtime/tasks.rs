@@ -45,6 +45,23 @@ impl LiveLauncher {
         })
     }
 
+    pub fn open_execution_directory(&self, id: String) -> Receiver<LiveEvent> {
+        let application = self.application.application().clone();
+        self.spawn_blocking(move || {
+            let detail = application
+                .execution_session(&id)?
+                .map(execution_detail)
+                .ok_or_else(|| anyhow::anyhow!("execution session not found"))?;
+            let directory = std::path::Path::new(&detail.row.directory);
+            anyhow::ensure!(
+                directory.is_absolute() && directory.is_dir(),
+                "working directory unavailable"
+            );
+            application.platform().open_directory(directory)?;
+            Ok(LiveEvent::Ignored)
+        })
+    }
+
     pub fn stop_execution(&self, id: String) -> Receiver<LiveEvent> {
         let application = self.application.application().clone();
         self.spawn_blocking(move || {

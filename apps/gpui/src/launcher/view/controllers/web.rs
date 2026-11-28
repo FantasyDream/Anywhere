@@ -1,8 +1,13 @@
 use super::*;
 use crate::host::WebPackageOperation;
+use std::sync::Mutex;
 
 impl LauncherView {
     pub(super) fn close_web_surface(&mut self, cx: &mut Context<Self>) {
+        self.drop_web_host_interaction(cx);
+        if self.preview.web_owner.is_some() {
+            self.close_preview(cx);
+        }
         tracing::debug!(
             screen = ?self.screen,
             has_view = self.web_surface.view.is_some(),
@@ -39,12 +44,20 @@ impl LauncherView {
 
     pub(super) fn toggle_web_actions(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.web_surface.actions_open = !self.web_surface.actions_open;
+        let open = self.web_surface.actions_open;
+        self.surface_focus_handle.focus(window, cx);
+        self.sync_web_view_visibility(cx);
         if let Some(view) = &self.web_surface.view {
-            if let Err(error) = view.read(cx).set_visible(!self.web_surface.actions_open) {
-                tracing::warn!(%error, "web_tool_visibility_failed");
+            let raw = view.read(cx).raw();
+            let _ = raw.evaluate_script(&format!(
+                "window.dispatchEvent(new CustomEvent('anywhere:actions',{{detail:{open}}}));"
+            ));
+            if open {
+                let _ = raw.focus_parent();
+            } else if self.web_surface.interaction.is_none() {
+                let _ = raw.focus();
             }
         }
-        self.surface_focus_handle.focus(window, cx);
         self.web_surface.action_selected = 0;
         cx.notify();
     }
@@ -56,6 +69,10 @@ impl LauncherView {
         let Some(invocation_id) = self.web_surface.invocation_id.clone() else {
             return;
         };
+        self.drop_web_host_interaction(cx);
+        if self.preview.web_owner.is_some() {
+            self.close_preview(cx);
+        }
         // Binding the replacement revokes the old document. Closing first would
         // delete the invocation that the replacement needs to bind.
         if let Some(live) = self.live.clone() {
@@ -103,17 +120,102 @@ impl LauncherView {
         }
     }
 
+    pub(crate) fn open_package_review(
+        &mut self,
+        path: std::path::PathBuf,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if self.screen != Screen::WebPackages || !self.presence.presented {
+            if !self.open_settings(window, cx) {
+                return false;
+            }
+            self.open_screen(Screen::WebPackages, window, cx);
+        }
+        self.inspect_package(path, cx);
+        true
+    }
+
+    pub(in crate::launcher::view) fn inspect_package(
+        &mut self,
+        path: std::path::PathBuf,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.presence.presented || self.screen != Screen::WebPackages {
+            return;
+        }
+        if self.web_surface.review_loading
+            || self.web_surface.review_approving
+            || self.web_surface.review.is_some()
+        {
+            self.set_notice(
+                l10n::plugin_review_pending(self.locale),
+                components::NoticeKind::Warning,
+            );
+            cx.notify();
+            return;
+        }
+        let Some(live) = self.live.clone() else {
+            return;
+        };
+        let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        self.web_surface.review_loading = true;
+        self.web_surface.review_cancel = Some(cancel.clone());
+        self.web_surface.review_generation = self.web_surface.review_generation.wrapping_add(1);
+        let generation = self.web_surface.review_generation;
+        let mut receiver = live.inspect_web_package(path, cancel);
+        cx.notify();
+        cx.spawn(async move |view, cx| {
+            let mut event = receiver.recv().await;
+            let _ = view.update(cx, |this, cx| {
+                if this.web_surface.review_generation != generation
+                    || this.screen != Screen::WebPackages
+                    || !this.presence.presented
+                {
+                    return;
+                }
+                this.web_surface.review_loading = false;
+                this.web_surface.review_cancel = None;
+                match event.take() {
+                    Some(LiveEvent::WebReview(review)) => {
+                        this.web_surface.review = Some(review);
+                        this.notice = None;
+                    }
+                    Some(LiveEvent::Error(error)) => {
+                        this.set_notice(error, components::NoticeKind::Error)
+                    }
+                    _ => {}
+                }
+                cx.notify();
+            });
+            if let Some(LiveEvent::WebReview(review)) = event {
+                live.cancel_web_review(review.token);
+            }
+        })
+        .detach();
+    }
+
+    pub(in crate::launcher::view) fn retire_package_review(&mut self) -> bool {
+        self.web_surface.review_generation = self.web_surface.review_generation.wrapping_add(1);
+        if let Some(cancel) = self.web_surface.review_cancel.take() {
+            cancel.store(true, std::sync::atomic::Ordering::Release);
+        }
+        let checking = std::mem::take(&mut self.web_surface.review_loading);
+        let review = self.web_surface.review.take();
+        let cancelled = checking || review.is_some();
+        if let (Some(live), Some(review)) = (&self.live, review) {
+            live.cancel_web_review(review.token);
+        }
+        cancelled
+    }
+
     pub(super) fn cancel_web_package_review(
         &mut self,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        let Some(review) = self.web_surface.review.take() else {
+        if !self.retire_package_review() {
             return false;
-        };
-        if let Some(live) = &self.live {
-            let receiver = live.cancel_web_review(review.token);
-            self.poll(receiver, self.live_state.generation, cx);
         }
         self.surface_focus_handle.focus(window, cx);
         cx.notify();
@@ -159,6 +261,7 @@ impl LauncherView {
         let protocol_policy = policy.clone();
         let entry_url = policy.url();
         let protocol_runtime = runtime;
+        let nav_policy = policy.clone();
         let ipc_policy = policy;
         let active_binding = Arc::new(Mutex::new(ActiveWebBinding {
             handle: document.handle.clone(),
@@ -171,16 +274,13 @@ impl LauncherView {
             Locale::En => "en",
             Locale::Zh => "zh",
         };
-        let builder = wry::WebViewBuilder::new()
+        let builder = crate::platform::configure_webview_builder(wry::WebViewBuilder::new())
             .with_transparent(true)
             .with_incognito(true)
             .with_devtools(cfg!(debug_assertions))
             .with_autoplay(false)
             .with_initialization_script(bootstrap_script(language))
-            .with_navigation_handler({
-                let entry_url = entry_url.clone();
-                move |candidate| candidate == entry_url
-            })
+            .with_navigation_handler(move |candidate| nav_policy.accepts_navigation(&candidate))
             .with_new_window_req_handler(|_, _| wry::NewWindowResponse::Deny)
             .with_download_started_handler(|_, _| false)
             .with_custom_protocol("anywhere-plugin".to_owned(), move |_, request| {
@@ -200,15 +300,11 @@ impl LauncherView {
                 let source = request.uri().to_string();
                 let frame = request.body();
                 if frame.len() > WEB_FRAME_BYTES {
-                    tracing::warn!(
-                        source = %source,
-                        frame_bytes = frame.len(),
-                        "web_ipc_frame_rejected"
-                    );
+                    tracing::warn!(frame_bytes = frame.len(), "web_ipc_frame_rejected");
                     return;
                 }
                 if !ipc_policy.accepts_source(&source) {
-                    tracing::warn!(source = %source, "web_ipc_source_rejected");
+                    tracing::warn!("web_ipc_source_rejected");
                     return;
                 }
                 let Ok(binding) = ipc_binding.lock() else {
@@ -300,6 +396,28 @@ impl LauncherView {
                     {
                         return None;
                     }
+                    if request.frame == r#"{"method":"host.dismissActions"}"# {
+                        if this.web_surface.actions_open {
+                            let window_handle = this.window_handle;
+                            let entity = cx.weak_entity();
+                            let handle = request.handle.clone();
+                            cx.defer(move |cx| {
+                                let _ = window_handle.update(cx, |_, window, cx| {
+                                    let _ =
+                                        entity.update(cx, |this, cx| {
+                                            if this.web_surface.actions_open
+                                                && this.web_surface.document.as_ref().is_some_and(
+                                                    |document| document.handle == handle,
+                                                )
+                                            {
+                                                this.toggle_web_actions(window, cx);
+                                            }
+                                        });
+                                });
+                            });
+                        }
+                        return Some(());
+                    }
                     if crate::web_tool::is_host_escape_frame(&request.frame) {
                         tracing::debug!(
                             document = %request.handle,
@@ -341,6 +459,7 @@ impl LauncherView {
                     LiveEvent::WebFrameReply {
                         handle: event_handle,
                         frame,
+                        host_action,
                     } => {
                         let request_value =
                             serde_json::from_str::<serde_json::Value>(&request).ok();
@@ -446,6 +565,9 @@ impl LauncherView {
                                     this.follow_web_state(handle.clone(), 0, generation, cx);
                                 }
                                 _ => {}
+                            }
+                            if let Some(action) = host_action {
+                                this.schedule_web_host_action(action, generation, cx);
                             }
                             cx.notify();
                         });
@@ -592,6 +714,40 @@ impl LauncherView {
         KeyFlow::Handled
     }
 
+    pub(super) fn close_web_uninstall_prompt(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.web_surface.uninstall_target = None;
+        self.web_surface
+            .uninstall_return_focus
+            .take()
+            .unwrap_or_else(|| self.surface_focus_handle.clone())
+            .focus(window, cx);
+        cx.notify();
+    }
+
+    pub(super) fn confirm_web_uninstall(
+        &mut self,
+        id: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.web_surface.uninstall_target.as_deref() != Some(id) {
+            return;
+        }
+        self.close_web_uninstall_prompt(window, cx);
+        if self
+            .web
+            .packages
+            .iter()
+            .any(|package| package.id == id && !package.builtin)
+        {
+            self.change_web_package_operation(id.to_owned(), WebPackageOperation::Uninstall, cx);
+        }
+    }
+
     pub(in crate::launcher::view) fn handle_web_packages_key(
         &mut self,
         input: &crate::launcher::view::input::KeyInput<'_>,
@@ -601,7 +757,9 @@ impl LauncherView {
         let modified = input.modifiers.modified;
         match input.key {
             "escape" => self.go_back(window, cx),
-            _ if self.web_surface.review.is_some() => {}
+            _ if self.web_surface.review.is_some()
+                || self.web_surface.review_loading
+                || self.web_surface.review_approving => {}
             "down" if !modified => {
                 self.web.select_next();
                 self.reveal_result_row(self.web.selected);

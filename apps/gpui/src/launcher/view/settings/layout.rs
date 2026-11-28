@@ -87,7 +87,7 @@ impl LauncherView {
         control: impl IntoElement,
     ) -> Div {
         div()
-            .min_h(px(58.))
+            .min_h(px(metrics::SETTINGS_ROW_MIN_HEIGHT))
             .px(px(metrics::SPACE_MD))
             .py(px(metrics::SPACE_SM))
             .flex()
@@ -128,7 +128,7 @@ impl LauncherView {
                 div()
                     .truncate()
                     .body_text()
-                    .font_weight(FontWeight::NORMAL)
+                    .font_weight(FontWeight::MEDIUM)
                     .text_color(theme::primary())
                     .child(title.into()),
             )

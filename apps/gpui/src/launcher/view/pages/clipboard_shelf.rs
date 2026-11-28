@@ -25,6 +25,10 @@ impl LauncherView {
             .unwrap_or_else(|| l10n::clipboard_always_on_top(self.locale));
 
         let body = self.render_shelf_body(cx);
+        let delete = self
+            .clipboard
+            .delete_pending
+            .map(|item_id| self.render_shelf_delete_confirmation(item_id, cx));
 
         let notice = self
             .notice
@@ -44,7 +48,7 @@ impl LauncherView {
             .size_full()
             .flex()
             .flex_col()
-            .pt(px(metrics::TITLE_BAR_INSET))
+            .child(self.render_window_titlebar(cx))
             .child(
                 div()
                     .h(px(metrics::ROW_HEIGHT_COMFORTABLE))
@@ -161,39 +165,33 @@ impl LauncherView {
                 )
             })
             .child(body)
+            .children(delete)
             .into_any_element()
     }
 
     fn render_shelf_body(&self, cx: &mut Context<Self>) -> AnyElement {
-        if let Some(delete_id) = self.clipboard.delete_pending {
-            return self.render_shelf_delete_confirmation(delete_id, cx);
-        }
         if self.clipboard.actions_open {
             return self.render_shelf_actions_body(cx);
         }
         if self.clipboard.items().is_empty() {
-            return div()
-                .flex_1()
-                .flex()
-                .flex_col()
-                .items_center()
-                .justify_center()
-                .p(px(metrics::SPACE_LG))
-                .child(
-                    div()
-                        .max_w(px(360.))
-                        .text_center()
-                        .caption_text()
-                        .text_color(theme::muted())
-                        .child(if self.clipboard.loading {
-                            l10n::searching(self.locale)
-                        } else if self.clipboard.query.trim().is_empty() {
-                            l10n::no_saved_entries_manage_recording_in_settings(self.locale)
-                        } else {
-                            l10n::no_matching_entries(self.locale)
-                        }),
+            return if self.clipboard.loading {
+                components::loading_state(l10n::searching(self.locale)).into_any_element()
+            } else {
+                components::empty_state(
+                    IconName::ClipboardList,
+                    if self.clipboard.query.trim().is_empty() {
+                        l10n::no_saved_entries(self.locale)
+                    } else {
+                        l10n::no_matching_entries(self.locale)
+                    },
+                    self.clipboard
+                        .query
+                        .trim()
+                        .is_empty()
+                        .then(|| l10n::manage_recording_in_settings_clipboard(self.locale)),
                 )
-                .into_any_element();
+                .into_any_element()
+            };
         }
         div()
             .flex_1()
@@ -210,7 +208,7 @@ impl LauncherView {
                     }),
                 )
                 .size_full()
-                .px(px(metrics::SPACE_XS))
+                .px(px(metrics::SPACE_SM))
                 .track_scroll(&self.scrolls.tool_lists.clipboard_shelf),
             )
             .vertical_scrollbar(&self.scrolls.clipboard_shelf_base())
@@ -229,92 +227,47 @@ impl LauncherView {
             .find(|item| item.id == delete_id)
             .map(|item| item.summary.clone())
             .unwrap_or_default();
-        div()
-            .flex_1()
-            .flex()
-            .flex_col()
-            .items_center()
-            .justify_center()
-            .gap(px(metrics::SPACE_SM))
-            .p(px(metrics::SPACE_LG))
-            .child(
+        let cancel = Button::new("shelf-delete-cancel")
+            .secondary()
+            .selected(!self.clipboard.delete_confirm_selected)
+            .label(l10n::cancel(self.locale))
+            .on_click(cx.listener(|this, _, _, cx| {
+                this.clipboard.delete_pending = None;
+                this.clipboard.delete_confirm_selected = false;
+                cx.notify();
+            }));
+        let confirm = Button::new("shelf-delete-confirm")
+            .danger()
+            .selected(self.clipboard.delete_confirm_selected)
+            .label(l10n::delete_entry(self.locale))
+            .on_click(cx.listener(|this, _, _, cx| {
+                this.confirm_clipboard_delete(cx);
+                this.clipboard.delete_pending = None;
+                this.clipboard.delete_confirm_selected = false;
+                cx.notify();
+            }));
+        components::modal_shell(
+            "shelf-delete-dialog",
+            IconName::Trash,
+            theme::danger(),
+            l10n::shelf_delete_title(self.locale),
+            l10n::shelf_delete_description(self.locale),
+            Some(
                 div()
-                    .body_text()
-                    .font_weight(FontWeight::MEDIUM)
-                    .child(l10n::shelf_delete_title(self.locale)),
-            )
-            .child(
-                div()
-                    .max_w(px(360.))
                     .truncate()
-                    .text_center()
-                    .text_size(px(metrics::CAPTION_SIZE))
-                    .text_color(theme::muted())
-                    .child(summary),
-            )
-            .child(
-                div()
-                    .max_w(px(380.))
-                    .text_center()
                     .caption_text()
                     .text_color(theme::muted())
-                    .child(l10n::shelf_delete_description(self.locale)),
-            )
-            .child(
-                div()
-                    .w_full()
-                    .max_w(px(380.))
-                    .pt(px(metrics::SPACE_XS))
-                    .flex()
-                    .gap(px(metrics::SPACE_SM))
-                    .child(
-                        div()
-                            .id("shelf-delete-cancel")
-                            .role(gpui_kit::Role::Button)
-                            .aria_selected(!self.clipboard.delete_confirm_selected)
-                            .flex_1()
-                            .p(px(metrics::CONTROL_PADDING_X))
-                            .rounded(px(metrics::RESULT_RADIUS))
-                            .when(!self.clipboard.delete_confirm_selected, |element| {
-                                element.selected_surface()
-                            })
-                            .hover(|style| style.bg(theme::hover()))
-                            .cursor_pointer()
-                            .text_center()
-                            .text_size(px(metrics::LABEL_SIZE))
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.clipboard.delete_pending = None;
-                                this.clipboard.delete_confirm_selected = false;
-                                cx.notify();
-                            }))
-                            .child(l10n::cancel(self.locale)),
-                    )
-                    .child(
-                        div()
-                            .id("shelf-delete-confirm")
-                            .role(gpui_kit::Role::Button)
-                            .aria_selected(self.clipboard.delete_confirm_selected)
-                            .flex_1()
-                            .p(px(metrics::CONTROL_PADDING_X))
-                            .rounded(px(metrics::RESULT_RADIUS))
-                            .when(self.clipboard.delete_confirm_selected, |element| {
-                                element.selected_surface()
-                            })
-                            .hover(|style| style.bg(theme::hover()))
-                            .cursor_pointer()
-                            .text_center()
-                            .text_size(px(metrics::LABEL_SIZE))
-                            .text_color(theme::danger())
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.confirm_clipboard_delete(cx);
-                                this.clipboard.delete_pending = None;
-                                this.clipboard.delete_confirm_selected = false;
-                                cx.notify();
-                            }))
-                            .child(l10n::delete_entry(self.locale)),
-                    ),
-            )
-            .into_any_element()
+                    .child(summary)
+                    .into_any_element(),
+            ),
+            div()
+                .flex()
+                .justify_end()
+                .p(px(metrics::SPACE_LG))
+                .gap(px(metrics::SPACE_SM))
+                .child(cancel)
+                .child(confirm),
+        )
     }
 
     fn render_shelf_actions_body(&self, cx: &mut Context<Self>) -> AnyElement {
@@ -325,7 +278,13 @@ impl LauncherView {
             l10n::delete_entry(self.locale),
             l10n::refresh(self.locale),
         ];
-        let shortcuts = ["↵", "⌘↵", "␣", "⌘⇧⌫", "⌘R"];
+        let shortcuts = [
+            "↵".to_owned(),
+            crate::platform::primary_shortcut_label("Enter"),
+            "␣".to_owned(),
+            crate::platform::primary_shortcut_label("Shift+Backspace"),
+            crate::platform::primary_shortcut_label("R"),
+        ];
         let icons = [
             IconName::Copy,
             IconName::CornerUpLeft,
@@ -358,7 +317,7 @@ impl LauncherView {
                             }),
                     )
                     .title(label)
-                    .trailing(components::keycap(shortcuts[index]))
+                    .trailing(components::keycap(shortcuts[index].clone()))
                     .build()
                     .test_support()
                     .when(enabled, |row| {
@@ -385,7 +344,9 @@ impl LauncherView {
         let command_hint = if selected {
             None
         } else if index < 9 {
-            Some(format!("⌘{}", index + 1))
+            Some(crate::platform::primary_shortcut_label(
+                &(index + 1).to_string(),
+            ))
         } else {
             None
         };
@@ -444,7 +405,9 @@ impl LauncherView {
                                 .size(px(metrics::ICON_SIZE))
                                 .text_color(theme::secondary()),
                         )
-                        .child("⌘K"),
+                        .child(components::keycap(
+                            crate::platform::primary_shortcut_label("K"),
+                        )),
                     )
                     .child(self.clipboard_copy_button(
                         format!("shelf-copy-{item_id}"),

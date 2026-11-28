@@ -4,10 +4,12 @@ mod icon;
 mod manifest;
 mod path;
 mod preflight;
+mod urls;
 pub mod wire;
 
 pub use archive::{VerifiedAsset, VerifiedWebPackage};
 pub use manifest::{parse_manifest, validate_manifest};
+pub use urls::{granted_url, MAX_URL_BYTES};
 
 pub const MAX_MANIFEST_BYTES: usize = 128 * 1024;
 pub const MAX_ARCHIVE_BYTES: usize = 20 * 1024 * 1024;

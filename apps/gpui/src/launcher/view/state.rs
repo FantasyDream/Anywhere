@@ -19,6 +19,7 @@ pub(super) struct ScrollHandles {
     pub(super) web_packages: ScrollHandle,
     pub(super) unsupported_tool: ScrollHandle,
     pub(super) history_actions: ScrollHandle,
+    pub(super) clipboard_inspector: ScrollHandle,
     pub(super) tool_lists: ToolListScrolls,
 }
 
@@ -72,6 +73,7 @@ impl IconLoader {
 
 #[derive(Default)]
 pub(super) struct PreviewState {
+    pub(super) web_owner: Option<String>,
     pub(super) host: Option<PreviewHost>,
     pub(super) busy: bool,
     pub(super) generation: u64,
@@ -224,24 +226,30 @@ impl ShortcutEditor {
 pub(super) struct SettingsEditor {
     pub(super) model: SettingsModel,
     pub(super) draft: HostPreferences,
-    pub(super) excluded_apps_input: Entity<InputState>,
-    pub(super) file_roots_input: Entity<InputState>,
-    pub(super) file_exclusions_input: Entity<InputState>,
+    pub(super) excluded_apps_input: Entity<TextareaState>,
+    pub(super) file_roots_input: Entity<TextareaState>,
+    pub(super) file_exclusions_input: Entity<TextareaState>,
     pub(super) history_path_input: Entity<InputState>,
     pub(super) history_filter_input: Entity<InputState>,
     pub(super) history_enabled_only: bool,
+    pub(super) history_path_editing: Option<String>,
+    pub(super) quick_add_inputs: [Entity<InputState>; 3],
+    pub(super) bulk_editor: Option<&'static str>,
+    pub(super) sidebar_focus: FocusHandle,
     pub(super) action_picker_open: bool,
     pub(super) action_picker_focus: FocusHandle,
     pub(super) close_pending: bool,
     pub(super) exit_intent: Option<SettingsExitIntent>,
+    pub(super) dismiss_on_done: bool,
     pub(super) modal_return_focus: Option<FocusHandle>,
     pub(super) keep_editing_focus: FocusHandle,
     pub(super) discard_focus: FocusHandle,
     pub(super) save_focus: FocusHandle,
     pub(super) confirm_cancel_focus: FocusHandle,
     pub(super) confirm_accept_focus: FocusHandle,
-    pub(super) clipboard_choice: Option<ClipboardSettingsChoice>,
     pub(super) save_generation: u64,
+    pub(super) draft_save_queued: bool,
+    pub(super) saving_instant_preferences: bool,
     pub(super) scrolls: [ScrollHandle; 7],
     pub(super) focus_handle: FocusHandle,
 }
@@ -256,28 +264,21 @@ impl SettingsEditor {
         window: &mut Window,
         cx: &mut Context<LauncherView>,
     ) -> (Self, Subscription) {
-        let excluded_apps_input = if auxiliary {
-            fallback_input.clone()
-        } else {
-            cx.new(|cx| {
-                InputState::new(window, cx).default_value(preferences.excluded_apps.join("\n"))
-            })
-        };
-        let file_roots_input = if auxiliary {
-            fallback_input.clone()
-        } else {
-            cx.new(|cx| {
-                InputState::new(window, cx).default_value(preferences.file_search_roots.join("\n"))
-            })
-        };
-        let file_exclusions_input = if auxiliary {
-            fallback_input.clone()
-        } else {
-            cx.new(|cx| {
-                InputState::new(window, cx)
-                    .default_value(preferences.file_search_excluded_names.join("\n"))
-            })
-        };
+        let excluded_apps_input = cx.new(|cx| {
+            TextareaState::new(window, cx)
+                .default_value(preferences.excluded_apps.join("\n"))
+                .auto_grow(2, 4)
+        });
+        let file_roots_input = cx.new(|cx| {
+            TextareaState::new(window, cx)
+                .default_value(readable_search_roots(&preferences.file_search_roots).join("\n"))
+                .auto_grow(2, 4)
+        });
+        let file_exclusions_input = cx.new(|cx| {
+            TextareaState::new(window, cx)
+                .default_value(preferences.file_search_excluded_names.join("\n"))
+                .auto_grow(2, 4)
+        });
         let history_path_input = if auxiliary {
             fallback_input.clone()
         } else {
@@ -307,21 +308,73 @@ impl SettingsEditor {
             history_path_input,
             history_filter_input,
             history_enabled_only: false,
+            history_path_editing: None,
+            quick_add_inputs: std::array::from_fn(|_| {
+                if auxiliary {
+                    fallback_input.clone()
+                } else {
+                    cx.new(|cx| InputState::new(window, cx).placeholder(l10n::quick_add(locale)))
+                }
+            }),
+            bulk_editor: None,
+            sidebar_focus: cx.focus_handle(),
             action_picker_open: false,
             action_picker_focus: cx.focus_handle(),
             close_pending: false,
             exit_intent: None,
+            dismiss_on_done: false,
             modal_return_focus: None,
             keep_editing_focus: cx.focus_handle(),
             discard_focus: cx.focus_handle(),
             save_focus: cx.focus_handle(),
             confirm_cancel_focus: cx.focus_handle(),
             confirm_accept_focus: cx.focus_handle(),
-            clipboard_choice: None,
             save_generation: 0,
+            draft_save_queued: false,
+            saving_instant_preferences: false,
             scrolls: std::array::from_fn(|_| ScrollHandle::new()),
             focus_handle: cx.focus_handle(),
         };
         (editor, history_filter_subscription)
+    }
+}
+
+pub(super) struct ClipboardInspector {
+    pub(super) item_id: i64,
+    pub(super) revision: (u64, u64, u64),
+    pub(super) text: Option<String>,
+    pub(super) pages: Vec<std::ops::Range<usize>>,
+    pub(super) selected_page: usize,
+}
+
+impl ClipboardInspector {
+    pub(super) fn set_text(&mut self, text: Option<String>) {
+        const PAGE_BYTES: usize = 8 * 1024;
+        let mut start = 0;
+        self.pages.clear();
+        if let Some(text) = &text {
+            while start < text.len() {
+                let limit = text.floor_char_boundary((start + PAGE_BYTES).min(text.len()));
+                let end = if limit == text.len() {
+                    limit
+                } else {
+                    text[start..limit]
+                        .rfind('\n')
+                        .filter(|last_line| *last_line >= PAGE_BYTES / 2)
+                        .map_or(limit, |last_line| start + last_line + 1)
+                };
+                self.pages.push(start..end);
+                start = end;
+            }
+        }
+        self.selected_page = 0;
+        self.text = text;
+    }
+
+    pub(super) fn body(&self) -> Option<&str> {
+        let text = self.text.as_deref()?;
+        self.pages
+            .get(self.selected_page)
+            .map(|range| &text[range.clone()])
     }
 }

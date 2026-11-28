@@ -41,7 +41,7 @@ pub(super) fn package_named(
     accepts: serde_json::Value,
     body: &str,
 ) -> VerifiedWebPackage {
-    let manifest = serde_json::json!({"schemaVersion":1,"id":id,"name":"Example","version":"1.0.0","apiVersion":"1","platforms":["macos"],"entry":"index.html","permissions":permissions,"commands":[{"id":"open","title":"Text Pad","keywords":["scratchpad"],"accepts":accepts,"entrypoint":"workspace"}]});
+    let manifest = serde_json::json!({"schemaVersion":1,"id":id,"name":"Example","version":"1.0.0","apiVersion":"2","platforms":["macos"],"entry":"index.html","permissions":permissions,"commands":[{"id":"open","title":"Text Pad","keywords":["scratchpad"],"accepts":accepts,"entrypoint":"workspace"}]});
     package_manifest(manifest, body)
 }
 pub(super) fn package_manifest(manifest: serde_json::Value, body: &str) -> VerifiedWebPackage {
@@ -172,6 +172,23 @@ fn catalog_requires_exact_review_and_platform_and_rejects_duplicate_ids() {
 }
 
 #[test]
+fn windows_bind_keeps_the_custom_protocol_origin_used_by_the_host() {
+    let manifest = serde_json::json!({"schemaVersion":1,"id":"dev.example.tool","name":"Example","version":"1.0.0","apiVersion":"2","platforms":["windows"],"entry":"index.html","permissions":[{"name":"context.read","types":[TEXT]}],"commands":[{"id":"open","title":"Text Pad","keywords":["scratchpad"],"accepts":[TEXT],"entrypoint":"workspace"}]});
+    let package = package_manifest(manifest, "hello");
+    let catalog =
+        WebPluginCatalog::prepare(WebPlatform::Windows, [(&package, approval(&package))]).unwrap();
+    let registry = catalog.append_to(&ActionRegistry::default()).unwrap();
+    let mut service = WebPluginService::default();
+    service.replace_catalog(catalog);
+    let input = context("document");
+    let invocation = start(&mut service, &reference(&registry), &input);
+    let binding = service.bind(&invocation, WebPlatform::Windows).unwrap();
+
+    assert!(binding.origin().starts_with("anywhere-plugin://"));
+    assert!(binding.origin().ends_with(".plugin.local"));
+}
+
+#[test]
 fn normal_search_never_exports_keywords_or_unmatched_text_fallbacks() {
     let package = package(
         serde_json::json!([{"name":"context.read","types":[TEXT]}]),
@@ -260,10 +277,8 @@ fn context_projection_is_permission_scoped_and_does_not_leak_paths_or_properties
         panic!("no resource");
     };
     assert_eq!(items[0].name, "repo");
-    assert_eq!(
-        handles[&items[0].handle].to_str(),
-        Some("/private/project/repo")
-    );
+    assert!(handles.is_none());
+    assert!(!items[0].readable);
     let selection = ResolvedContext::new(
         FILE_SELECTION,
         ContextValue::FileSelection(vec!["/a".into(); 129].into()),
@@ -477,7 +492,7 @@ async fn application_executes_committed_candidate_records_only_ready_and_revokes
     rpc_value(&app, &binding, "state", "state.subscribe").await;
     assert_eq!(
         serde_json::from_value::<Option<WebCurrentApp>>(
-            rpc_value(&app, &binding, "app", "context.getCurrentApp").await
+            rpc_value(&app, &binding, "app", "app.getSource").await
         )
         .unwrap(),
         Some(WebCurrentApp {
@@ -645,7 +660,7 @@ pub(super) async fn rpc_value(
     method: &str,
 ) -> serde_json::Value {
     let frame =
-        serde_json::json!({"protocol":1,"requestId":id,"method":method,"params":{}}).to_string();
+        serde_json::json!({"protocol":2,"requestId":id,"method":method,"params":{}}).to_string();
     let reply = app
         .dispatch_web_message(binding, source(binding), &frame)
         .await;
@@ -696,7 +711,7 @@ async fn poisoned_locks_still_revoke_web_and_capture_while_denying_rpc() {
 
     // Authorization / RPC rejects on poisoned web_plugins lock without panicking.
     let cancel_frame =
-        serde_json::json!({"protocol":1,"requestId":"req-1","method":"lifecycle.ready","params":{}})
+        serde_json::json!({"protocol":2,"requestId":"req-1","method":"lifecycle.ready","params":{}})
             .to_string();
     let reply = app
         .dispatch_web_message(&binding, source(&binding), &cancel_frame)

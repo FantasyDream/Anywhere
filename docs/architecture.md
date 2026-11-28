@@ -1,8 +1,6 @@
 # 架构与代码地图
 
-当前源码为 V0.14 macOS 15+ GPUI 开发预览。Rust Core 决定业务语义，GPUI
-呈现并处理输入，AppKit / Quick Look / WebKit 只提供系统适配。最后核对：
-2026-11-23。
+当前源码提供 macOS 15+ 与 Windows 11 x64 的 GPUI 开发预览。Rust Core 决定业务语义，GPUI 呈现并处理输入，macOS 和 Windows 通过平台适配层连接系统能力。
 
 产品入口是 `apps/gpui/src/app.rs`。当前范围与证据见
 [GPUI 交付范围与验收状态](mvp-gpui.md)，窗口、焦点和输入契约见
@@ -19,7 +17,7 @@ flowchart TD
     Features --> Core
     Application --> Persistence[SQLite / preferences]
     Application --> Platform[Platform capabilities]
-    GPUI --> Native[AppKit / Quick Look / WebKit]
+    GPUI --> Native[macOS AppKit / WebKit 或 Windows Win32 / WebView2]
     Web[WebView + TypeScript SDK] --> Broker[Rust capability broker]
     Background[On-demand QuickJS] --> Broker
     Broker --> Runtime
@@ -41,7 +39,7 @@ flowchart TD
 Web CSS；`apps/gpui/src/platform/material/` 读取 macOS 明暗、Reduce
 Transparency、Increase Contrast 和 Reduce Motion，安装
 `NSGlassEffectView` / `NSVisualEffectView`。GPUI 只绘制透明内容层和语义色，
-不伪造原生玻璃，也没有 Flutter / Dart / bridge 之间的 appearance 回传。
+Windows 适配在 `platform/material/windows.rs` 和 `platform/windows/backdrop.rs`，按系统透明效果和窗口类型选用原生合成或不透明主题。详见[界面设计](ui-design.md)。
 
 图标缓存、文件结果窗口和 Web document 分别限额；当前没有跨语言的
 `memory-pressure` 协议或 `ANYWHERE_PROFILE_UI` 开关。性能诊断使用
@@ -63,7 +61,7 @@ apps/gpui/src/
 ├── launcher/        Snapshot gate、页面模型、独立工具窗壳（tool_windows.rs）、图标缓存与视图（controllers/、pages/、settings/）
 ├── settings/        设置展示模型
 ├── host/            数据路径、运行时分派、快照投影、原生借用协调、偏好、热键与目录授权
-├── platform/        跨平台门面与 macOS（platform/macos/、material/、preview.rs）系统边界
+├── platform/        共享桌面接口、能力和键位策略，连接 AppKit 与 Win32 适配器
 ├── l10n/            共享本地化的 Rust 投影
 └── ui/              设计 tokens 投影与 theme
 ```
@@ -72,16 +70,21 @@ apps/gpui/src/
 模块生命周期。第三方包使用独立安装批准和 SDK。第三方 Context 限定为
 `plugin.<package-id>.*`，脚本输出不能转换为原生文件权限。
 
+Windows 的桌面服务位于 `crates/anywhere-platform/src/windows/`，包括 Shell
+应用目录和资源打开、Explorer / UIA Context、剪贴板与文件索引。GPUI 的托盘、窗口、
+WebView2 origin、登录项与外部预览接入位于 `apps/gpui/src/platform/windows/`
+及其模块入口。已接入能力和实机证据见 [Windows 功能进度](windows-progress.md)。
+
 ## 启动与依赖
 
-`apps/gpui/src/main.rs` 先验证 macOS 15+，再启动 GPUI application。
-`app.rs` 先创建隐藏的 Starting 窗口和状态栏壳，随后由独立启动线程打开共享
+`apps/gpui/src/main.rs` 检查宿主环境后启动 GPUI application。
+`app.rs` 先创建 Starting 窗口和状态栏壳，随后由独立启动线程打开共享
 runtime；Ready 后才注入缓存设置、偏好和热键。Starting / Failed 状态不能预留
 Session 或执行动作。`app.rs` 最终创建：
 
 - `LiveLauncher` 与 `ApplicationRuntime`；
 - 主 GPUI 窗口；
-- `NSStatusBar` 状态项；
+- macOS `NSStatusBar` 状态项或 Windows 托盘图标；
 - 全局热键控制器；
 - 按需打开的独立 Clipboard Shelf 与 Running Tasks 窗口；
 - 窗口关闭、清理和状态栏恢复路径。
@@ -92,7 +95,7 @@ Application History、Tasks 和 Web 拆分请求方法。`host/runtime_support.r
 负责启动偏好应用、目录恢复和领域快照到 GPUI DTO 的纯投影。同步设置或系统
 操作不得阻塞渲染线程。产品路径由
 `apps/gpui/src/host/mod.rs` 构造，默认数据目录是
-`~/Library/Application Support/Anywhere`。
+`~/Library/Application Support/Anywhere`（macOS）或 `%LOCALAPPDATA%\Anywhere`（Windows）。
 
 GPUI 内的 Session / revision / snapshot gate / stream cancellation 由
 `launcher/view/live_state.rs` 持有；File Search、Clipboard、Application History、
@@ -201,7 +204,7 @@ JS 转换并形成普通候选和对象动作。它与 Launcher Usage、剪贴�
 - 原生启动配置与外观更新：`apps/gpui/src/host/native_window.rs` 通过 AsyncApp 的可失败窗口更新探测借用边界，释放借用后再执行可能同步触发 resize 的 AppKit 操作，最后返回 GPUI 更新页面。嵌套事件循环中借用尚未释放时等待重试；窗口关闭或 owner 释放时取消。普通 GCD 异步入队不能作为 GPUI 借用已释放的保证。
 - 目录：`apps/gpui/src/host/directory_access.rs`，使用安全范围书签。
 - 登录项：`apps/gpui/src/host/login_item.rs` 对照系统状态应用保存值。系统操作失败可在通用设置独立重试，直接使用已保存的启动偏好。显式数据目录下跳过系统操作。
-- 状态栏与窗口：`apps/gpui/src/platform/mod.rs` 与 `apps/gpui/src/platform/macos/`。
+- 窗口、状态栏与输入适配经 `apps/gpui/src/platform/`。页面共用布局和命令表，按能力呈现可用操作。AppKit 与 Win32 适配器负责原生窗口、材质和系统通知。
 - Quick Look：`apps/gpui/src/platform/preview.rs`。
 - Web document：`apps/gpui/src/web_tool.rs` 与 `launcher/view/`。
 
@@ -210,13 +213,13 @@ helper 行为必须按[验收矩阵](mvp-gpui.md#物理桌验矩阵)单独记录
 
 ## Web 插件
 
-安装时 Rust 验证 Manifest、资源、摘要和权限。批准后 WebView 只访问固定 origin
-与已验证资源；页面通过受限 JSON 字符串帧 IPC 进入统一 broker。Rust 拥有文档 handle、
-请求资格、预算和取消，GPUI 只挂载视图和转发生命周期事件。
+Rust 用 API 2 Manifest 审查身份、摘要、命令和权限。批准后的 WebView 通过协议 2
+向统一 broker 发请求，有限后台 QuickJS 使用同一运行角色和授权检查。数据请求、
+窗口意图和确认/预览交互分别交付；GPUI 挂载原生视图、显示确认卡并管理焦点。
 
-替换文档会推进 generation。旧页面的资源请求、ack、状态事件或关闭回调不能影响
-新文档。Web 包损坏只移除可选 Web 能力，不阻断 Launcher 启动。按需 QuickJS 使用
-同一能力代理，当前仍为进程内执行；进程隔离尚未交付。
+文档换代、停用和安装目录更新会撤销旧调用。包损坏保留可管理的安装记录。单文件
+读取校验原生文件身份，预览使用共享 PreviewStore 管理只读快照。详见
+[Web 插件架构](web-plugin-design.md)。
 
 ## 扩展入口
 

@@ -61,6 +61,14 @@ jobs:
       - name: Check Rust, native adapters, GPUI and plugin SDK
         run: ./scripts/check.sh
 
+      - uses: actions/upload-artifact@v7
+        with:
+          name: Anywhere-plugin-sdk-${{ github.sha }}
+          path: |
+            build/plugin-sdk/*.tgz
+            build/plugin-sdk/*.tgz.sha256
+          if-no-files-found: error
+
   package:
     # Signing credentials are available only for an explicit maintainer dispatch.
     if: github.event_name == 'workflow_dispatch'

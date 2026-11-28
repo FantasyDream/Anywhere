@@ -6,9 +6,7 @@ impl LauncherView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        if !self.web_surface.actions_open {
-            self.ensure_web_view(window, cx);
-        }
+        self.ensure_web_view(window, cx);
         let (title, subtitle) = if let Some(document) = &self.web_surface.document {
             let subtitle = if self.standalone_tool {
                 if document.builtin {
@@ -66,9 +64,16 @@ impl LauncherView {
         )
         .on_click(cx.listener(|this, _, window, cx| this.toggle_web_actions(window, cx)))
         .into_any_element();
-        let body = if self.web_surface.actions_open {
-            components::action_candidates("web-tool-actions-panel", l10n::tool_options(self.locale))
+        let actions = self.web_surface.actions_open.then(|| {
+            components::action_popover("web-tool-actions-panel", l10n::tool_options(self.locale))
                 .debug_selector(|| "web-tool-actions-panel".into())
+                .on_mouse_down_out(cx.listener(|this, _, window, cx| {
+                    if this.web_surface.actions_open {
+                        window.prevent_default();
+                        cx.stop_propagation();
+                        this.toggle_web_actions(window, cx);
+                    }
+                }))
                 .test_support()
                 .children(
                     [
@@ -85,17 +90,36 @@ impl LauncherView {
                     .into_iter()
                     .enumerate()
                     .map(|(index, (icon, label))| {
-                        components::action_candidate(
+                        components::action_popover_row(
                             format!("web-tool-action-{index}"),
                             label,
                             icon,
                             self.web_surface.action_selected == index,
                             true,
+                            None,
                         )
                         .on_click(cx.listener(
                             move |this, _, window, cx| this.execute_web_action(index, window, cx),
                         ))
                     }),
+                )
+                .into_any_element()
+        });
+        let body = if let Some(panel) = actions {
+            // The native child WebView occupies its own platform surface.
+            // Leave a right-hand strip free so it cannot cover the GPUI menu.
+            div()
+                .flex_1()
+                .min_h_0()
+                .flex()
+                .child(div().flex_1().min_w_0().flex().child(body))
+                .child(
+                    div()
+                        .flex_none()
+                        .w(px(metrics::MENU_WIDTH + metrics::SPACE_XL))
+                        .max_w_1_2()
+                        .p(px(metrics::SPACE_XS))
+                        .child(panel),
                 )
                 .into_any_element()
         } else {

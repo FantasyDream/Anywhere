@@ -56,6 +56,37 @@
     event.preventDefault();
     native.postMessage(hostEscapeFrame);
   });
+  const dismissActionsFrame = '{"method":"host.dismissActions"}';
+  let actionsOpen = false;
+  let suppressActionDismissClick = false;
+  let actionsFocus;
+  window.addEventListener('anywhere:actions', event => {
+    actionsOpen = event.detail === true;
+    if (actionsOpen) actionsFocus = document.activeElement;
+    else actionsFocus?.focus?.();
+  });
+  window.addEventListener(
+    'pointerdown',
+    event => {
+      suppressActionDismissClick = actionsOpen;
+      if (!actionsOpen) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      native.postMessage(dismissActionsFrame);
+    },
+    true,
+  );
+  for (const type of ['click', 'auxclick', 'contextmenu']) {
+    window.addEventListener(
+      type,
+      event => {
+        if (!actionsOpen && !suppressActionDismissClick) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      },
+      true,
+    );
+  }
   const receivers = new Set();
   const pending = new Set();
   let focused;
@@ -119,7 +150,7 @@
         const cancellation = message.method === 'request.cancel';
         // Cancellation is unqueued and only forwarded for an active pending request.
         if (cancellation) {
-          if (!pending.delete(message.params?.request_id)) return;
+          if (!pending.delete(message.params?.requestId)) return;
         } else {
           if (pending.size >= 32) throw new Error('BUSY');
           pending.add(message.requestId);

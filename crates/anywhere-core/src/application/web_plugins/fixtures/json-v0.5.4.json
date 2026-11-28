@@ -3,7 +3,7 @@
   "id": "dev.anywhere.json-workspace",
   "name": "JSON Workspace",
   "version": "0.5.4",
-  "apiVersion": "1",
+  "apiVersion": "2",
   "platforms": [
     "macos"
   ],

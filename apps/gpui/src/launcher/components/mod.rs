@@ -1,3 +1,11 @@
+mod action_popover;
+mod controls;
+mod modal;
+
+pub use action_popover::{action_popover, action_popover_row};
+pub use controls::{filter_chip, search_field};
+pub use modal::{modal_frame, modal_shell};
+
 mod footer_bar;
 mod highlight;
 mod list_row;
@@ -81,29 +89,18 @@ pub fn squircle_icon_plate(icon: IconName, tint: Hsla, icon_size: f32) -> Div {
         .child(Icon::new(icon).size(px(icon_size)).text_color(tint))
 }
 
-pub fn action_candidate(
-    id: impl Into<SharedString>,
-    label: impl Into<SharedString>,
-    icon: IconName,
-    selected: bool,
-    enabled: bool,
-) -> gpui_kit::base::ObservedElement<Stateful<Div>> {
-    let label = label.into();
-    let mut row = ListRow::new(id)
-        .density(RowDensity::Compact)
-        .selected(selected)
-        .enabled(enabled)
-        .leading(
-            Icon::new(icon)
-                .size(px(metrics::ICON_SIZE))
-                .text_color(theme::secondary()),
-        )
-        .title(label.clone())
-        .title_tooltip(label);
-    if selected && enabled {
-        row = row.trailing(keycap("↵"));
-    }
-    row.build().test_support()
+pub fn loading_state(label: impl Into<SharedString>) -> Div {
+    use gpui_kit::component::spinner::Spinner;
+    div()
+        .flex_1()
+        .flex()
+        .items_center()
+        .justify_center()
+        .gap(px(metrics::SPACE_SM))
+        .body_text()
+        .text_color(theme::secondary())
+        .child(Spinner::new().color(theme::accent()))
+        .child(label.into())
 }
 
 pub fn keycap(value: impl Into<SharedString>) -> Div {

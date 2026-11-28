@@ -3,7 +3,7 @@ use super::metadata::{encoded, read_manifest};
 use anyhow::{bail, Context, Result};
 use std::{
     collections::{BTreeMap, BTreeSet},
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf, MAIN_SEPARATOR, MAIN_SEPARATOR_STR},
 };
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RunTarget {
@@ -40,11 +40,7 @@ pub fn targets(root: &Path) -> Result<Vec<RunTarget>> {
             .flatten()
             .filter_map(toml::Value::as_str)
         {
-            let pattern = format!(
-                "{}/{}",
-                glob::Pattern::escape(&root.to_string_lossy()),
-                member
-            );
+            let pattern = workspace_member_pattern(root, member);
             for (index, entry) in glob::glob(&pattern)?.take(129).enumerate() {
                 if index == 128 {
                     bail!("Cargo workspace member expansion exceeds the 128 entries limit");
@@ -190,6 +186,21 @@ pub fn targets(root: &Path) -> Result<Vec<RunTarget>> {
 fn parse(root: &Path) -> Result<toml::Value> {
     toml::from_str(&read_manifest(&root.join("Cargo.toml"))?)
         .context("Cargo.toml is not valid TOML")
+}
+
+fn workspace_member_pattern(root: &Path, member: &str) -> String {
+    let root_text = root.to_string_lossy();
+    let prefix_len = match root.components().next() {
+        Some(Component::Prefix(prefix)) => prefix.as_os_str().to_string_lossy().len(),
+        _ => 0,
+    };
+    // Escaping a verbatim Windows prefix changes the drive that glob resolves.
+    format!(
+        "{}{}{MAIN_SEPARATOR}{}",
+        &root_text[..prefix_len],
+        glob::Pattern::escape(&root_text[prefix_len..]),
+        member.replace('/', MAIN_SEPARATOR_STR),
+    )
 }
 
 #[cfg(test)]

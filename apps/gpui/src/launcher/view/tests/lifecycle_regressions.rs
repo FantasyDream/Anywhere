@@ -347,6 +347,45 @@ fn settings_operations_finish_after_the_launcher_generation_changes(cx: &mut Tes
 }
 
 #[gpui_kit::test]
+fn save_during_clipboard_write_commits_the_dirty_draft_when_the_write_finishes(
+    cx: &mut TestAppContext,
+) {
+    let (_window, view) = open_presented_view(cx);
+    let (sender, receiver) = tokio::sync::mpsc::channel(1);
+    cx.update(|cx| {
+        view.update(cx, |view, cx| {
+            view.screen = Screen::Settings;
+            view.settings_editor.draft.launch_at_login = !view.preferences.launch_at_login;
+            let operation = view.begin_settings_operation();
+            view.poll_settings_save(receiver, operation, cx);
+            view.save_settings(cx);
+            view.save_settings(cx);
+            assert_ne!(
+                view.settings_editor.draft.launch_at_login,
+                view.preferences.launch_at_login
+            );
+        });
+    });
+    sender
+        .try_send(LiveEvent::Settings(crate::settings::SettingsSnapshot {
+            clipboard_recording: true,
+            features: vec![],
+        }))
+        .unwrap();
+    cx.run_until_parked();
+    cx.update(|cx| {
+        let view = view.read(cx);
+        assert_eq!(
+            view.settings_editor.draft.launch_at_login,
+            view.preferences.launch_at_login
+        );
+        assert_eq!(view.settings_editor.save_generation, 2);
+        assert!(view.settings_editor.model.clipboard_recording);
+        assert!(!view.settings_editor.model.saving);
+    });
+}
+
+#[gpui_kit::test]
 fn settings_operation_failures_roll_back_the_switch_and_keep_the_draft(cx: &mut TestAppContext) {
     let (_window, view) = open_presented_view(cx);
     let (sender, receiver) = tokio::sync::mpsc::channel(1);
@@ -387,7 +426,7 @@ fn late_folder_authorization_does_not_overwrite_new_roots(cx: &mut TestAppContex
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.screen = Screen::Settings;
-            set_input_value(
+            set_textarea_value(
                 &view.settings_editor.file_roots_input,
                 "/newer-edit".to_owned(),
                 window,
@@ -410,6 +449,62 @@ fn late_folder_authorization_does_not_overwrite_new_roots(cx: &mut TestAppContex
         });
     })
     .unwrap();
+}
+
+#[cfg(windows)]
+#[gpui_kit::test]
+fn authorized_search_directories_hide_windows_verbatim_prefixes(cx: &mut TestAppContext) {
+    let (window, view) = open_presented_view(cx);
+    let previous = vec![r"\\?\C:\fixture\previous".to_owned()];
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.screen = Screen::Settings;
+            set_textarea_value(
+                &view.settings_editor.file_roots_input,
+                previous[0].clone(),
+                window,
+                cx,
+            );
+            view.finish_search_directory_selection(
+                &previous,
+                Ok(Some(vec![
+                    r"\\?\C:\fixture\previous".to_owned(),
+                    r"\\?\C:\fixture\working".to_owned(),
+                ])),
+                window,
+                cx,
+            );
+            assert_eq!(
+                view.settings_editor
+                    .file_roots_input
+                    .read(cx)
+                    .value()
+                    .as_ref(),
+                r"C:\fixture\previous
+C:\fixture\working"
+            );
+            assert_eq!(
+                view.settings_editor.draft.file_search_roots,
+                vec![r"C:\fixture\previous", r"C:\fixture\working"]
+            );
+        });
+    })
+    .unwrap();
+}
+
+#[cfg(windows)]
+#[test]
+fn persisted_search_directories_hide_windows_verbatim_prefixes() {
+    assert_eq!(
+        readable_search_roots(&[
+            r"\\?\C:\fixture\previous".to_owned(),
+            r"\\?\UNC\server\share\working".to_owned(),
+        ]),
+        vec![
+            r"C:\fixture\previous".to_owned(),
+            r"\\server\share\working".to_owned(),
+        ]
+    );
 }
 
 #[gpui_kit::test]
@@ -611,4 +706,34 @@ fn a_hidden_web_document_retains_metadata_and_requires_resume_before_mount(
             assert!(view.web_surface.view.is_none());
         });
     }
+}
+
+#[gpui_kit::test]
+fn current_app_wakeup_does_not_resume_the_previous_target(cx: &mut TestAppContext) {
+    let (window, view) = open_view(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.live_state.session_id = Some(7);
+            view.presence.presented = false;
+            view.presence.retained_workspace = true;
+            view.presence.hidden_at = Some(Instant::now());
+            view.input_mode = InputMode::Search;
+            view.model.set_query("Git 状态".into());
+            view.model.scopes = vec![crate::launcher::LauncherScope {
+                id: "app.example".into(),
+                label: "Editor".into(),
+                is_current_app: true,
+            }];
+            view.model.select_scope(Some("app.example".into()));
+            set_input_value(&view.input, "Git 状态", window, cx);
+
+            assert!(view.activate_from_entry(InputMode::Environment, false, window, cx));
+            assert!(!view.presence.retained_workspace);
+            assert!(view.presence.hidden_at.is_none());
+            assert!(view.model.query.is_empty());
+            assert!(view.model.selected_scope.is_none());
+            assert!(view.input.read(cx).value().is_empty());
+        });
+    })
+    .unwrap();
 }

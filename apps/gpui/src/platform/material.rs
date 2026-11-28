@@ -1,20 +1,20 @@
 //! Platform-neutral window backdrop policy and platform material adapters.
 //!
-//! Product pages render on a fully transparent GPUI canvas. The platform
-//! adapter owns the backdrop surface, window clipping and accessibility
-//! fallback. Windows can later plug a Mica/Acrylic adapter into the same policy
-//! without changing Launcher, Settings, Tasks or Web surfaces.
+//! Platform adapters own native backdrops and window clipping. The material
+//! policy supplies the application's appearance and accessibility settings.
 
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 
 #[cfg(target_os = "macos")]
 mod macos;
+#[cfg(windows)]
+mod windows;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum WindowMaterialMode {
     /// macOS 26+ Liquid Glass.
     LiquidGlass,
-    /// System blur on older macOS releases.
+    /// Native blur on Windows and older macOS releases.
     Blurred,
     /// Accessibility or unsupported-host fallback.
     Opaque,
@@ -44,6 +44,7 @@ pub enum WindowAppearance {
     Dark,
 }
 
+#[cfg(target_os = "macos")]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum WindowGlassStyle {
     /// Use the system's regular material without a custom tint or backdrop veil.
@@ -145,12 +146,16 @@ pub(crate) fn prepare_window_material() {
     {
         macos::prepare_window_material();
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(windows)]
+    {
+        windows::prepare_window_material();
+    }
+    #[cfg(not(any(target_os = "macos", windows)))]
     {
         remember_material_plan(WindowMaterialPlan {
             mode: WindowMaterialMode::Opaque,
             appearance: WindowAppearance::Light,
-            corner_radius: 0.0,
+            corner_radius: f64::from(crate::ui::LAUNCHER_CORNER_RADIUS),
             increase_contrast: false,
             reduce_motion: false,
         });
@@ -162,31 +167,24 @@ pub(crate) fn set_application_appearance(appearance: Option<WindowAppearance>) -
     {
         macos::set_application_appearance(appearance)
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(windows)]
+    {
+        windows::set_application_appearance(appearance)
+    }
+    #[cfg(not(any(target_os = "macos", windows)))]
     {
         let _ = appearance;
         false
     }
 }
 
+#[cfg(target_os = "macos")]
 pub(crate) fn install_window_material(
-    #[cfg(target_os = "macos")] window: &objc2_app_kit::NSWindow,
+    window: &objc2_app_kit::NSWindow,
     corner_radius: f64,
     glass_style: WindowGlassStyle,
 ) -> bool {
-    #[cfg(target_os = "macos")]
-    {
-        macos::install_window_material(window, corner_radius, glass_style)
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        // A future Windows adapter maps the same plan to DWM SystemBackdrop
-        // (Mica/Acrylic) and its accessibility fallback.
-        let _ = corner_radius;
-        let _ = glass_style;
-        prepare_window_material();
-        true
-    }
+    macos::install_window_material(window, corner_radius, glass_style)
 }
 
 #[cfg(test)]

@@ -10,8 +10,9 @@ use crate::core::{
     },
 };
 use anyhow::Result;
-use anywhere_platform::{FileSearchHit, FileSearchHost};
+use anywhere_platform::{paths::display_path, FileSearchHit, FileSearchHost};
 use anywhere_protocol::*;
+use std::path::Path;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
@@ -250,6 +251,11 @@ impl AsyncCandidateSource for FileSearchSource {
             })
         };
         let index = async {
+            if store.is_path_query()
+                || policy.options.engine == anywhere_platform::FileSearchEngine::DirectScan
+            {
+                return Ok(());
+            }
             let permit = tokio::select! { p = self.index_worker.clone().acquire_owned() => p?, _ = execution.superseded() => return Ok::<_, anyhow::Error>(()), };
             if current() {
                 return Ok(());
@@ -261,11 +267,7 @@ impl AsyncCandidateSource for FileSearchSource {
             let index_store = store.clone();
             let result = tokio::task::spawn_blocking(move || {
                 let _permit = permit;
-                if index_store.is_path_query() {
-                    return Ok(Vec::new());
-                }
-                let hits = platform.search_files_with_options(&query, 64, &options, &*check)?;
-                Ok::<_, anyhow::Error>(index_store.verify_index_hits(hits, &*check))
+                index_store.provisional_hits(platform.as_ref(), &query, &options, &*check)
             })
             .await?;
             // A late index batch must never replace confirmed traversal results.
@@ -284,7 +286,11 @@ impl AsyncCandidateSource for FileSearchSource {
             Ok(())
         };
         let scan = async {
-            tokio::select! { _ = tokio::time::sleep(std::time::Duration::from_millis(110)) => {}, _ = execution.superseded() => return Ok::<_, anyhow::Error>(()), }
+            if !store.is_path_query()
+                && policy.options.engine != anywhere_platform::FileSearchEngine::DirectScan
+            {
+                tokio::select! { _ = tokio::time::sleep(std::time::Duration::from_millis(110)) => {}, _ = execution.superseded() => return Ok::<_, anyhow::Error>(()), }
+            }
             let permit = tokio::select! { p = self.worker.clone().acquire_owned() => p?, _ = execution.superseded() => return Ok(()), };
             if current() {
                 return Ok(());
@@ -295,13 +301,14 @@ impl AsyncCandidateSource for FileSearchSource {
             let actions = self.actions.clone();
             tokio::task::spawn_blocking(move || {
                 let _permit = permit;
-                let result = store.run(&*check, |page| {
+                let publish = |page| {
                     if check() {
                         anyhow::bail!("search cancelled");
                     }
                     tx.blocking_send(scan_batch(page, &actions, &store))
                         .map_err(|_| anyhow::anyhow!("search receiver closed"))
-                });
+                };
+                let result = store.run(&*check, publish);
                 if let Err(error) = result {
                     if !check() {
                         store.fail(&error);
@@ -498,6 +505,7 @@ pub fn result_actions(
                 Some(
                     "core.file.open"
                         | "core.file.reveal"
+                        | "core.file.inspect_web_package"
                         | "core.file.copy"
                         | "core.directory.open"
                         | "core.directory.copy"
@@ -510,10 +518,13 @@ pub fn result_actions(
                 (&offer.presentation.command_id, context.value.path())
             {
                 let fingerprint = anywhere_platform::search_storage::path_fingerprint(path);
+                let display_path = display_path(Path::new(path)).to_string_lossy().into_owned();
                 offer.presentation.id = format!(
                     "file-action:{command}:{}:{fingerprint:016x}",
                     context.type_id
                 );
+                offer.presentation.subtitle = Some(display_path.clone());
+                offer.presentation.execution_target_label = Some(display_path);
             }
             offer.presentation.kind = CandidateKind::Action;
             offer.presentation.file_kind = file.presentation.file_kind;

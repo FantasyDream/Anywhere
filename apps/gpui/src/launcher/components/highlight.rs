@@ -48,7 +48,7 @@ pub fn compute_match_highlights(text: &str, query: &str) -> Vec<Range<usize>> {
     merge_ranges(ranges)
 }
 
-/// Render `text` with `accent` bold highlights for characters matching `query`.
+/// Render `text` with semibold highlights for characters matching `query`.
 pub fn highlighted_text(text: SharedString, query: &str, highlight_color: Hsla) -> AnyElement {
     let ranges = compute_match_highlights(text.as_ref(), query);
     if ranges.is_empty() {
@@ -56,7 +56,7 @@ pub fn highlighted_text(text: SharedString, query: &str, highlight_color: Hsla) 
     }
     let style = HighlightStyle {
         color: Some(highlight_color),
-        font_weight: Some(FontWeight::BOLD),
+        font_weight: Some(FontWeight::SEMIBOLD),
         ..Default::default()
     };
     StyledText::new(text)

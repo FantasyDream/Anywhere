@@ -5,11 +5,12 @@ impl LauncherView {
         &mut self,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let body = if self.clipboard.actions_open {
-            self.render_clipboard_actions_panel(cx)
-        } else {
-            self.render_clipboard_results(cx)
-        };
+        self.sync_clipboard_inspector(cx);
+        let body = self.render_clipboard_results(cx);
+        let panel = self
+            .clipboard
+            .actions_open
+            .then(|| self.render_clipboard_actions_panel(cx));
         let actions = components::page_actions_button(
             "clipboard-page-actions",
             l10n::actions(self.locale),
@@ -49,6 +50,9 @@ impl LauncherView {
             .size_full()
             .relative()
             .child(page)
+            .when_some(panel, |page, panel| {
+                page.child(self.render_action_overlay(panel, cx))
+            })
             .into_any_element()
     }
 
@@ -80,31 +84,11 @@ impl LauncherView {
                         l10n::manage_recording_in_settings_clipboard(self.locale)
                     }
                 });
-            div()
-                .flex_1()
-                .flex()
-                .flex_col()
-                .items_center()
-                .justify_center()
-                .gap(px(metrics::SPACE_MD))
-                .p(px(metrics::SPACE_XXL))
-                .child(
-                    Icon::new(IconName::Clock3)
-                        .size(px(metrics::ICON_PLATE_SIZE))
-                        .text_color(theme::icon_purple()),
-                )
-                .child(div().body_text().text_color(theme::primary()).child(title))
-                .when_some(detail, |element, detail| {
-                    element.child(
-                        div()
-                            .max_w(px(440.))
-                            .text_center()
-                            .caption_text()
-                            .text_color(theme::muted())
-                            .child(detail),
-                    )
-                })
-                .into_any_element()
+            if self.clipboard.loading {
+                components::loading_state(title).into_any_element()
+            } else {
+                components::empty_state(IconName::Clock3, title, detail).into_any_element()
+            }
         } else {
             let list = div()
                 .flex_1()
@@ -122,7 +106,7 @@ impl LauncherView {
                         }),
                     )
                     .size_full()
-                    .px(px(metrics::SPACE_SM))
+                    .px(px(metrics::LIST_PADDING_X))
                     .track_scroll(&self.scrolls.tool_lists.clipboard),
                 )
                 .vertical_scrollbar(&self.scrolls.clipboard_base());
@@ -193,38 +177,12 @@ impl LauncherView {
         for (filter, id, label) in filters {
             let active = self.clipboard.kind_filter == filter;
             bar = bar.child(
-                div()
-                    .id(id)
-                    .role(gpui_kit::Role::Button)
-                    .aria_selected(active)
-                    .h(px(metrics::CONTROL_HEIGHT))
-                    .px(px(metrics::CONTROL_PADDING_X))
-                    .flex()
-                    .items_center()
-                    .rounded(px(metrics::CONTROL_RADIUS))
-                    .text_size(px(metrics::LABEL_SIZE))
-                    .font_weight(if active {
-                        FontWeight::MEDIUM
-                    } else {
-                        FontWeight::NORMAL
-                    })
-                    .text_color(if active {
-                        theme::primary()
-                    } else {
-                        theme::secondary()
-                    })
-                    .when(active, |chip| {
-                        chip.bg(theme::selected())
-                            .border(px(metrics::DIVIDER_WIDTH))
-                            .border_color(theme::control_border())
-                    })
-                    .when(!active, |chip| chip.hover(|style| style.bg(theme::hover())))
-                    .cursor_pointer()
-                    .on_click(cx.listener(move |this, _, _, cx| {
+                components::filter_chip(id, label, active).on_click(cx.listener(
+                    move |this, _, _, cx| {
                         this.clipboard.set_kind_filter(filter);
                         cx.notify();
-                    }))
-                    .child(label),
+                    },
+                )),
             );
         }
         bar
@@ -240,6 +198,37 @@ impl LauncherView {
         let relative = format_relative_time(item.copied_at_ms, current_unix_ms(), self.locale);
         let size = format_byte_count(item.byte_count);
         let item_id = item.id;
+        let scroll = &self.scrolls.clipboard_inspector;
+        let inspector = self
+            .clipboard_inspector
+            .as_ref()
+            .filter(|inspector| inspector.item_id == item_id);
+        let body = inspector
+            .and_then(state::ClipboardInspector::body)
+            .unwrap_or(item.summary.as_str());
+        let code = body.lines().nth(1).is_some()
+            && (body.trim_start().starts_with(['{', '[', '$', '>'])
+                || body
+                    .lines()
+                    .take(40)
+                    .any(|line| line.starts_with("    ") || line.starts_with('\t')));
+        let color_values = swatch.map(|color| {
+            let ink = gpui_kit::Rgba::from(color);
+            let [red, green, blue] =
+                [ink.r, ink.g, ink.b].map(|value| (value * 255.).round() as u8);
+            let alpha = (ink.a * 255.).round() as u8;
+            let hex = if alpha == 255 {
+                format!("#{red:02X}{green:02X}{blue:02X}")
+            } else {
+                format!("#{red:02X}{green:02X}{blue:02X}{alpha:02X}")
+            };
+            let rgb = if alpha == 255 {
+                format!("rgb({red}, {green}, {blue})")
+            } else {
+                format!("rgba({red}, {green}, {blue}, {:.3})", ink.a)
+            };
+            [hex, rgb]
+        });
         div()
             .id("clipboard-preview-inspector")
             .w_2_5()
@@ -262,20 +251,110 @@ impl LauncherView {
                         .border_color(theme::control_border()),
                 )
             })
+            .when_some(color_values, |panel, values| {
+                panel.child(
+                    div()
+                        .flex()
+                        .flex_wrap()
+                        .gap(px(metrics::SPACE_XS))
+                        .children(values.into_iter().enumerate().map(|(index, value)| {
+                            Button::new(SharedString::from(format!("clipboard-copy-color-{index}")))
+                                .secondary()
+                                .icon(IconName::Copy)
+                                .label(value.clone())
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    this.copy_text_with_feedback(value.clone(), cx);
+                                }))
+                        })),
+                )
+            })
             .child(
                 div()
                     .flex_1()
                     .min_h_0()
-                    .overflow_hidden()
-                    .p(px(metrics::SPACE_SM))
+                    .relative()
                     .rounded(px(metrics::CONTROL_RADIUS))
                     .bg(theme::field())
                     .border(px(metrics::DIVIDER_WIDTH))
                     .border_color(theme::border())
-                    .text_size(px(metrics::LABEL_SIZE))
-                    .line_height(px(metrics::LABEL_SIZE * metrics::BODY_LINE_HEIGHT))
-                    .text_color(theme::primary())
-                    .child(item.summary),
+                    .child(
+                        div()
+                            .id("clipboard-inspector-scroll")
+                            .test_support()
+                            .size_full()
+                            .track_scroll(scroll)
+                            .overflow_y_scroll()
+                            .p(px(metrics::SPACE_SM))
+                            .whitespace_normal()
+                            .text_size(px(metrics::LABEL_SIZE))
+                            .line_height(px(metrics::LABEL_SIZE * metrics::BODY_LINE_HEIGHT))
+                            .when(code, |text| text.font_family(fonts::FONT_MONO))
+                            .text_color(theme::primary())
+                            .children(body.split('\n').map(|line| {
+                                // Keep explicit line boundaries while wrapping each line to the inspector.
+                                div().child(SharedString::from(if line.is_empty() {
+                                    " "
+                                } else {
+                                    line
+                                }))
+                            })),
+                    )
+                    .vertical_scrollbar(scroll),
+            )
+            .when_some(
+                inspector.filter(|state| state.pages.len() > 1),
+                |panel, state| {
+                    panel.child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .gap(px(metrics::SPACE_XS))
+                            .children(
+                                [(-1, IconName::ChevronLeft), (1, IconName::ChevronRight)]
+                                    .into_iter()
+                                    .enumerate()
+                                    .map(|(index, (step, icon))| {
+                                        let page = state.selected_page.saturating_add_signed(step);
+                                        let label = l10n::clipboard_preview_page(
+                                            self.locale,
+                                            (page + 1) as i64,
+                                        );
+                                        Button::new(SharedString::from(format!(
+                                            "clipboard-inspector-page-{index}"
+                                        )))
+                                        .ghost()
+                                        .icon(icon)
+                                        .accessibility_label(label.clone())
+                                        .tooltip(label)
+                                        .disabled(
+                                            page == state.selected_page
+                                                || page >= state.pages.len(),
+                                        )
+                                        .on_click(
+                                            cx.listener(move |this, _, _, cx| {
+                                                if let Some(state) =
+                                                    this.clipboard_inspector.as_mut()
+                                                {
+                                                    if state.item_id == item_id
+                                                        && page < state.pages.len()
+                                                    {
+                                                        state.selected_page = page;
+                                                        this.scrolls
+                                                            .clipboard_inspector
+                                                            .set_offset(gpui_kit::point(
+                                                                px(0.),
+                                                                px(0.),
+                                                            ));
+                                                        cx.notify();
+                                                    }
+                                                }
+                                            }),
+                                        )
+                                    }),
+                            ),
+                    )
+                },
             )
             .child(
                 div()
@@ -344,7 +423,7 @@ impl LauncherView {
             components::footer_action_button(
                 "clipboard-footer-actions",
                 actions_label,
-                "⌘K",
+                crate::platform::primary_shortcut_label("K"),
                 false,
             )
             .on_click(cx.listener(|this, _, _, cx| {
@@ -375,7 +454,9 @@ impl LauncherView {
         let title = target
             .map(|item| item.summary.clone())
             .unwrap_or_else(|| l10n::actions(self.locale));
-        components::action_candidates("clipboard-actions", title)
+        let preview_key = crate::platform::primary_shortcut_label("Y");
+        let refresh_key = crate::platform::primary_shortcut_label("R");
+        components::action_popover("clipboard-actions", title)
             .debug_selector(|| "clipboard-actions".into())
             .children(
                 [
@@ -390,12 +471,17 @@ impl LauncherView {
                     target.is_some() || *index == Self::clipboard_refresh_action(self.screen)
                 })
                 .map(|(index, (icon, label))| {
-                    components::action_candidate(
+                    components::action_popover_row(
                         format!("clipboard-action-row-{index}"),
                         label,
                         icon,
                         self.clipboard.action_selected == index,
                         true,
+                        match index {
+                            1 => Some(preview_key.as_str()),
+                            3 => Some(refresh_key.as_str()),
+                            _ => None,
+                        },
                     )
                     .on_click(
                         cx.listener(move |this, _, _, cx| this.execute_clipboard_action(index, cx)),

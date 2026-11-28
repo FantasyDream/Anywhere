@@ -333,7 +333,8 @@ fn shelf_command_arrows_reveal_the_selected_row(cx: &mut TestAppContext) {
     });
     sync_test_viewport(cx, window, gpui_kit::size(px(480.), px(520.)));
     let command = KeyModifiers {
-        command: true,
+        command: cfg!(target_os = "macos"),
+        control: !cfg!(target_os = "macos"),
         modified: true,
         ..Default::default()
     };

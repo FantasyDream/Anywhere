@@ -41,17 +41,19 @@ impl LauncherView {
                 IconName::Puzzle,
             ))
             .child(self.settings_rows_card(feature_rows))
-            .child(
-                self.settings_row(
-                    l10n::web_tools(self.locale),
-                    l10n::web_tools_settings_description(self.locale),
-                    Button::new("manage-web-packages")
-                        .secondary()
-                        .label(l10n::manage_web_tools(self.locale))
-                        .on_click(cx.listener(|this, _, window, cx| {
-                            this.open_screen(Screen::WebPackages, window, cx);
-                        })),
-                ),
-            )
+            .when(crate::platform::capabilities::WEB_TOOLS, |page| {
+                page.child(
+                    self.settings_row(
+                        l10n::web_tools(self.locale),
+                        l10n::web_tools_settings_description(self.locale),
+                        Button::new("manage-web-packages")
+                            .secondary()
+                            .label(l10n::manage_web_tools(self.locale))
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.open_screen(Screen::WebPackages, window, cx);
+                            })),
+                    ),
+                )
+            })
     }
 }

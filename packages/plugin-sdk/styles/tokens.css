@@ -62,6 +62,16 @@
   --aw-on-dark-selection-outline: #ffffff30;
   --aw-on-dark-control-border: #ffffff30;
   --aw-on-dark-divider: #ffffff1f;
+  --aw-settings-sidebar-width: 172px;
+  --aw-tasks-sidebar-width: 256px;
+  --aw-settings-row-min-height: 58px;
+  --aw-search-field-height: 34px;
+  --aw-modal-width-compact: 360px;
+  --aw-modal-width-picker: 440px;
+  --aw-list-padding-x: 10px;
+  --aw-task-card-height: 76px;
+  --aw-selection-indicator-width: 3px;
+  --aw-draft-indicator-size: 6px;
   --aw-radius: 18px;
   --aw-result-radius: 12px;
   --aw-control-radius: 8px;
@@ -152,8 +162,8 @@
   --aw-row-title-compact: 13px;
   --aw-row-subtitle-regular: 12px;
   --aw-row-subtitle-compact: 11px;
-  --aw-font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --aw-font-mono: Menlo, Consolas, monospace;
+  --aw-font-ui: "Noto Sans SC", system-ui, sans-serif;
+  --aw-font-mono: "Fira Mono", monospace;
   --aw-text: var(--aw-primary);
 }
 :root { color-scheme: dark; }

@@ -58,26 +58,31 @@ impl WebDocumentPolicy {
         &self.origin
     }
 
+    pub fn runtime_origin(&self) -> String {
+        crate::platform::web_document_origin(&self.origin)
+    }
+
     pub fn entry(&self) -> &str {
         &self.entry
     }
 
     pub fn accepts_navigation(&self, candidate: &str) -> bool {
-        candidate == self.url()
+        candidate == self.url() || candidate == format!("{}/{}", self.runtime_origin(), self.entry)
     }
 
     pub fn accepts_source(&self, candidate: &str) -> bool {
         let Ok(url) = Url::parse(candidate) else {
             return false;
         };
-        let Ok(origin) = Url::parse(&self.origin) else {
+        if !url.username().is_empty() || url.password().is_some() || url.port().is_some() {
             return false;
-        };
-        url.scheme() == origin.scheme()
-            && url.host_str() == origin.host_str()
-            && url.username().is_empty()
-            && url.password().is_none()
-            && url.port().is_none()
+        }
+        let runtime_origin = self.runtime_origin();
+        let matches = [self.origin.as_str(), runtime_origin.as_str()]
+            .into_iter()
+            .filter_map(|candidate_origin| Url::parse(candidate_origin).ok())
+            .any(|origin| url.scheme() == origin.scheme() && url.host_str() == origin.host_str());
+        matches
     }
 
     pub fn resource_path(&self, value: &str) -> Option<String> {
@@ -128,10 +133,11 @@ impl WebDocumentPolicy {
 
     pub fn protect_html(&self, bytes: &[u8]) -> Vec<u8> {
         let body = String::from_utf8_lossy(bytes);
+        let active_origin = self.runtime_origin();
         let injection = format!(
             "<meta charset=\"utf-8\"><meta http-equiv=\"Content-Security-Policy\" content=\"{}\">\
              <style data-anywhere-theme>{}</style>",
-            content_security_policy(&self.origin),
+            content_security_policy(&active_origin),
             web_theme_css()
         );
         inject_document_head(&body, &injection).into_bytes()
@@ -146,14 +152,15 @@ impl WebDocumentPolicy {
         } else {
             bytes
         };
-        let csp = content_security_policy(&self.origin);
+        let active_origin = self.runtime_origin();
+        let csp = content_security_policy(&active_origin);
         Response::builder()
             .status(200)
             .header(CONTENT_TYPE, content_type)
             .header(CONTENT_SECURITY_POLICY, csp)
             .header(X_CONTENT_TYPE_OPTIONS, "nosniff")
             .header(CACHE_CONTROL, "no-store")
-            .header("Access-Control-Allow-Origin", self.origin.as_str())
+            .header("Access-Control-Allow-Origin", active_origin.as_str())
             .body(Cow::Owned(body))
             .unwrap_or_else(|_| plain_response(500, "Host response failed"))
     }
@@ -228,7 +235,15 @@ fn inject_document_head(body: &str, injection: &str) -> String {
 }
 
 pub fn bootstrap_script(language: &str) -> String {
-    format!("{}\n{BOOTSTRAP}", locale_script(language))
+    let platform = if cfg!(target_os = "macos") {
+        "macos"
+    } else {
+        "windows"
+    };
+    format!(
+        "Object.defineProperty(window, '__anywherePlatform', {{value:{platform:?}}});\n{}\n{BOOTSTRAP}",
+        locale_script(language)
+    )
 }
 
 pub(crate) fn is_host_escape_frame(frame: &str) -> bool {

@@ -100,7 +100,7 @@ pub(super) async fn check(path: &Path) -> Result<()> {
         !app.web_document_is_background(&workspace)?,
         "workspace lost its UI"
     );
-    let frame = json!({"protocol":1,"requestId":"indent","method":"storage.set",
+    let frame = json!({"protocol":2,"requestId":"indent","method":"storage.set",
         "params":{"key":"indent","value":4}})
     .to_string();
     let reply = app

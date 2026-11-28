@@ -2,6 +2,7 @@ use super::*;
 
 impl LauncherView {
     pub(in crate::launcher::view) fn context_settings(&mut self, cx: &mut Context<Self>) -> Div {
+        let file_selection_label = crate::platform::capabilities::file_selection_label(self.locale);
         div()
             .flex()
             .flex_col()
@@ -14,49 +15,76 @@ impl LauncherView {
                 div()
                     .text_size(px(metrics::CAPTION_SIZE))
                     .text_color(theme::muted())
-                    .child(l10n::context_description(self.locale)),
+                    .child(crate::platform::capabilities::context_sources_description(
+                        self.locale,
+                    )),
             )
-            .child(self.settings_rows_card(vec![
-                self.context_capture_row(
-                    ContextSource::FinderSelection,
-                    l10n::finder_selection(self.locale),
-                    l10n::selected_files_description(self.locale),
-                    self.settings_editor.draft.capture_finder_selection,
-                    Switch::new("capture-finder")
-                        .checked(self.settings_editor.draft.capture_finder_selection)
-                        .on_change(cx.listener(|this, checked, _, cx| {
-                            this.settings_editor.draft.capture_finder_selection = *checked;
-                            cx.notify();
-                        })),
-                    cx,
-                ),
-                self.context_capture_row(
-                    ContextSource::SelectedText,
-                    l10n::selected_text(self.locale),
-                    l10n::selected_text_description(self.locale),
-                    self.settings_editor.draft.capture_selected_text,
-                    Switch::new("capture-selected-text")
-                        .checked(self.settings_editor.draft.capture_selected_text)
-                        .on_change(cx.listener(|this, checked, _, cx| {
-                            this.settings_editor.draft.capture_selected_text = *checked;
-                            cx.notify();
-                        })),
-                    cx,
-                ),
-                self.context_capture_row(
-                    ContextSource::BrowserCurrentPage,
-                    l10n::browser_current_page(self.locale),
-                    l10n::browser_page_description(self.locale),
-                    self.settings_editor.draft.capture_browser_current_page,
-                    Switch::new("capture-browser")
-                        .checked(self.settings_editor.draft.capture_browser_current_page)
-                        .on_change(cx.listener(|this, checked, _, cx| {
-                            this.settings_editor.draft.capture_browser_current_page = *checked;
-                            cx.notify();
-                        })),
-                    cx,
-                ),
-            ]))
+            .when(
+                crate::platform::capabilities::DESKTOP_CONTEXT_CAPTURE,
+                |page| {
+                    page.child(self.settings_rows_card(vec![
+                            self.context_capture_row(
+                                ContextSource::FinderSelection,
+                                file_selection_label.clone(),
+                                l10n::selected_files_description(self.locale),
+                                self.settings_editor.draft.capture_finder_selection,
+                                Switch::new("capture-finder")
+                                    .disabled(self.settings_editor.model.saving)
+                                    .checked(self.settings_editor.draft.capture_finder_selection)
+                                    .accessibility_label(file_selection_label)
+                                    .on_change(cx.listener(|this, checked, _, cx| {
+                                        this.save_instant_preferences(
+                                            |preferences| {
+                                                preferences.capture_finder_selection = *checked
+                                            },
+                                            cx,
+                                        );
+                                    })),
+                                cx,
+                            ),
+                            self.context_capture_row(
+                                ContextSource::SelectedText,
+                                l10n::selected_text(self.locale),
+                                l10n::selected_text_description(self.locale),
+                                self.settings_editor.draft.capture_selected_text,
+                                Switch::new("capture-selected-text")
+                                    .disabled(self.settings_editor.model.saving)
+                                    .checked(self.settings_editor.draft.capture_selected_text)
+                                    .accessibility_label(l10n::selected_text(self.locale))
+                                    .on_change(cx.listener(|this, checked, _, cx| {
+                                        this.save_instant_preferences(
+                                            |preferences| {
+                                                preferences.capture_selected_text = *checked
+                                            },
+                                            cx,
+                                        );
+                                    })),
+                                cx,
+                            ),
+                            self.context_capture_row(
+                                ContextSource::BrowserCurrentPage,
+                                l10n::browser_current_page(self.locale),
+                                l10n::browser_page_description(self.locale),
+                                self.settings_editor.draft.capture_browser_current_page,
+                                Switch::new("capture-browser")
+                                    .disabled(self.settings_editor.model.saving)
+                                    .checked(
+                                        self.settings_editor.draft.capture_browser_current_page,
+                                    )
+                                    .accessibility_label(l10n::browser_current_page(self.locale))
+                                    .on_change(cx.listener(|this, checked, _, cx| {
+                                        this.save_instant_preferences(
+                                            |preferences| {
+                                                preferences.capture_browser_current_page = *checked
+                                            },
+                                            cx,
+                                        );
+                                    })),
+                                cx,
+                            ),
+                        ]))
+                },
+            )
     }
 
     pub(in crate::launcher::view) fn context_capture_row(
@@ -102,8 +130,9 @@ impl LauncherView {
                 false,
             )
         };
-        let privacy_pane =
-            capture.and_then(|capture| privacy_pane_for_capture(source, capture.status));
+        let privacy_pane = crate::platform::capabilities::FILE_SEARCH_PRIVACY_SETTINGS
+            .then(|| capture.and_then(|capture| privacy_pane_for_capture(source, capture.status)))
+            .flatten();
         div()
             .min_h(px(70.))
             .px(px(metrics::SPACE_MD))

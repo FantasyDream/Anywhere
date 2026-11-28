@@ -1,6 +1,6 @@
 # Current App 菜单动作
 
-现行专题契约；文档整理：2026-11-18。历史验收见 [归档](archive/README.md)。
+macOS 从 Accessibility 菜单栏读取动作，Windows 从激活时捕获的标准 Win32 菜单栏读取动作。两端使用同一 Current App Scope 和执行资格。
 
 ## 交互约定
 
@@ -44,13 +44,28 @@
 - 原应用快捷键作为独立 Action / Candidate 字段由 Core 建模并投影到 GPUI，同时保留为搜索别名；支持字符键及常见特殊键。当前候选行不展示这类快捷键，字段保留不等于仍有键帽 UI。
 - 用户配置的 Anywhere Action 绑定与原应用快捷键分别管理。MenuAction 的 BindingPolicy 明确拒绝持久绑定；Registry 生成持久绑定时会检查该策略，`execute_builtin` 包装也检查其目标，不能绕过限制。
 
+## Windows 标准菜单栏
+
+Windows 适配记录前台窗口、PID 和进程启动时间。后台发现只读取该窗口关联的
+标准菜单栏，展开已存在的子菜单，保留标题、快捷键标签和可用状态。扫描限制
+为 8 层、512 项；自绘、纯位图、按位置分发和重复命令 ID 不生成可执行项。
+现代应用的自定义菜单、应用 Ribbon 和按需生成的菜单内容仍有接入缺口。
+
+选择动作时在原窗口刷新菜单栏和路径对应子菜单的动态状态，初始化共享 350 ms
+等待预算。每一步重读菜单并复核完整标题路径、命令 ID、启用状态和窗口身份，
+再把有效命令交给 Windows 消息队列。窗口失效、初始化超时、命令变更或系统拒绝
+投递时走现有失败刷新路径。发现阶段只读取已存在的菜单，禁用窗口的菜单隐藏。
+[Win32 GetMenu](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getmenu) ·
+[WM_INITMENUPOPUP](https://learn.microsoft.com/en-us/windows/win32/menurc/wm-initmenupopup) ·
+[WM_COMMAND](https://learn.microsoft.com/en-us/windows/win32/menurc/wm-command)
+
 ## 验证
 
 `scripts/check.sh` 包含 Rust/GPUI 检查及 macOS 原生定位回归。原生测试使用模拟 AX 节点运行生产遍历和定位函数，不激活外部应用。
 
 覆盖：Hidden 恢复、同一 Scope、未授权保留 Finder 动作、单次发现、同 Session / 跨 Session 过期结果、失效后刷新、PID/启动身份/版本变化、重复标题、兄弟插入、AX 标识本地化、快捷键、非菜单 Group recency 与菜单历史隔离。
 
-Finder、VS Code、Chrome/Safari、TextEdit 的真实菜单、物理热键、授权交互以及首屏延迟仍需实机手工验收；自动化测试和打包通过不代表这些 GUI 项目已经验证。
+真实窗口、菜单命令结果和物理热键按 [macOS 桌面验收](test-acceptance-macos.md)与 [Windows 桌面验收](test-acceptance-windows.md#标准菜单栏)记录。
 
 ## 菜单身份安全降级
 

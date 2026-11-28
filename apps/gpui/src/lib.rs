@@ -3,6 +3,7 @@ pub mod host;
 pub mod l10n;
 pub mod launcher;
 pub mod platform;
+pub mod plugin_open;
 pub mod settings;
 pub mod ui;
 pub mod web_tool;

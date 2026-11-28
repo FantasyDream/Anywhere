@@ -1,9 +1,14 @@
 //! A headless command uses the same grant-checked broker as a Web document.
 //! The async driver owns Host work; the blocking VM only exchanges bounded messages.
-use super::{background_runtime, WebDocumentBinding, WebMessageSource};
+use super::{
+    background_runtime::{self, BackgroundFailure},
+    invocation::UsageRecord,
+    WebDocumentBinding, WebMessageSource,
+};
 use crate::application::Application;
 use anyhow::{ensure, Context, Result};
 use anywhere_protocol::{web_bridge::*, web_plugin::PluginRuntime};
+use serde::Deserialize;
 use serde_json::{json, Value};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -50,15 +55,58 @@ fn source(binding: &WebDocumentBinding) -> WebMessageSource<'_> {
     }
 }
 
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct BackgroundFeedback {
+    #[serde(default, deserialize_with = "present")]
+    message: Option<String>,
+    #[serde(default, deserialize_with = "present")]
+    close_window: Option<bool>,
+}
+
+fn present<'de, D: serde::Deserializer<'de>, T: Deserialize<'de>>(
+    input: D,
+) -> Result<Option<T>, D::Error> {
+    T::deserialize(input).map(Some)
+}
+
+impl BackgroundFeedback {
+    fn parse(value: Value) -> Result<Self, BackgroundFailure> {
+        if value.is_null() {
+            return Ok(Self::default());
+        }
+        if !value.is_object() {
+            return Err(BackgroundFailure::InvalidReturn);
+        }
+        let feedback: Self =
+            serde_json::from_value(value).map_err(|_| BackgroundFailure::InvalidReturn)?;
+        if feedback
+            .message
+            .as_ref()
+            .is_some_and(|message| message.len() > 512)
+        {
+            return Err(BackgroundFailure::InvalidReturn);
+        }
+        Ok(feedback)
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct BackgroundCompletion {
+    pub(crate) message: Option<String>,
+    pub(crate) close_window: bool,
+    pub(crate) usage: UsageRecord,
+}
+
 impl Application {
     pub(crate) async fn run_headless_web_action(
         &self,
         view: Option<&anywhere_protocol::HostView>,
         session_id: anywhere_protocol::SessionId,
         revision: anywhere_protocol::Revision,
-    ) -> Result<bool> {
+    ) -> Result<Option<BackgroundCompletion>> {
         let Some(anywhere_protocol::HostView::WebPlugin { invocation_id }) = view else {
-            return Ok(false);
+            return Ok(None);
         };
         let binding = {
             let session = self.session()?;
@@ -81,7 +129,7 @@ impl Application {
                 command.id == invocation.command.command_id
                     && command.runtime == PluginRuntime::Background
             }) {
-                return Ok(false);
+                return Ok(None);
             }
             let platform = entry.platform;
             web.bind(invocation_id, platform)?
@@ -90,15 +138,35 @@ impl Application {
             service: self.web_plugins.clone(),
             binding,
         };
-        self.run_background_command(&document.binding).await?;
-        Ok(true)
+        let result = self.run_background_command(&document.binding).await?;
+        let mut web = self
+            .web_plugins
+            .lock()
+            .map_err(|_| anyhow::anyhow!("plugin service unavailable"))?;
+        let diagnostics = web.diagnostics.clone();
+        let invocation = web.authorize(&document.binding, source(&document.binding))?;
+        let feedback = BackgroundFeedback::parse(result).inspect_err(|&error| {
+            diagnostics.record(
+                &invocation.command.plugin_id,
+                &invocation.input.entrypoint,
+                error,
+            );
+        })?;
+        let message = feedback
+            .message
+            .filter(|message| !message.trim().is_empty());
+        Ok(Some(BackgroundCompletion {
+            close_window: feedback.close_window.unwrap_or(message.is_none()),
+            message,
+            usage: invocation.usage.clone(),
+        }))
     }
 
     pub(super) async fn run_background_command(
         &self,
         binding: &WebDocumentBinding,
-    ) -> Result<String> {
-        let (file, entrypoint, input, registered, job) = {
+    ) -> Result<Value> {
+        let (file, entrypoint, input, registered, job, package, diagnostics) = {
             let mut web = self
                 .web_plugins
                 .lock()
@@ -137,16 +205,17 @@ impl Application {
             });
             web.backgrounds
                 .insert(binding.runtime_id().into(), job.clone());
-            (values.0, values.1, values.2, values.3, job)
+            (
+                values.0,
+                values.1,
+                values.2,
+                values.3,
+                job,
+                reference.plugin_id,
+                web.diagnostics.clone(),
+            )
         };
         let _running = Running(job.clone());
-        // Ready records usage once, without creating any WebKit resource.
-        let ready =
-            json!({"protocol":1,"requestId":"bg_ready","method":"lifecycle.ready","params":{}})
-                .to_string();
-        let _ = self
-            .dispatch_web_message(binding, source(binding), &ready)
-            .await;
         let (sender, mut calls) = mpsc::channel::<(WebCall, oneshot::Sender<WebResult<Value>>)>(1);
         let invoke: background_runtime::HostInvoke = Arc::new(move |call| {
             let (reply, result) = oneshot::channel();
@@ -160,9 +229,12 @@ impl Application {
         let active = job.active.clone();
         let current =
             Arc::new(move || active.load(Ordering::Acquire) && registered.load(Ordering::Acquire));
-        let mut worker = tokio::task::spawn_blocking(move || {
+        let mut worker = tokio::task::spawn_blocking(move || -> Result<Value> {
             let code = String::from_utf8(file.read()?)?;
-            background_runtime::run(&code, &entrypoint, &input, invoke, current)
+            Ok(
+                background_runtime::run(&code, &entrypoint, &input, invoke, current)
+                    .inspect_err(|error| diagnostics.record_error(&package, &entrypoint, error))?,
+            )
         });
         let mut sequence = 0u64;
         let result = loop {
@@ -180,7 +252,7 @@ impl Application {
         crate::core::sync::lock_for_revoke(&self.web_plugins, "web_plugins")
             .backgrounds
             .remove(binding.runtime_id());
-        Ok(serde_json::to_string(&result?)?)
+        result
     }
 
     async fn background_reply_value(

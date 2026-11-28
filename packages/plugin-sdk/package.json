@@ -5,7 +5,7 @@
   "private": true,
   "license": "MIT",
   "bin": {
-    "anywhere-plugin": "tools/create.mjs"
+    "anywhere-plugin": "tools/anywhere-plugin.mjs"
   },
   "exports": {
     ".": {
@@ -17,14 +17,23 @@
       "import": "./dist/index.js"
     },
     "./styles/controls.css": "./styles/controls.css",
-    "./styles/tokens.css": "./styles/tokens.css"
+    "./styles/tokens.css": "./styles/tokens.css",
+    "./mock": {
+      "types": "./dist/mock.d.ts",
+      "import": "./dist/mock.js"
+    },
+    "./mock/palettes.css": "./tools/mock-palettes.css",
+    "./mock/background": {
+      "types": "./tools/background-mock.d.mts",
+      "import": "./tools/background-mock.mjs"
+    }
   },
   "types": "./dist/index.d.ts",
   "files": [
     "dist",
     "styles",
-    "tools/package.py",
-    "tools/create.mjs",
+    "tools",
+    "schemas",
     "templates",
     "README.md"
   ],
@@ -32,7 +41,7 @@
     "build": "tsc",
     "check": "tsc --noEmit",
     "test": "node --test test/*.test.mjs",
-    "prepack": "npm run build"
+    "prepack": "npm run build && node tools/copy-schemas.mjs"
   },
   "devDependencies": {
     "typescript": "7.0.2"

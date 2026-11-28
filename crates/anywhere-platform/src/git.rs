@@ -55,6 +55,9 @@ fn base_command(program: &Path, repository: &Path) -> Command {
         "diff.textconv=",
         "-C",
     ]);
+    #[cfg(windows)]
+    command.arg(dunce::simplified(repository));
+    #[cfg(not(windows))]
     command.arg(repository);
     // Honour the selected repository, not an inherited one.
     command

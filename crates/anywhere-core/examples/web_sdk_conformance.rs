@@ -71,7 +71,7 @@ fn source(binding: &WebDocumentBinding) -> WebMessageSource<'_> {
     }
 }
 fn package() -> Result<anywhere_plugin::web::VerifiedWebPackage> {
-    let manifest = json!({"schemaVersion":1,"id":"dev.example.conformance","name":"Conformance","version":"1.0.0","apiVersion":"1","platforms":["macos"],"entry":"index.html","permissions":[{"name":"clipboard.readText"},{"name":"clipboard.writeText"},{"name":"storage.local"},{"name":"context.currentApp"}],"commands":[{"id":"open","title":"Conformance","entrypoint":"workspace"}]});
+    let manifest = json!({"schemaVersion":1,"id":"dev.example.conformance","name":"Conformance","version":"1.0.0","apiVersion":"2","platforms":["macos"],"entry":"index.html","permissions":[{"name":"clipboard.readText"},{"name":"clipboard.writeText"},{"name":"storage.local"},{"name":"context.currentApp"}],"commands":[{"id":"open","title":"Conformance","entrypoint":"workspace"}]});
     let mut zip = zip::ZipWriter::new(Cursor::new(vec![]));
     for (name, bytes) in [
         ("manifest.json", serde_json::to_vec(&manifest)?),
@@ -91,6 +91,7 @@ async fn main() -> Result<()> {
     let args = std::env::args().skip(1).collect::<Vec<_>>();
     if let [mode, path] = args.as_slice() {
         return match mode.as_str() {
+            "--import" => check_runtime_import(Path::new(path)),
             "--background" => check_background(Path::new(path)).await,
             "--json" => json_workspace::check(Path::new(path)).await,
             _ => anyhow::bail!("unknown harness mode"),
@@ -98,7 +99,7 @@ async fn main() -> Result<()> {
     }
     anyhow::ensure!(
         args.is_empty(),
-        "expected --background PACKAGE, --json PACKAGE or no arguments"
+        "expected --import PACKAGE, --background PACKAGE, --json PACKAGE or no arguments"
     );
     let app = Application::new(
         Arc::new(SyntheticPlatform(Mutex::new("synthetic clipboard".into()))),
@@ -167,6 +168,29 @@ async fn main() -> Result<()> {
         println!("{output}");
         std::io::stdout().flush()?;
     }
+    Ok(())
+}
+
+fn check_runtime_import(path: &Path) -> Result<()> {
+    use anywhere_core::application::frontend_runtime::{ApplicationRuntime, RuntimePaths};
+    let data =
+        std::env::var_os("ANYWHERE_DATA_DIR").context("isolated ANYWHERE_DATA_DIR is required")?;
+    let data = std::path::PathBuf::from(data);
+    anyhow::ensure!(
+        data.is_absolute() && data.is_dir(),
+        "isolated data directory is unavailable"
+    );
+    let runtime = ApplicationRuntime::open(RuntimePaths::new(&data, data.join("plugins")))?;
+    let review = runtime.inspect_web_package(path)?;
+    anyhow::ensure!(runtime
+        .web_package_statuses()?
+        .iter()
+        .all(|entry| entry.id != review.id));
+    let packages = runtime.approve_web_package(&review.token)?;
+    anyhow::ensure!(packages
+        .iter()
+        .any(|entry| entry.id == review.id && entry.enabled && entry.available));
+    println!("Isolated ApplicationRuntime approved {}", review.id);
     Ok(())
 }
 

@@ -1,4 +1,6 @@
-use super::{catalog::WebPluginCatalog, projection};
+use super::{
+    catalog::WebPluginCatalog, diagnostics::Diagnostics, interaction::InteractionPort, projection,
+};
 use crate::core::{
     action::{descriptor::ActionRegistry, web_command::WebCommandRef},
     context::ResolvedContext,
@@ -45,8 +47,8 @@ pub struct WebMessageSource<'a> {
     pub main_frame: bool,
 }
 
-#[derive(Clone)]
-pub(super) struct UsageRecord {
+#[derive(Clone, Debug)]
+pub(crate) struct UsageRecord {
     pub action_id: String,
     pub context_type: String,
     pub source_app: String,
@@ -57,26 +59,81 @@ pub(super) struct Invocation {
     pub(super) input: WebInvocation,
     pub(super) session_id: anywhere_protocol::SessionId,
     pub(super) launch_revision: Revision,
-    // Paths stay private; the public broker grants no filesystem operation.
-    _resources: projection::Resources,
+    pub(super) resource: projection::Resources,
     app: Option<WebCurrentApp>,
     binding: Option<WebDocumentBinding>,
     hidden_at: Option<Instant>,
-    document_epoch: u64,
+    pub(super) document_epoch: u64,
     usage_recorded: bool,
-    document_ready: bool,
-    usage: UsageRecord,
+    pub(super) lifecycle: RuntimeLifecycle,
+    pub(super) usage: UsageRecord,
     pub(super) rpc: super::rpc_state::RpcState,
-    bound_at: Instant,
     pub(super) closed: tokio::sync::watch::Sender<bool>,
+}
+
+pub(super) enum RuntimeLifecycle {
+    Webview { ready: bool, bound_at: Instant },
+    Background { state: BackgroundState },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) enum BackgroundState {
+    Running,
+    AwaitingInteraction,
+    HandoffCompleted { request_id: Option<String> },
+}
+
+impl Invocation {
+    pub(super) fn is_draining(&self) -> bool {
+        self.hidden_at.is_some() && self.handed_off()
+    }
+
+    pub(super) fn handed_off(&self) -> bool {
+        matches!(
+            self.lifecycle,
+            RuntimeLifecycle::Background {
+                state: BackgroundState::HandoffCompleted { .. }
+            }
+        )
+    }
+
+    pub(super) fn handoff_request_id(&self) -> Option<&str> {
+        match &self.lifecycle {
+            RuntimeLifecycle::Background {
+                state: BackgroundState::HandoffCompleted { request_id },
+            } => request_id.as_deref(),
+            _ => None,
+        }
+    }
+}
+impl RuntimeLifecycle {
+    fn webview() -> Self {
+        Self::Webview {
+            ready: false,
+            bound_at: Instant::now(),
+        }
+    }
+
+    fn waiting_for_ready_timed_out(&self) -> bool {
+        matches!(self, Self::Webview {ready: false, bound_at} if bound_at.elapsed() >= Duration::from_secs(10))
+    }
+
+    pub(super) fn role(&self) -> anywhere_protocol::web_bridge::WebRole {
+        match self {
+            Self::Webview { .. } => anywhere_protocol::web_bridge::WebRole::Webview,
+            Self::Background { .. } => anywhere_protocol::web_bridge::WebRole::Background,
+        }
+    }
 }
 
 #[derive(Default)]
 pub struct WebPluginService {
+    pub(super) interactions: InteractionPort,
     pub(super) catalog: WebPluginCatalog,
     pub(super) invocations: BTreeMap<String, Invocation>,
     pub(super) backgrounds:
         BTreeMap<String, std::sync::Arc<super::background_action::BackgroundJob>>,
+    pub(super) diagnostics: Diagnostics,
     pub(super) storage: Option<crate::persistence::module_storage::ModuleStorageHost>,
 }
 
@@ -94,6 +151,7 @@ impl WebPluginService {
         let mut window = Self {
             catalog: self.catalog.clone(),
             storage: self.storage.clone(),
+            diagnostics: self.diagnostics.clone(),
             ..Default::default()
         };
         let parent = self.authorize(
@@ -106,21 +164,39 @@ impl WebPluginService {
             },
         )?;
         ensure!(parent.session_id == session_id, "Web invocation expired");
+        ensure!(
+            parent.lifecycle.role() == anywhere_protocol::web_bridge::WebRole::Webview,
+            "standalone windows require a WebView"
+        );
+        let mut input = parent.input.clone();
+        let mut resource = parent.resource.clone();
+        if let anywhere_protocol::web_plugin::WebInput::Resources { items, .. } = &mut input.input {
+            for item in items {
+                let handle = super::token()?;
+                if let Some(resource) = resource
+                    .as_mut()
+                    .filter(|resource| resource.handle == item.handle)
+                {
+                    resource.handle.clone_from(&handle);
+                    resource.access = Default::default();
+                }
+                item.handle = handle;
+            }
+        }
         let copied = Invocation {
             command: parent.command.clone(),
-            input: parent.input.clone(),
+            input,
             session_id,
             launch_revision: revision,
-            _resources: parent._resources.clone(),
+            resource,
             app: parent.app.clone(),
             binding: None,
             hidden_at: None,
             document_epoch: 0,
             usage_recorded: true,
-            document_ready: false,
+            lifecycle: RuntimeLifecycle::webview(),
             usage: parent.usage.clone(),
             rpc: Default::default(),
-            bound_at: Instant::now(),
             closed: tokio::sync::watch::channel(false).0,
         };
         ensure!(
@@ -152,7 +228,8 @@ impl WebPluginService {
         session: std::sync::Arc<crate::application::session_coordinator::SessionCoordinator>,
         platform: std::sync::Arc<dyn anywhere_platform::Platform>,
     ) -> Result<crate::core::context::registry::ContextProviderRegistry> {
-        self.catalog.append_providers(providers, session, platform)
+        self.catalog
+            .append_providers(providers, session, platform, &self.diagnostics)
     }
     pub(crate) fn restore_actions(&self, base: &ActionRegistry) -> Result<ActionRegistry> {
         self.catalog.append_to(base)
@@ -237,8 +314,15 @@ impl WebPluginService {
                 "Web command does not recognize this input"
             );
         }
-        let (input, resources) =
+        let (mut input, resources) =
             projection::build_with_resources(context, &entry.manifest.permissions)?;
+        if !definition.runtime.is_webview() {
+            if let anywhere_protocol::web_plugin::WebInput::Resources { items, .. } = &mut input {
+                for item in items {
+                    item.previewable = false;
+                }
+            }
+        }
         let id = super::token()?;
         let invocation = Invocation {
             command: command.clone(),
@@ -247,12 +331,31 @@ impl WebPluginService {
             // committed execution request identifies the input revision at launch.
             launch_revision,
             input: WebInvocation {
+                capabilities: anywhere_protocol::web_plugin::WebCapabilities {
+                    url_open: entry
+                        .manifest
+                        .permissions
+                        .iter()
+                        .any(|permission| matches!(permission, WebPermission::UrlOpen { .. })),
+                    window_control: definition.runtime.is_webview(),
+                    resource_read: resources.is_some()
+                        && entry
+                            .manifest
+                            .permissions
+                            .contains(&WebPermission::ResourcesRead {}),
+                    preview_open: definition.runtime.is_webview()
+                        && resources.is_some()
+                        && entry
+                            .manifest
+                            .permissions
+                            .contains(&WebPermission::PreviewOpen {}),
+                },
                 plugin_id: command.plugin_id.clone(),
                 command_id: command.command_id.clone(),
                 entrypoint: definition.entrypoint.clone(),
                 input,
             },
-            _resources: resources,
+            resource: resources,
             app: app.map(|app| WebCurrentApp {
                 id: app.bundle_id.clone(),
                 name: app.name.clone(),
@@ -261,9 +364,17 @@ impl WebPluginService {
             hidden_at: None,
             document_epoch: 0,
             usage_recorded: false,
-            document_ready: false,
+            lifecycle: match definition.runtime {
+                anywhere_protocol::web_plugin::PluginRuntime::Webview => {
+                    RuntimeLifecycle::webview()
+                }
+                anywhere_protocol::web_plugin::PluginRuntime::Background => {
+                    RuntimeLifecycle::Background {
+                        state: BackgroundState::Running,
+                    }
+                }
+            },
             rpc: Default::default(),
-            bound_at: Instant::now(),
             closed: tokio::sync::watch::channel(false).0,
             usage: UsageRecord {
                 action_id: command.action_id(),
@@ -305,13 +416,9 @@ impl WebPluginService {
             .document_epoch
             .checked_add(1)
             .context("Web document epoch exhausted")?;
-        let scheme = match platform {
-            WebPlatform::Macos => "anywhere-plugin",
-            WebPlatform::Windows => "https",
-        };
         let binding = WebDocumentBinding {
             invocation_id: invocation_id.into(),
-            origin: format!("{scheme}://{runtime_id}.plugin.local"),
+            origin: format!("anywhere-plugin://{runtime_id}.plugin.local"),
             runtime_id,
             document_epoch,
             content_digest: entry.digest.clone(),
@@ -319,8 +426,9 @@ impl WebPluginService {
         invocation.document_epoch = document_epoch;
         invocation.rpc = Default::default();
         invocation.closed = tokio::sync::watch::channel(false).0;
-        invocation.bound_at = Instant::now();
-        invocation.document_ready = false;
+        if matches!(invocation.lifecycle, RuntimeLifecycle::Webview { .. }) {
+            invocation.lifecycle = RuntimeLifecycle::webview();
+        }
         invocation.binding = Some(binding.clone());
         invocation.hidden_at = None;
         Ok(binding)
@@ -371,12 +479,10 @@ impl WebPluginService {
         binding: &WebDocumentBinding,
         source: WebMessageSource<'_>,
     ) -> Result<bool> {
-        let command = self.authorize(binding, source)?.command.clone();
-        let entry = &self.catalog.entries[&command.plugin_id];
-        Ok(entry.manifest.commands.iter().any(|c| {
-            c.id == command.command_id
-                && c.runtime == anywhere_protocol::web_plugin::PluginRuntime::Background
-        }))
+        Ok(matches!(
+            self.authorize(binding, source)?.lifecycle,
+            RuntimeLifecycle::Background { .. }
+        ))
     }
 
     pub fn current_app(
@@ -410,28 +516,31 @@ impl WebPluginService {
             .invocations
             .get_mut(&binding.invocation_id)
             .context("Web invocation expired")?;
-        if !invocation.document_ready && invocation.bound_at.elapsed() >= Duration::from_secs(10) {
-            anyhow::bail!("Web ready deadline expired");
-        }
-        invocation.document_ready = true;
+        let RuntimeLifecycle::Webview { ready, .. } = &mut invocation.lifecycle else {
+            anyhow::bail!("ready requires a WebView");
+        };
+        *ready = true;
         if std::mem::replace(&mut invocation.usage_recorded, true) {
             return Ok(None);
         }
-        Ok(Some(UsageRecord {
-            action_id: invocation.usage.action_id.clone(),
-            context_type: invocation.usage.context_type.clone(),
-            source_app: invocation.usage.source_app.clone(),
-        }))
+        Ok(Some(invocation.usage.clone()))
     }
 
     pub(crate) fn suspend(&mut self) {
-        for job in self.backgrounds.values() {
-            job.cancel();
-        }
-        self.backgrounds.clear();
         for invocation in self.invocations.values_mut() {
+            if invocation.handed_off() {
+                let keep = invocation.handoff_request_id().map(str::to_owned);
+                invocation.rpc.cancel_except(keep.as_deref());
+                invocation.closed.send_replace(true);
+                invocation.hidden_at.get_or_insert_with(Instant::now);
+                continue;
+            }
+            if let Some(binding) = invocation.binding.take() {
+                if let Some(job) = self.backgrounds.remove(binding.runtime_id()) {
+                    job.cancel();
+                }
+            }
             invocation.closed.send_replace(true);
-            invocation.binding = None;
             invocation.rpc = Default::default();
             // Repeated focus notifications must not restart the retention interval.
             invocation.hidden_at.get_or_insert_with(Instant::now);
@@ -442,8 +551,7 @@ impl WebPluginService {
         self.invocations.retain(|_, invocation| {
             if invocation.hidden_at.is_none()
                 && invocation.binding.is_some()
-                && !invocation.document_ready
-                && invocation.bound_at.elapsed() >= Duration::from_secs(10)
+                && invocation.lifecycle.waiting_for_ready_timed_out()
             {
                 return false;
             }
@@ -481,6 +589,8 @@ impl WebPluginService {
         ensure!(
             current.runtime_id == binding.runtime_id
                 && current.document_epoch == binding.document_epoch
+                && current.content_digest == binding.content_digest
+                && current.content_digest == entry.digest
                 && source.main_frame
                 && source.runtime_id == current.runtime_id
                 && source.document_epoch == current.document_epoch

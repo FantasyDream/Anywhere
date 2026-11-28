@@ -18,11 +18,14 @@ impl LauncherView {
             })
             .child(
                 Switch::new("open-at-login")
+                    .disabled(self.settings_editor.model.saving)
                     .checked(self.settings_editor.draft.launch_at_login)
                     .accessibility_label(l10n::open_at_login(self.locale))
                     .on_change(cx.listener(|this, checked, _, cx| {
-                        this.settings_editor.draft.launch_at_login = *checked;
-                        cx.notify();
+                        this.save_instant_preferences(
+                            |preferences| preferences.launch_at_login = *checked,
+                            cx,
+                        );
                     })),
             );
         let theme = self.theme_settings(cx);
@@ -65,7 +68,7 @@ impl LauncherView {
         ))
         .into();
         let dark_bg: gpui_kit::Hsla = gpui_kit::rgba(crate::ui::argb(
-            crate::ui::design_tokens::colors::OPAQUE_DARK.window,
+            crate::ui::design_tokens::colors::FIXED.fallback_surface,
         ))
         .into();
         let light_accent: gpui_kit::Hsla = gpui_kit::rgba(crate::ui::argb(
@@ -83,63 +86,60 @@ impl LauncherView {
             .overflow_hidden()
             .border(px(metrics::DIVIDER_WIDTH))
             .border_color(theme::border());
+        let miniature = |background, accent: gpui_kit::Hsla| {
+            div()
+                .flex_1()
+                .h_full()
+                .min_w_0()
+                .bg(background)
+                .p(px(metrics::SPACE_XS))
+                .flex()
+                .flex_col()
+                .gap(px(metrics::SPACE_XS))
+                .child(
+                    div()
+                        .h(px(metrics::SPACE_SM))
+                        .rounded(px(metrics::SPACE_XS))
+                        .bg(accent.opacity(0.35))
+                        .px(px(metrics::SPACE_XS))
+                        .flex()
+                        .items_center()
+                        .child(div().w_1_2().h(px(metrics::DIVIDER_WIDTH)).bg(accent)),
+                )
+                .children([true, false].into_iter().map(|selected| {
+                    div()
+                        .relative()
+                        .flex_1()
+                        .flex()
+                        .items_center()
+                        .rounded(px(metrics::SPACE_XS))
+                        .bg(accent.opacity(if selected { 0.22 } else { 0.09 }))
+                        .when(selected, |row| {
+                            row.child(
+                                div()
+                                    .absolute()
+                                    .left_0()
+                                    .w(px(metrics::SELECTION_INDICATOR_WIDTH))
+                                    .h_full()
+                                    .bg(accent),
+                            )
+                        })
+                        .child(
+                            div()
+                                .ml(px(metrics::SPACE_SM))
+                                .w_1_2()
+                                .h(px(metrics::DIVIDER_WIDTH))
+                                .bg(accent.opacity(0.75)),
+                        )
+                }))
+        };
         match mode {
             UiTheme::System => frame
                 .flex()
-                .child(
-                    div()
-                        .flex_1()
-                        .h_full()
-                        .bg(light_bg)
-                        .p(px(metrics::SPACE_XS))
-                        .child(
-                            div()
-                                .w_full()
-                                .h(px(metrics::SPACE_SM))
-                                .rounded(px(metrics::ROW_INSET_Y_COMPACT))
-                                .bg(light_accent),
-                        ),
-                )
-                .child(
-                    div()
-                        .flex_1()
-                        .h_full()
-                        .bg(dark_bg)
-                        .p(px(metrics::SPACE_XS))
-                        .child(
-                            div()
-                                .w_full()
-                                .h(px(metrics::SPACE_SM))
-                                .rounded(px(metrics::ROW_INSET_Y_COMPACT))
-                                .bg(dark_accent),
-                        ),
-                ),
-            UiTheme::Light => frame
-                .bg(light_bg)
-                .p(px(metrics::SPACE_SM))
-                .flex()
-                .flex_col()
-                .gap(px(metrics::SPACE_XS))
-                .child(
-                    div()
-                        .w_1_2()
-                        .h(px(metrics::SPACE_SM))
-                        .rounded(px(metrics::ROW_INSET_Y_COMPACT))
-                        .bg(light_accent),
-                ),
-            UiTheme::Dark => frame
-                .bg(dark_bg)
-                .p(px(metrics::SPACE_SM))
-                .flex()
-                .flex_col()
-                .gap(px(metrics::SPACE_XS))
-                .child(
-                    div()
-                        .w_1_2()
-                        .h(px(metrics::SPACE_SM))
-                        .rounded(px(metrics::ROW_INSET_Y_COMPACT))
-                        .bg(dark_accent),
-                ),
+                .child(miniature(light_bg, light_accent))
+                .child(miniature(dark_bg, dark_accent)),
+            UiTheme::Light => frame.flex().child(miniature(light_bg, light_accent)),
+            UiTheme::Dark => frame.flex().child(miniature(dark_bg, dark_accent)),
         }
     }
 
@@ -151,9 +151,11 @@ impl LauncherView {
         locale: Locale,
         cx: &Context<Self>,
     ) -> gpui_kit::Stateful<Div> {
+        let label = mode.label(locale);
         div()
             .id(id)
             .role(gpui_kit::Role::Button)
+            .aria_label(label.clone())
             .aria_selected(active)
             .flex_1()
             .min_w_0()
@@ -181,8 +183,7 @@ impl LauncherView {
             .gap(px(metrics::SPACE_XS))
             .on_click(cx.listener(move |this, _, _, cx| {
                 if this.settings_editor.draft.ui_theme != mode {
-                    this.settings_editor.draft.ui_theme = mode;
-                    this.save_settings(cx);
+                    this.save_instant_preferences(|preferences| preferences.ui_theme = mode, cx);
                 }
             }))
             .child(Self::theme_card_preview(mode))
@@ -202,7 +203,7 @@ impl LauncherView {
                                 FontWeight::MEDIUM
                             })
                             .text_color(theme::primary())
-                            .child(mode.label(locale)),
+                            .child(label),
                     )
                     .when(active, |row| {
                         row.child(
@@ -227,6 +228,7 @@ impl LauncherView {
             l10n::language(locale),
             l10n::language_description(locale),
             Button::new("settings-language")
+                .disabled(self.settings_editor.model.saving)
                 .secondary()
                 .label(label)
                 .dropdown_caret(true)
@@ -242,8 +244,10 @@ impl LauncherView {
                                 .checked(language == selected)
                                 .on_click(move |_, _, cx| {
                                     let _ = view.update(cx, |this, cx| {
-                                        this.settings_editor.draft.ui_language = language;
-                                        cx.notify();
+                                        this.save_instant_preferences(
+                                            |preferences| preferences.ui_language = language,
+                                            cx,
+                                        );
                                     });
                                 }),
                         );

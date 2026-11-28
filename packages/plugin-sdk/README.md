@@ -2,9 +2,20 @@
 
 WebView / 按需后台任务共用的最小插件 SDK，运行时无 npm 依赖，不启动 Node。已接入 macOS 本地 WebView、Host 确认 UI 与安装入口，也连接 Rust 合成测试宿主。当前仍是本地开发预览，完整安全 / 跨平台验收尚未完成。
 
-**第一次开发插件：** 阅读仓库中的 [第三方插件开发指南](https://github.com/FantasyDream/Anywhere/blob/main/docs/plugin-development.md)。SDK `.tgz` 自带 `templates/minimal/` 和 `tools/package.py`，可在独立目录使用；当前没有公开 npm 发布版。
+**第一次开发插件：** 阅读仓库中的 [第三方插件开发指南](https://github.com/FantasyDream/Anywhere/blob/main/docs/plugin-development.md)。SDK `.tgz` 自带四种 API 2 模板和 Node.js 22+ CLI，可在独立目录使用。
 
 导出包包含 `dist/`、类型、公共 CSS、模板、打包工具、本说明和 MIT 许可证。业务通过 `@anywhere/sdk` / `@anywhere/sdk/styles/controls.css` 标准导入，不引用仓库源文件。模板的 `npm run build` 构建网页，`npm run pack` 生成 `.awplugin`；`vendor/` 中保留 SDK 包后，不再依赖原仓库位置。
+
+`anywhere-plugin` 支持 `init`、`validate --built`、`pack --output <file.awplugin>` 和 `test`。
+从模板运行 `npm run dev` 可试用浏览器 Mock 或后台 Mock。普通 Web 代码使用
+`definePlugin`，后台命令使用 `anywhere-background` 构建条件，自动解析器使用
+`defineResolver`，返回 `{typeId, value}` 组成的数组。
+
+Web 和显式后台 Action 可使用 `url.open`、`resources.stat` 和 `resources.readText`。
+外链由宿主逐次确认，文本读取只接受本次启动原始单文件句柄。WebView 还提供
+`window.back`、`window.close` 和 `preview.open`。如需显示平台键帽和匹配键盘事件，
+两处使用同一规格，例如 `environment.formatShortcut('Mod+Enter')` 与
+`environment.matchesShortcut(event, 'Mod+Enter')`。
 
 ## 统一业务 API
 
@@ -47,10 +58,10 @@ const plugin = definePlugin({
   // onError(error) 可选：缺省使用共享样式的错误提示。
 });
 // 在业务按钮中调用，处理取消 / 失败后再提示结果。
-await plugin.host.clipboard.writeText('hello');
+await plugin.anywhere.clipboard.writeText('hello');
 ```
 
-页面渲染后调用。启动就绪、首次输入、隐藏时撤销待处理请求、恢复后的新连接、退出释放均自动完成；`plugin.host` 是稳定门面，旧按钮处理器在恢复后也能使用新连接。`plugin.ready` 在首次启动处理结束后完成，错误通过 `onError` 报告；`plugin.dispose()` 幂等，可在前端框架卸载时调用。`onLaunch(invocation, {signal})` 的 signal 在页面销毁时中止；异步业务自行检查，避免卸载后更新状态。`onDispose` 用来清理业务资源。
+页面渲染后调用。启动就绪、首次输入、隐藏时撤销待处理请求、恢复后的新连接、退出释放均自动完成；`plugin.anywhere` 是稳定门面，旧按钮处理器在恢复后也能使用新连接。`plugin.ready` 在首次启动处理结束后完成，错误通过 `onError` 报告；`plugin.dispose()` 幂等，可在前端框架卸载时调用。`onLaunch(invocation, {signal})` 的 signal 在页面销毁时中止；异步业务自行检查，避免卸载后更新状态。`onDispose` 用来清理业务资源。
 
 背景、默认控件样式自动注入，无需 CSS 导入；模板的 `aw-tool` 提供标准工具栏、可伸展编辑区和状态栏。可使用任意标准 HTML / 前端框架，自定义业务布局；这里没有新增 UI DSL。底层 API 继续兼容，只有进阶集成才需自行管理它们。
 
@@ -98,7 +109,7 @@ import { host } from '@anywhere/sdk';
 await host.ready();
 const invocation = await host.invocation.get();
 
-const app = await host.context.getCurrentApp();
+const app = await host.app.getSource();
 const prefs = await host.storage.get('preferences');
 await host.storage.set('preferences', { indent: 2 });
 await host.clipboard.writeText('Text to copy');
@@ -107,7 +118,7 @@ const clipboard = await host.clipboard.readText();
 
 - `context.read` 只允许本次调用中声明的类型，不包含完整 Context Graph；文件只给显示名称与不透明句柄。
 - `context.currentApp` 是唤醒前冻结的 ID / 名称，需要单独批准。
-- 剪贴板读写分别需要安装时批准对应权限；当前 V0.14 GPUI Host 不再逐次确认。网页不能用 `approved`、`userGesture` 或自报 pluginId 获得资格。SDK Promise 等待 Host 的最终响应，不会自动重试副作用。
+- 剪贴板读写分别需要安装时批准对应权限；GPUI Host 不再逐次确认。网页不能用 `approved`、`userGesture` 或自报 pluginId 获得资格。SDK Promise 等待 Host 的最终响应，不会自动重试副作用。
 - `storage.local` 只能使用当前插件及来源绑定的键空间，不接受 namespace。值是 JSON；`get` 返回值或 `null`。
 - 支持 `AbortSignal`。隐藏、重载、返回、撤销时 Host 负责撤销 Rust 文档资格并释放旧客户端；`createHost(transport)` 提供的实例也有 `dispose()`。
 - 没有通用 `invoke`、Shell、后台监控、历史剪贴板、任意文件或网络 API。
@@ -120,13 +131,13 @@ const clipboard = await host.clipboard.readText();
 cargo run -p anywhere-protocol --features web-schema --example generate_web_sdk_contract --locked
 ```
 
-帧 ≤ 64 KiB；8 个进行中请求、16 个排队请求；单文档最多 4,096 个请求 ID。普通调用 5 秒；首次 ready 最多 10 秒。取消或超时无法撤回已经开始的 OS I/O，错误不承诺可以安全重试。
+帧 ≤ 64 KiB；8 个进行中请求、16 个排队请求；单文档最多 4,096 个请求 ID。普通调用 5 秒，`url.open` 确认等待 30 秒；首次 ready 最多 10 秒。取消或超时无法撤回已经开始的 OS I/O，错误不承诺可以安全重试。
 
 复制文本原始 UTF-8 ≤ 1 MiB；大文本每块 ≤ 4 KiB 原始字节，编码后 ≤ 32 KiB。结果 JSON 采用单个下载缓冲，编码后总量 ≤ 2 MiB，超过返回 `TOO_LARGE`，不静默截断。缓冲 5 秒过期，后台每秒清理；隐藏 / 销毁立即释放。SDK 按 UTF-8 边界切分，保留中文、表情和 BOM。
 
 KV 每个命名空间的值合计 ≤ 1 MiB、最多 256 个键，单键值 JSON ≤ 64 KiB；调用仍受帧上限约束。配额检查与更新在同一个 SQLite 事务内，失败保留旧值。
 
-Host 通过 `HostTransport` 注入一条只传字符串帧的消息连接。原生来源 / 主 frame / Runtime / 文档 epoch 由 Host 另行交给 Rust，不进入 SDK 请求正文。生命周期事件已接入；主题由 Host 注入 CSS tokens。返回 / 重载由 Host 提供，尚未开放 SDK navigation / actions API。
+Host 通过 `HostTransport` 注入一条只传字符串帧的消息连接。原生来源 / 主 frame / Runtime / 文档 epoch 由 Host 另行交给 Rust，不进入 SDK 请求正文。生命周期事件已接入；主题由 Host 注入 CSS tokens。WebView 可通过 `window.back()` / `window.close()` 申请返回或关闭当前窗口，底层操作仍由 Host 按文档与请求身份校验后执行；`runBackgroundMock` 需以 Node `--experimental-vm-modules` 运行（`anywhere-plugin test` 会自动注入该参数）。
 
 安装更新、禁用或撤销会失效旧调用，当前没有延迟替换编辑页的模式。卸载会清理该安装的私有 KV；没有保留数据选项。Host 的本地安装身份不等于已验证发布者，Action ID 与使用记录 / 快捷键也不提供跨发布者身份隔离。
 

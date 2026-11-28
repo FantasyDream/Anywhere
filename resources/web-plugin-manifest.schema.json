@@ -70,6 +70,12 @@
         "entrypoint": {
           "type": "string"
         },
+        "icon": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "id": {
           "type": "string"
         },
@@ -87,6 +93,13 @@
           },
           "type": "array"
         },
+        "localizedTitles": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "maxProperties": 32,
+          "type": "object"
+        },
         "requireContext": {
           "description": "A typed Context is mandatory even when the command title matches a query.",
           "type": "boolean"
@@ -97,6 +110,12 @@
         },
         "runtime": {
           "$ref": "#/$defs/PluginRuntime"
+        },
+        "subtitle": {
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "title": {
           "type": "string"
@@ -235,6 +254,52 @@
             "name"
           ],
           "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "const": "url.open",
+              "type": "string"
+            },
+            "origins": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "name",
+            "origins"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "const": "resources.read",
+              "type": "string"
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "const": "preview.open",
+              "type": "string"
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "type": "object"
         }
       ]
     },
@@ -250,7 +315,7 @@
   "additionalProperties": false,
   "properties": {
     "apiVersion": {
-      "const": "1",
+      "const": "2",
       "type": "string"
     },
     "background": {
@@ -289,6 +354,7 @@
       "items": {
         "$ref": "#/$defs/WebPermission"
       },
+      "maxItems": 16,
       "type": "array"
     },
     "platforms": {
@@ -317,5 +383,13 @@
     "permissions"
   ],
   "title": "WebPluginManifest",
-  "type": "object"
+  "type": "object",
+  "x-anywhere-commandIcons": [
+    "code",
+    "copy",
+    "file",
+    "globe",
+    "search",
+    "clipboard"
+  ]
 }

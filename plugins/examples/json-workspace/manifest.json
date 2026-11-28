@@ -3,9 +3,10 @@
   "id": "dev.anywhere.json-workspace",
   "name": "JSON Workspace",
   "version": "0.7.3",
-  "apiVersion": "1",
+  "apiVersion": "2",
   "platforms": [
-    "macos"
+    "macos",
+    "windows"
   ],
   "entry": "dist/index.html",
   "permissions": [
@@ -39,7 +40,11 @@
       "accepts": [
         "plugin.dev.anywhere.json-workspace.json"
       ],
-      "entrypoint": "workspace"
+      "entrypoint": "workspace",
+      "localizedTitles": {
+        "en": "JSON Workspace",
+        "zh": "JSON 工作台"
+      }
     },
     {
       "id": "copy-format",
@@ -55,7 +60,11 @@
       ],
       "entrypoint": "copyFormatted",
       "requireContext": true,
-      "runtime": "background"
+      "runtime": "background",
+      "localizedTitles": {
+        "en": "Copy Formatted JSON",
+        "zh": "复制格式化 JSON"
+      }
     },
     {
       "id": "copy-minify",
@@ -72,7 +81,11 @@
       ],
       "entrypoint": "copyMinified",
       "requireContext": true,
-      "runtime": "background"
+      "runtime": "background",
+      "localizedTitles": {
+        "en": "Copy Minified JSON",
+        "zh": "复制压缩 JSON"
+      }
     },
     {
       "id": "copy-escaped",
@@ -88,7 +101,11 @@
       ],
       "entrypoint": "copyEscaped",
       "requireContext": true,
-      "runtime": "background"
+      "runtime": "background",
+      "localizedTitles": {
+        "en": "Copy Escaped JSON",
+        "zh": "复制转义 JSON"
+      }
     }
   ],
   "background": {

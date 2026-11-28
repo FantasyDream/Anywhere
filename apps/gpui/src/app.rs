@@ -1,11 +1,12 @@
+#[cfg(test)]
+use gpui_kit::WindowBackgroundAppearance;
 use gpui_kit::{
     point, px, size, ActivationPolicy, AnyWindowHandle, App as GpuiApp, AppContext as _, Bounds,
-    Context, Entity, Render, Subscription, Window, WindowBackgroundAppearance, WindowBounds,
-    WindowKind, WindowOptions,
+    Context, Entity, Render, Subscription, Window, WindowBounds, WindowKind, WindowOptions,
 };
 use std::sync::{
     atomic::{AtomicU64, Ordering},
-    Arc, Mutex,
+    Arc,
 };
 
 use crate::{
@@ -14,6 +15,7 @@ use crate::{
         launcher_window_size, locale_for_language, ClipboardShelfView, LauncherEvent, LauncherView,
         ToolWindowView,
     },
+    platform::product_window_background,
     ui::{
         design_tokens::{fonts, metrics},
         theme,
@@ -30,6 +32,7 @@ struct ProductShell {
     _status_item: Option<crate::platform::StatusItemHost>,
     _launcher_events: Option<Subscription>,
     _window_closed: Option<Subscription>,
+    _window_activation: Option<Subscription>,
 }
 
 enum RuntimeStartup {
@@ -258,8 +261,10 @@ pub(crate) fn install_component_theme(cx: &mut GpuiApp) {
     gpui_kit::component::Theme::update(cx, configure_component_theme);
 }
 
-pub fn run(cx: &mut GpuiApp) {
+pub fn run(cx: &mut GpuiApp, packages: tokio::sync::mpsc::Receiver<std::path::PathBuf>) {
     gpui_kit::init(cx);
+    crate::ui::load_fonts(cx);
+    crate::platform::initialize_desktop(cx);
     crate::launcher::bind_keys(cx);
     crate::platform::prepare_window_material();
     install_component_theme(cx);
@@ -271,7 +276,9 @@ pub fn run(cx: &mut GpuiApp) {
         tokio::sync::mpsc::channel::<crate::platform::StatusItemAction>(64);
     let options = main_window_options(cx);
     let opened = gpui_kit::open_window(options, cx, |window, cx| {
-        crate::platform::bind_window_identity(window, PRODUCT_NAME);
+        if crate::platform::bind_window_identity(window, PRODUCT_NAME) {
+            install_component_theme(cx);
+        }
         let launcher = cx.new(|cx| {
             if preview {
                 LauncherView::new(window, cx)
@@ -279,7 +286,7 @@ pub fn run(cx: &mut GpuiApp) {
                 LauncherView::starting(window, cx, crate::l10n::Locale::En)
             }
         });
-        cx.new(|_| ProductShell {
+        cx.new(|cx| ProductShell {
             launcher,
             live: None,
             shelf_window: None,
@@ -288,6 +295,7 @@ pub fn run(cx: &mut GpuiApp) {
             _status_item: None,
             _launcher_events: None,
             _window_closed: None,
+            _window_activation: crate::platform::observe_launcher_activation(window, cx),
         })
     });
     let (window_handle, shell) = match opened {
@@ -315,7 +323,7 @@ pub fn run(cx: &mut GpuiApp) {
     let launcher_window = window_handle;
     install_status_and_shell_events(launcher_window, &shell, status_actions, cx);
     if let Some(startup_receiver) = startup_receiver {
-        spawn_runtime_startup(startup_receiver, window_handle, shell.clone(), cx);
+        spawn_runtime_startup(startup_receiver, window_handle, shell.clone(), packages, cx);
     }
     spawn_status_action_loop(status_receiver, window_handle, shell.clone(), cx);
     spawn_platform_event_loop(window_handle, shell, preview, cx);
@@ -343,6 +351,7 @@ fn install_status_and_shell_events(
     if status_item.is_none() {
         tracing::warn!("status_item_unavailable");
     }
+    crate::platform::ensure_launcher_can_be_reopened();
     shell.update(cx, |shell, cx| {
         shell._status_item = status_item;
         let weak = cx.weak_entity();
@@ -463,6 +472,7 @@ fn spawn_runtime_startup(
     mut startup_receiver: tokio::sync::mpsc::Receiver<RuntimeStartup>,
     startup_window: AnyWindowHandle,
     startup_shell: gpui_kit::Entity<ProductShell>,
+    packages: tokio::sync::mpsc::Receiver<std::path::PathBuf>,
     cx: &mut GpuiApp,
 ) {
     cx.spawn(async move |cx| {
@@ -498,7 +508,7 @@ fn spawn_runtime_startup(
                 let (hotkeys, hotkey_error) = match HotKeyController::new(&preferences) {
                     Ok(controller) => {
                         let error = controller.registration_error().map(str::to_owned);
-                        (Some(Arc::new(Mutex::new(controller))), error)
+                        (Some(controller), error)
                     }
                     Err(error) => {
                         tracing::error!(%error, "global_hotkey_manager_unavailable");
@@ -506,23 +516,21 @@ fn spawn_runtime_startup(
                     }
                 };
                 let locale = locale_for_language(preferences.ui_language);
-                let effective = {
-                    let controller = hotkeys.as_ref().and_then(|hotkeys| hotkeys.lock().ok());
-                    crate::host::registered_preferences(&preferences, controller.as_deref())
-                };
+                let effective = crate::host::registered_preferences(&preferences, hotkeys.as_ref());
                 let labels = crate::platform::StatusMenuLabels::new(locale, &effective);
                 let attached = startup_window
                     .update(cx, |_, window, cx| {
                         startup_shell.update(cx, |shell, cx| {
                             shell.live = Some(live.clone());
                             shell.launcher.update(cx, |launcher, cx| {
-                                launcher.attach_runtime(
-                                    live,
-                                    hotkeys.clone(),
-                                    hotkey_error,
-                                    window,
-                                    cx,
-                                )
+                                launcher.attach_runtime(live, hotkeys, hotkey_error, window, cx);
+                                if crate::platform::activate_launcher_on_runtime_ready(window) {
+                                    launcher.activate_from_menu(
+                                        anywhere_protocol::InputMode::Search,
+                                        window,
+                                        cx,
+                                    );
+                                }
                             });
                             if crate::platform::set_application_appearance(
                                 preferences.ui_theme.appearance(),
@@ -537,6 +545,12 @@ fn spawn_runtime_startup(
                     .is_ok();
                 if attached {
                     install_global_hotkeys(cx, startup_window, &startup_shell);
+                    spawn_package_open_loop(
+                        packages,
+                        startup_window,
+                        startup_shell.downgrade(),
+                        cx,
+                    );
                 }
             }
             RuntimeStartup::Failed(error) => {
@@ -549,6 +563,41 @@ fn spawn_runtime_startup(
                         });
                     });
                 });
+            }
+        }
+    })
+    .detach();
+}
+
+fn spawn_package_open_loop(
+    mut packages: tokio::sync::mpsc::Receiver<std::path::PathBuf>,
+    window: AnyWindowHandle,
+    shell: gpui_kit::WeakEntity<ProductShell>,
+    cx: &mut gpui_kit::AsyncApp,
+) {
+    cx.spawn(async move |cx| {
+        while let Some(path) = packages.recv().await {
+            let opened = window.update(cx, |_, window, cx| {
+                shell
+                    .update(cx, |shell, cx| {
+                        shell.launcher.update(cx, |launcher, cx| {
+                            launcher.open_package_review(path, window, cx)
+                        })
+                    })
+                    .unwrap_or(false)
+            });
+            match opened {
+                Ok(true) => {
+                    cx.background_executor()
+                        .timer(std::time::Duration::from_millis(80))
+                        .await;
+                    if !crate::platform::configure_settings_window(PRODUCT_NAME) {
+                        tracing::warn!("settings_window_configuration_failed");
+                    }
+                    crate::platform::show_main_window();
+                }
+                Ok(false) => {}
+                Err(_) => break,
             }
         }
     })
@@ -625,9 +674,9 @@ fn spawn_status_action_loop(
                     let opened = status_window
                         .update(cx, |_, window, cx| {
                             status_shell.update(cx, |shell, cx| {
-                                shell
-                                    .launcher
-                                    .update(cx, |launcher, cx| launcher.open_settings(window, cx))
+                                shell.launcher.update(cx, |launcher, cx| {
+                                    launcher.open_settings_from_menu(window, cx)
+                                })
                             })
                         })
                         .unwrap_or(false);
@@ -871,25 +920,20 @@ fn install_global_hotkeys(
 
 fn main_window_options(cx: &mut GpuiApp) -> WindowOptions {
     let window_size = launcher_window_size();
-    WindowOptions {
+    let mut options = WindowOptions {
         window_bounds: Some(launcher_window_bounds(window_size, cx)),
         titlebar: Some(gpui_kit::TitlebarOptions {
             title: Some(PRODUCT_NAME.into()),
             appears_transparent: true,
             traffic_light_position: None,
         }),
-        focus: false,
-        show: false,
-        // PopUp creates the native macOS NSPanel with the nonactivating style
-        // from the outset. The launcher overrides its level to floating in the
-        // platform bridge after launch.
-        kind: WindowKind::PopUp,
         is_resizable: false,
-        is_minimizable: false,
-        window_background: WindowBackgroundAppearance::Transparent,
+        window_background: product_window_background(),
         app_id: Some(BUNDLE_ID.to_owned()),
         ..Default::default()
-    }
+    };
+    crate::platform::configure_launcher_window_options(&mut options);
+    options
 }
 
 fn launcher_window_bounds(
@@ -901,15 +945,14 @@ fn launcher_window_bounds(
         return WindowBounds::centered(window_size, cx);
     };
     let visible = display.visible_bounds();
-    // gpui-fast-macos 0.1.14 treats WindowBounds Y as the window's bottom
-    // edge when creating the native frame. Keep a constant 20% gap below the
-    // usable screen top so later resizes do not move that top edge.
     let max_x = visible.origin.x + (visible.size.width - window_size.width).max(px(0.));
+    let top_gap = visible.size.height * crate::platform::LAUNCHER_TOP_INSET_RATIO as f32;
+    let y =
+        crate::platform::window_origin_from_top(visible.size.height, window_size.height, top_gap);
     let origin = point(
         (visible.origin.x + (visible.size.width - window_size.width) * 0.5)
             .clamp(visible.origin.x, max_x),
-        (visible.origin.y + visible.size.height - visible.size.height * 0.2 - window_size.height)
-            .max(visible.origin.y),
+        visible.origin.y + y,
     );
     WindowBounds::Windowed(Bounds::new(origin, window_size))
 }
@@ -946,7 +989,7 @@ fn shelf_window_options(cx: &mut GpuiApp) -> WindowOptions {
         titlebar: Some(gpui_kit::TitlebarOptions {
             title: Some(CLIPBOARD_SHELF_TITLE.into()),
             appears_transparent: true,
-            traffic_light_position: Some(gpui_kit::point(px(14.), px(16.))),
+            traffic_light_position: crate::platform::auxiliary_window_traffic_light_position(),
         }),
         focus: true,
         show: true,
@@ -954,7 +997,7 @@ fn shelf_window_options(cx: &mut GpuiApp) -> WindowOptions {
         is_resizable: true,
         is_minimizable: true,
         window_min_size: Some(size(px(360.), px(360.))),
-        window_background: WindowBackgroundAppearance::Transparent,
+        window_background: product_window_background(),
         app_id: Some(BUNDLE_ID.to_owned()),
         ..Default::default()
     }
@@ -985,7 +1028,7 @@ fn tasks_window_options(cx: &mut GpuiApp) -> WindowOptions {
         titlebar: Some(gpui_kit::TitlebarOptions {
             title: Some(TASKS_WINDOW_TITLE.into()),
             appears_transparent: true,
-            traffic_light_position: Some(gpui_kit::point(px(14.), px(16.))),
+            traffic_light_position: crate::platform::auxiliary_window_traffic_light_position(),
         }),
         focus: true,
         show: true,
@@ -993,7 +1036,7 @@ fn tasks_window_options(cx: &mut GpuiApp) -> WindowOptions {
         is_resizable: true,
         is_minimizable: true,
         window_min_size: Some(size(px(760.), px(420.))),
-        window_background: WindowBackgroundAppearance::Transparent,
+        window_background: product_window_background(),
         app_id: Some(BUNDLE_ID.to_owned()),
         ..Default::default()
     }
@@ -1009,6 +1052,7 @@ mod tests {
     };
 
     #[gpui_kit::test]
+    #[cfg(not(windows))]
     fn main_window_starts_hidden_as_a_floating_spotlight_surface(cx: &mut TestAppContext) {
         cx.update(gpui_kit::init);
         assert!(matches!(
@@ -1028,6 +1072,22 @@ mod tests {
         let titlebar = options.titlebar.expect("launcher titlebar options");
         assert!(titlebar.appears_transparent);
         assert!(titlebar.traffic_light_position.is_none());
+    }
+
+    #[gpui_kit::test]
+    #[cfg(windows)]
+    fn windows_launcher_starts_as_frameless_popup_without_taskbar_entry(cx: &mut TestAppContext) {
+        cx.update(gpui_kit::init);
+        let options = cx.update(main_window_options);
+        assert!(options.show && options.focus && !options.is_minimizable);
+        assert!(matches!(options.kind, WindowKind::PopUp));
+        assert!(matches!(
+            options.window_background,
+            WindowBackgroundAppearance::Transparent
+        ));
+        assert!(options
+            .titlebar
+            .is_some_and(|titlebar| titlebar.appears_transparent));
     }
 
     #[test]
@@ -1161,15 +1221,13 @@ mod tests {
         assert!(options.focus);
         assert!(options.is_resizable);
         assert!(matches!(options.kind, WindowKind::Normal));
-        assert_eq!(
-            options.window_background,
-            WindowBackgroundAppearance::Transparent
-        );
+        assert_eq!(options.window_background, product_window_background());
         assert!(options
             .titlebar
             .as_ref()
             .is_some_and(|titlebar| titlebar.appears_transparent
-                && titlebar.traffic_light_position.is_some()
+                && titlebar.traffic_light_position
+                    == crate::platform::auxiliary_window_traffic_light_position()
                 && titlebar.title.as_deref() == Some("JSON Workspace")));
         assert_eq!(
             options.window_min_size,
@@ -1257,7 +1315,7 @@ mod tests {
                 .titlebar
                 .as_ref()
                 .and_then(|titlebar| titlebar.traffic_light_position),
-            Some(gpui_kit::point(px(14.), px(16.)))
+            crate::platform::auxiliary_window_traffic_light_position()
         );
     }
 
@@ -1284,6 +1342,7 @@ mod tests {
                             _status_item: None,
                             _launcher_events: None,
                             _window_closed: None,
+                            _window_activation: None,
                         })
                     },
                 )
@@ -1298,9 +1357,10 @@ mod tests {
                 });
             });
             window.render_frame(cx);
-            window.click("settings-category-general", cx);
+            window.click("settings-category-shortcuts", cx);
             window.render_frame(cx);
-            window.click("open-at-login", cx);
+            window.click("current-shortcut-record", cx);
+            window.press("ctrl-alt-m", cx);
             window.render_frame(cx);
         })
         .unwrap();

@@ -71,8 +71,6 @@ dependencies = [
 [[package]]
 name = "accesskit_windows"
 version = "0.34.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "106c2b961215864d1c2e703ee63269c25c4e80a577ffb2c1017b9c17dcdf83a1"
 dependencies = [
  "accesskit",
  "accesskit_consumer",
@@ -267,6 +265,11 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
+ "windows 0.62.2",
+ "windows-core 0.62.2",
+ "windows-numerics 0.3.1",
+ "windows-registry 0.6.1",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -276,6 +279,7 @@ dependencies = [
  "anyhow",
  "cc",
  "clipboard-rs",
+ "dunce",
  "libc",
  "objc2 0.6.5",
  "serde",
@@ -284,6 +288,8 @@ dependencies = [
  "tracing",
  "url",
  "which",
+ "windows 0.62.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -301,6 +307,7 @@ dependencies = [
  "sha2 0.11.1",
  "unicode-casefold",
  "unicode-normalization",
+ "url",
  "zip",
 ]
 
@@ -2846,8 +2853,6 @@ dependencies = [
 [[package]]
 name = "gpui-fast"
 version = "0.1.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f8c3a7e25e5a4789656da980b0316857acbdb72347b5d890d7d0c549bb9fee72"
 dependencies = [
  "accesskit",
  "anyhow",
@@ -3130,8 +3135,6 @@ dependencies = [
 [[package]]
 name = "gpui-fast-windows"
 version = "0.1.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a89bfdc3a922a29f83611fc7f01642533d35260a7f86aa9befb14f2b6dcca093"
 dependencies = [
  "accesskit",
  "accesskit_windows",

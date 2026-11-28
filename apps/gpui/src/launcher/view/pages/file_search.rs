@@ -99,7 +99,7 @@ impl LauncherView {
                         }),
                     )
                     .size_full()
-                    .px(px(10.))
+                    .px(px(metrics::LIST_PADDING_X))
                     .track_scroll(&self.scrolls.tool_lists.file_search)
                     .on_scroll(cx.listener(|this, _, _, cx| {
                         if this.scrolls.file_search_base().offset().y

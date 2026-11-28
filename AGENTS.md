@@ -136,6 +136,9 @@ scripts/check-gpui.sh
 scripts/check.sh
 ```
 
+For desktop acceptance, follow the [macOS runbook](docs/test-acceptance-macos.md)
+or [Windows runbook](docs/test-acceptance-windows.md) for the build under test.
+
 Use controllable ordering tests for stale asynchronous results; a passing build
 does not establish native focus, physical IME, process memory or GUI behavior.
 

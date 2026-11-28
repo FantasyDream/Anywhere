@@ -1,7 +1,7 @@
-import {anywhere} from '@anywhere/sdk';
+import {anywhere, defineResolver} from '@anywhere/sdk';
 
-export async function resolve() {
-  const input = await anywhere.context.get();
+export const resolve = defineResolver(async ({context}) => {
+  const input = await context.get();
   if (input.kind !== 'text') return [];
   let value;
   try {
@@ -12,14 +12,14 @@ export async function resolve() {
   if (!value || typeof value !== 'object') return [];
   return [
     {
-      type: 'plugin.dev.example.json-summary.summary',
+      typeId: 'plugin.dev.example.json-summary.summary',
       value: {
         kind: Array.isArray(value) ? 'array' : 'object',
         count: Object.keys(value).length,
       },
     },
   ];
-}
+});
 
 export async function copy() {
   const input = await anywhere.context.get();

@@ -15,7 +15,18 @@ impl LauncherView {
         };
         let storage_usage = status.and_then(|status| status.storage_usage);
         let controls_disabled = storage_usage.is_none() || self.clipboard.loading;
-        let choice_menu = self.clipboard_settings_choice_menu(cx);
+        let retention_menu = self.clipboard_settings_choice_button(
+            ClipboardSettingsChoice::Retention,
+            retention_label,
+            controls_disabled,
+            cx,
+        );
+        let pause_menu = self.clipboard_settings_choice_button(
+            ClipboardSettingsChoice::Pause,
+            pause_label,
+            controls_disabled,
+            cx,
+        );
         div()
             .flex()
             .flex_col()
@@ -27,7 +38,7 @@ impl LauncherView {
                     Switch::new("clipboard-recording")
                         .checked(self.settings_editor.model.clipboard_recording)
                         .disabled(self.settings_editor.model.saving)
-                        .accessibility_label(l10n::clipboard(self.locale))
+                        .accessibility_label(l10n::record_clipboard_history(self.locale))
                         .on_change(cx.listener(|this, checked, _, cx| {
                             this.set_clipboard_recording(*checked, cx);
                         })),
@@ -47,32 +58,11 @@ impl LauncherView {
                         .flex()
                         .items_center()
                         .gap(px(metrics::SPACE_SM))
-                        .child(
-                            Button::new("clipboard-retention")
-                                .secondary()
-                                .disabled(controls_disabled)
-                                .label(retention_label)
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    this.settings_editor.clipboard_choice = Some(
-                                        ClipboardSettingsChoice::Retention,
-                                    );
-                                    cx.notify();
-                                })),
-                        )
-                        .child(
-                            Button::new("clipboard-pause")
-                                .secondary()
-                                .disabled(controls_disabled)
-                                .label(pause_label)
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    this.settings_editor.clipboard_choice =
-                                        Some(ClipboardSettingsChoice::Pause);
-                                    cx.notify();
-                                })),
-                        )
+                        .child(retention_menu)
+                        .child(pause_menu)
                         .child(
                             Button::new("clipboard-clear-settings")
-                                .secondary()
+                                .ghost().text_color(theme::danger())
                                 .disabled(controls_disabled)
                                 .label(l10n::clear_history(self.locale))
                                 .on_click(cx.listener(|this, _, window, cx| {
@@ -85,7 +75,6 @@ impl LauncherView {
                         ),
                 ),
             ]))
-            .when_some(choice_menu, |element, menu| element.child(menu))
             .child(
                 div()
                     .text_size(px(metrics::CAPTION_SIZE))
@@ -96,102 +85,116 @@ impl LauncherView {
                 l10n::when_opening_launcher(self.locale),
                 IconName::Search,
             ))
-            .child(self.settings_rows_card(vec![self.context_capture_row(
-                ContextSource::Clipboard,
-                l10n::clipboard_text(self.locale),
-                l10n::auto_fill_supported_content_copied_within_the(self.locale),
-                self.settings_editor.draft.capture_clipboard,
-                Switch::new("capture-clipboard")
-                    .checked(self.settings_editor.draft.capture_clipboard)
-                    .on_change(cx.listener(|this, checked, _, cx| {
-                        this.settings_editor.draft.capture_clipboard = *checked;
-                        cx.notify();
-                    })),
-                cx,
-            )]))
+            .child(self.settings_rows_card(vec![
+                    self.context_capture_row(
+                        ContextSource::Clipboard,
+                        l10n::clipboard_text(self.locale),
+                        l10n::auto_fill_supported_content_copied_within_the(self.locale),
+                        self.settings_editor.draft.capture_clipboard,
+                        Switch::new("capture-clipboard")
+                            .disabled(self.settings_editor.model.saving)
+                            .checked(self.settings_editor.draft.capture_clipboard)
+                            .accessibility_label(l10n::clipboard_text(self.locale))
+                            .on_change(cx.listener(|this, checked, _, cx| {
+                                this.save_instant_preferences(
+                                    |preferences| preferences.capture_clipboard = *checked,
+                                    cx,
+                                );
+                            })),
+                        cx,
+                    ),
+                ]))
     }
 
-    pub(in crate::launcher::view) fn clipboard_settings_choice_menu(
-        &mut self,
-        cx: &mut Context<Self>,
-    ) -> Option<AnyElement> {
-        let choice = self.settings_editor.clipboard_choice?;
+    fn clipboard_settings_choice_button(
+        &self,
+        choice: ClipboardSettingsChoice,
+        button_label: String,
+        disabled: bool,
+        cx: &Context<Self>,
+    ) -> impl IntoElement {
+        let locale = self.locale;
         let status = self.clipboard.status.as_ref();
-        let (title, options): (String, Vec<(String, usize, bool)>) = match choice {
-            ClipboardSettingsChoice::Retention => (
-                l10n::keep_history_for(self.locale),
-                [0_u32, 1, 7, 30, 90]
-                    .into_iter()
-                    .map(|days| {
-                        let label = if days == 0 {
-                            l10n::until_storage_limit(self.locale)
-                        } else {
-                            l10n::retention_days(self.locale, i64::from(days))
-                        };
-                        (
-                            label,
-                            days as usize,
-                            status.is_some_and(|status| status.retention_days == days),
-                        )
-                    })
-                    .collect(),
-            ),
+        let options = match choice {
+            ClipboardSettingsChoice::Retention => [0, 1, 7, 30, 90]
+                .into_iter()
+                .map(|days| {
+                    let label = if days == 0 {
+                        l10n::until_storage_limit(locale)
+                    } else {
+                        l10n::retention_days(locale, i64::from(days))
+                    };
+                    (
+                        format!("clipboard-retention-{days}"),
+                        label,
+                        days,
+                        status.is_some_and(|status| status.retention_days == days),
+                    )
+                })
+                .collect::<Vec<_>>(),
             ClipboardSettingsChoice::Pause => {
                 let paused = status.is_some_and(|status| status.paused_until_ms.is_some());
-                let mut options = vec![(l10n::resume_recording(self.locale), 0, !paused)];
-                options.extend([5_u32, 15, 60].into_iter().map(|minutes| {
+                let mut options = vec![(
+                    "clipboard-resume".to_owned(),
+                    l10n::resume_recording(locale),
+                    0,
+                    !paused,
+                )];
+                options.extend([5, 15, 60].into_iter().map(|minutes| {
                     (
-                        l10n::pause_minutes(self.locale, i64::from(minutes)),
-                        minutes as usize,
+                        format!("clipboard-pause-{minutes}"),
+                        l10n::pause_minutes(locale, i64::from(minutes)),
+                        minutes,
                         false,
                     )
                 }));
-                (l10n::pause_history_recording(self.locale), options)
+                options
             }
         };
-        let choice_id = match choice {
-            ClipboardSettingsChoice::Retention => "retention",
-            ClipboardSettingsChoice::Pause => "pause",
+        let id = match choice {
+            ClipboardSettingsChoice::Retention => "clipboard-retention",
+            ClipboardSettingsChoice::Pause => "clipboard-pause",
         };
-        let options = options.into_iter().map(|(label, value, selected)| {
-            let id = match choice {
-                ClipboardSettingsChoice::Retention => {
-                    format!("clipboard-retention-{value}")
+        let view = cx.weak_entity();
+        Button::new(id)
+            .secondary()
+            .disabled(disabled)
+            .label(button_label)
+            .dropdown_caret(true)
+            .dropdown_menu(move |mut menu, _, _| {
+                for (id, label, value, selected) in &options {
+                    let id = SharedString::from(id.clone());
+                    let label = label.clone();
+                    let value = *value;
+                    let view = view.clone();
+                    menu = menu.item(
+                        PopupMenuItem::element(move |_, _| {
+                            div()
+                                .id(id.clone())
+                                .test_support()
+                                .aria_label(label.clone())
+                                .child(label.clone())
+                        })
+                        .checked(*selected)
+                        .on_click(move |_, window, cx| {
+                            let _ = view.update(cx, |this, cx| {
+                                if this.clipboard.loading {
+                                    return;
+                                }
+                                match choice {
+                                    ClipboardSettingsChoice::Retention => {
+                                        this.select_clipboard_retention(value, window, cx)
+                                    }
+                                    ClipboardSettingsChoice::Pause => {
+                                        this.select_clipboard_pause(value, cx)
+                                    }
+                                }
+                            });
+                        }),
+                    );
                 }
-                ClipboardSettingsChoice::Pause if value == 0 => "clipboard-resume".to_owned(),
-                ClipboardSettingsChoice::Pause => format!("clipboard-pause-{value}"),
-            };
-            Button::new(SharedString::from(id))
-                .when(selected, |button| button.secondary())
-                .when(!selected, |button| button.ghost())
-                .label(label)
-                .on_click(cx.listener(move |this, _, window, cx| match choice {
-                    ClipboardSettingsChoice::Retention => {
-                        this.select_clipboard_retention(value as u32, window, cx)
-                    }
-                    ClipboardSettingsChoice::Pause => this.select_clipboard_pause(value as u32, cx),
-                }))
-        });
-        Some(
-            div()
-                .id(SharedString::from(format!("clipboard-{choice_id}-choices")))
-                .test_support()
-                .p(px(metrics::SPACE_MD))
-                .flex()
-                .flex_col()
-                .gap(px(metrics::SPACE_SM))
-                .rounded(px(metrics::CARD_RADIUS))
-                .bg(theme::field())
-                .child(div().caption_text().text_color(theme::muted()).child(title))
-                .child(
-                    div()
-                        .flex()
-                        .flex_wrap()
-                        .gap(px(metrics::SPACE_SM))
-                        .children(options),
-                )
-                .into_any_element(),
-        )
+                menu
+            })
     }
 
     pub(in crate::launcher::view) fn select_clipboard_retention(
@@ -208,7 +211,6 @@ impl LauncherView {
         else {
             return;
         };
-        self.settings_editor.clipboard_choice = None;
         if clipboard_retention_removes_entries(current, days) {
             self.present_clipboard_confirmation(
                 ClipboardConfirmation::SetRetention(days),
@@ -237,7 +239,6 @@ impl LauncherView {
         minutes: u32,
         cx: &mut Context<Self>,
     ) {
-        self.settings_editor.clipboard_choice = None;
         let Some(live) = self.live.clone() else {
             return;
         };
@@ -257,7 +258,6 @@ impl LauncherView {
         }
         self.settings_editor.close_pending = false;
         self.settings_editor.exit_intent = None;
-        self.settings_editor.clipboard_choice = None;
         if self.settings_editor.modal_return_focus.is_none() {
             self.settings_editor.modal_return_focus = window.focused(cx);
         }

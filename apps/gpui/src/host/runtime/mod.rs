@@ -51,6 +51,7 @@ pub enum LiveEvent {
         host_error: Option<String>,
     },
     Clipboard(ClipboardSnapshot),
+    ClipboardInspector(Option<String>),
     AppHistory(AppHistorySnapshot),
     AppHistoryAction {
         item_id: String,
@@ -92,6 +93,7 @@ pub enum LiveEvent {
     WebFrameReply {
         handle: String,
         frame: String,
+        host_action: Option<anywhere_core::application::web_plugins::WebHostAction>,
     },
     WebState {
         handle: String,
@@ -155,6 +157,10 @@ impl LiveLauncher {
         let (authorized_roots, access_error) =
             reconcile_access_at_startup(&directory_access, &preferences);
         apply_preferences(&application, &preferences, &authorized_roots)?;
+        {
+            let _entered = runtime.enter();
+            configure_application_search_paths(&application, &preferences);
+        }
         let settings_cache = settings_snapshot_from(&application)?;
         Ok(Self {
             runtime: Some(runtime),
@@ -289,6 +295,23 @@ impl LiveLauncher {
                 .expect("tool runtime owner")
                 .runtime()
         })
+    }
+}
+
+fn configure_application_search_paths(
+    application: &ApplicationRuntime,
+    preferences: &HostPreferences,
+) {
+    if !crate::platform::capabilities::APPLICATION_SEARCH_FILE_EXTENSIONS.is_empty() {
+        application
+            .application()
+            .configure_application_search_paths(
+                preferences
+                    .application_search_paths
+                    .iter()
+                    .map(PathBuf::from)
+                    .collect(),
+            );
     }
 }
 

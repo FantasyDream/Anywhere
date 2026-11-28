@@ -267,6 +267,7 @@ async fn another_instance_forget_blocks_a_cached_open_without_side_effects() {
         .any(|candidate| candidate.command_id.as_deref() == Some(OPEN)));
 }
 
+#[cfg(unix)]
 #[tokio::test]
 async fn replaced_broken_database_rebinds_typed_service_and_revokes_old_rows() {
     let temporary = tempfile::tempdir().unwrap();

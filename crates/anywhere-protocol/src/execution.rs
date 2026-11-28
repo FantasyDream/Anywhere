@@ -54,6 +54,10 @@ pub enum ActionStatus {
 #[serde(rename_all = "snake_case")]
 pub enum HostView {
     FileSearch,
+    /// Review a local archive selected through a native action.
+    WebPackageReview {
+        path: String,
+    },
     NativeTool {
         id: String,
         input: String,

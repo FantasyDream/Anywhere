@@ -368,16 +368,11 @@ async fn history_objects_reuse_actions_without_leaking_targets_to_usage_or_accep
         .await
         .unwrap();
     assert!(result.succeeded());
+    let expected_copy =
+        anywhere_platform::paths::display_path(&project.canonicalize().unwrap()).to_path_buf();
     assert_eq!(
         platform.calls.lock().unwrap().last(),
-        Some(&(
-            "copy".into(),
-            project
-                .canonicalize()
-                .unwrap()
-                .to_string_lossy()
-                .into_owned()
-        ))
+        Some(&("copy".into(), expected_copy.to_string_lossy().into_owned()))
     );
     let records = usage.lock().unwrap().load_global().unwrap();
     assert!(records

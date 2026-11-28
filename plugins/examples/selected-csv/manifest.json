@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "apiVersion": "2",
+  "id": "dev.example.selected-csv",
+  "name": "Selected CSV",
+  "version": "1.0.0",
+  "platforms": ["macos", "windows"],
+  "entry": "dist/index.html",
+  "permissions": [
+    {"name": "context.read", "types": ["core.file"]},
+    {"name": "resources.read"},
+    {"name": "preview.open"}
+  ],
+  "commands": [{
+    "id": "open",
+    "title": "Inspect Selected CSV",
+    "localizedTitles": {"zh": "查看所选 CSV"},
+    "accepts": ["core.file"],
+    "requireContext": true,
+    "entrypoint": "csv"
+  }]
+}

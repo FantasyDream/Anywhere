@@ -1,4 +1,9 @@
-import type {WebInput, WebCurrentApp, JsonValue} from './contract.js';
+import type {
+  WebInput,
+  WebCurrentApp,
+  JsonValue,
+  CallResults,
+} from './contract.js';
 /** Structural cancellation port; background packages require no DOM typings. */
 export interface CallOptions {
   signal?: {
@@ -12,8 +17,18 @@ export interface CallOptions {
   };
 }
 export type Unsubscribe = () => void;
-/** The same business API in a WebView or a finite background job. */
-export interface Anywhere {
+export type ResourceStat = CallResults['resources.stat'];
+export type ReadTextOptions = CallOptions & {maxBytes?: number};
+
+/** Business APIs available in a WebView and a finite background action. */
+export interface BackgroundAnywhere {
+  url: {
+    open(url: string, options?: CallOptions): Promise<void>;
+  };
+  resources: {
+    stat(handle: string, options?: CallOptions): Promise<ResourceStat>;
+    readText(handle: string, options?: ReadTextOptions): Promise<string>;
+  };
   context: {
     get(): Promise<WebInput>;
     onChange(callback: (context: WebInput) => void): Unsubscribe;
@@ -38,5 +53,16 @@ export interface Anywhere {
   app: {
     getSource(options?: CallOptions): Promise<WebCurrentApp | null>;
     getFrontmost(options?: CallOptions): Promise<WebCurrentApp | null>;
+  };
+}
+
+/** Native window operations are offered only to an active WebView. */
+export interface Anywhere extends BackgroundAnywhere {
+  window: {
+    back(options?: CallOptions): Promise<void>;
+    close(options?: CallOptions): Promise<void>;
+  };
+  preview: {
+    open(handle: string, options?: CallOptions): Promise<void>;
   };
 }

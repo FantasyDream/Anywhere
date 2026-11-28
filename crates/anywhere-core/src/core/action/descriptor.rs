@@ -97,8 +97,11 @@ pub struct ActionDescriptor {
 
 impl ActionDescriptor {
     fn from_definition(mut definition: ActionDefinition) -> Self {
+        let mut seen: std::collections::HashSet<String> =
+            definition.aliases.iter().cloned().collect();
+        seen.insert(definition.title.clone());
         for title in definition.localized_titles.values() {
-            if title != &definition.title && !definition.aliases.contains(title) {
+            if seen.insert(title.clone()) {
                 definition.aliases.push(title.clone());
             }
         }
@@ -528,7 +531,7 @@ mod tests {
     #[test]
     fn exact_type_match_and_builtin_command_count() {
         let registry = crate::application::builtin_registry();
-        assert_eq!(registry.commands().count(), 30);
+        assert_eq!(registry.commands().count(), 31);
         let url = recognized_contexts("https://github.com")
             .into_iter()
             .find(|c| c.type_id == URL)

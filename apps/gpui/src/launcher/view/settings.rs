@@ -29,10 +29,6 @@ impl LauncherView {
         let clipboard_confirmation = self
             .clipboard_confirmation
             .map(|confirmation| self.render_settings_clipboard_confirmation(confirmation, cx));
-        let close_prompt = self
-            .settings_editor
-            .close_pending
-            .then(|| self.render_settings_close_prompt(dirty, cx));
         let sidebar = self.render_settings_sidebar(cx);
         div()
             .id("settings-surface")
@@ -58,7 +54,7 @@ impl LauncherView {
                     .min_w(px(0.))
                     .h_full()
                     .overflow_x_hidden()
-                    .pt(px(28.))
+                    .pt(px(metrics::TITLE_BAR_INSET))
                     .flex()
                     .flex_col()
                     .child(
@@ -90,23 +86,26 @@ impl LauncherView {
                                     .flex()
                                     .items_center()
                                     .gap(px(metrics::SPACE_SM))
-                                    .when(self.settings_editor.model.saving || dirty, |element| {
+                                    .when(self.settings_editor.model.saving, |element| {
                                         element.child(
                                             div()
-                                                .debug_selector(|| "settings-dirty-label".into())
+                                                .id("settings-saving")
                                                 .flex_none()
-                                                .whitespace_nowrap()
-                                                .caption_text()
-                                                .text_color(if dirty {
-                                                    theme::warning()
-                                                } else {
-                                                    theme::muted()
-                                                })
-                                                .child(if self.settings_editor.model.saving {
-                                                    l10n::saving(self.locale)
-                                                } else {
-                                                    l10n::changes_not_saved(self.locale)
-                                                }),
+                                                .aria_label(l10n::saving(self.locale))
+                                                .child(
+                                                    Spinner::new().xsmall().color(theme::accent()),
+                                                ),
+                                        )
+                                    })
+                                    .when(dirty, |element| {
+                                        element.child(
+                                            Button::new("discard-settings-draft")
+                                                .ghost()
+                                                .label(l10n::discard_changes(self.locale))
+                                                .disabled(self.settings_editor.model.saving)
+                                                .on_click(cx.listener(|this, _, window, cx| {
+                                                    this.revert_settings_draft(window, cx);
+                                                })),
                                         )
                                     })
                                     .when(dirty || self.hotkey_error.is_some(), |element| {
@@ -114,12 +113,23 @@ impl LauncherView {
                                             Button::new("save-settings")
                                                 .when(dirty, |button| button.primary())
                                                 .when(!dirty, |button| button.secondary())
+                                                .when(dirty, |button| {
+                                                    button.child(components::keycap(
+                                                        crate::platform::primary_shortcut_label(
+                                                            "S",
+                                                        ),
+                                                    ))
+                                                })
                                                 .label(if dirty {
                                                     l10n::save_changes(self.locale)
                                                 } else {
                                                     l10n::retry_shortcuts(self.locale)
                                                 })
-                                                .disabled(self.settings_editor.model.saving)
+                                                .disabled(
+                                                    self.settings_editor.draft_save_queued
+                                                        || self.settings_editor.model.saving
+                                                            && !dirty,
+                                                )
                                                 .on_click(cx.listener(|this, _, _, cx| {
                                                     this.save_settings(cx)
                                                 })),
@@ -170,11 +180,18 @@ impl LauncherView {
                             ),
                     ),
             )
+            .child(
+                div()
+                    .absolute()
+                    .top_0()
+                    .left_0()
+                    .right_0()
+                    .child(self.render_window_titlebar(cx)),
+            )
             .when_some(action_picker, |element, picker| element.child(picker))
             .when_some(clipboard_confirmation, |element, prompt| {
                 element.child(prompt)
             })
-            .when_some(close_prompt, |element, prompt| element.child(prompt))
             .into_any_element()
     }
 
@@ -183,6 +200,10 @@ impl LauncherView {
             return Some((error, components::NoticeKind::Error));
         }
         if !self.settings_editor.close_pending
+            && !matches!(
+                self.shortcuts.recording,
+                Some(ShortcutSlot::CurrentApp | ShortcutSlot::Universal)
+            )
             && matches!(
                 self.notice_kind,
                 components::NoticeKind::Error | components::NoticeKind::Warning
@@ -237,106 +258,6 @@ impl LauncherView {
         )
     }
 
-    fn render_settings_modal_shell(
-        id: &'static str,
-        icon: IconName,
-        badge_tint: gpui_kit::Hsla,
-        title: String,
-        description: String,
-        error: Option<(&'static str, String)>,
-        actions: Div,
-    ) -> AnyElement {
-        div()
-            .id(id)
-            .test_support()
-            .absolute()
-            .inset_0()
-            .flex()
-            .items_center()
-            .justify_center()
-            .bg(theme::modal_scrim())
-            .occlude()
-            .child(
-                div()
-                    .w(px(340.))
-                    .rounded(px(metrics::MODAL_RADIUS))
-                    .bg(theme::action_menu_surface())
-                    .border(px(metrics::DIVIDER_WIDTH))
-                    .border_color(theme::control_border())
-                    .shadow_lg()
-                    .overflow_hidden()
-                    .text_color(theme::primary())
-                    .flex()
-                    .flex_col()
-                    .child(
-                        div()
-                            .px(px(metrics::SPACE_XL))
-                            .pt(px(metrics::SPACE_XL))
-                            .pb(px(metrics::SPACE_LG))
-                            .flex()
-                            .flex_col()
-                            .items_center()
-                            .gap(px(metrics::SPACE_SM))
-                            .child(
-                                div()
-                                    .size(px(metrics::ROW_HEIGHT_COMPACT))
-                                    .rounded(px(metrics::CARD_RADIUS))
-                                    .bg(badge_tint.opacity(0.14))
-                                    .border(px(metrics::DIVIDER_WIDTH))
-                                    .border_color(badge_tint.opacity(0.28))
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .child(
-                                        Icon::new(icon)
-                                            .size(px(metrics::ROW_ICON_SIZE))
-                                            .text_color(badge_tint),
-                                    ),
-                            )
-                            .child(
-                                div()
-                                    .w_full()
-                                    .text_center()
-                                    .text_size(px(metrics::MODAL_TITLE_SIZE))
-                                    .line_height(px(
-                                        metrics::MODAL_TITLE_SIZE * metrics::BODY_LINE_HEIGHT
-                                    ))
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .text_color(theme::primary())
-                                    .child(title),
-                            )
-                            .child(
-                                div()
-                                    .w_full()
-                                    .text_center()
-                                    .text_size(px(metrics::LABEL_SIZE))
-                                    .line_height(px(
-                                        metrics::LABEL_SIZE * metrics::CAPTION_LINE_HEIGHT
-                                    ))
-                                    .whitespace_normal()
-                                    .text_color(theme::secondary())
-                                    .child(description),
-                            )
-                            .when_some(error, |body, (error_id, message)| {
-                                body.child(
-                                    div()
-                                        .id(error_id)
-                                        .test_support()
-                                        .w_full()
-                                        .pt(px(metrics::SPACE_XS))
-                                        .child(components::notice(
-                                            message,
-                                            components::NoticeKind::Error,
-                                        )),
-                                )
-                            }),
-                    )
-                    .child(div().h(px(metrics::DIVIDER_WIDTH)).bg(theme::divider()))
-                    .child(actions),
-            )
-            .into_any_element()
-    }
-
     fn render_settings_clipboard_confirmation(
         &self,
         confirmation: ClipboardConfirmation,
@@ -366,7 +287,6 @@ impl LauncherView {
         let accept = Button::new("clipboard-confirm-accept")
             .when(is_clear, |button| button.danger())
             .when(!is_clear, |button| button.primary())
-            .w_full()
             .track_focus(&self.settings_editor.confirm_accept_focus)
             .disabled(self.clipboard.loading)
             .label(if is_clear {
@@ -379,7 +299,6 @@ impl LauncherView {
             }));
         let cancel = Button::new("clipboard-confirm-cancel")
             .secondary()
-            .w_full()
             .bg(theme::field())
             .border(px(metrics::DIVIDER_WIDTH))
             .border_color(theme::control_border())
@@ -391,11 +310,11 @@ impl LauncherView {
         let actions = div()
             .p(px(metrics::SPACE_LG))
             .flex()
-            .flex_col()
+            .justify_end()
             .gap(px(metrics::SPACE_SM))
-            .child(accept)
-            .child(cancel);
-        Self::render_settings_modal_shell(
+            .child(cancel)
+            .child(accept);
+        components::modal_shell(
             "clipboard-confirm-prompt",
             icon,
             theme::danger(),
@@ -406,8 +325,9 @@ impl LauncherView {
         )
     }
 
-    fn render_settings_close_prompt(&self, dirty: bool, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn render_settings_close_prompt(&self, cx: &mut Context<Self>) -> AnyElement {
         let error = self.settings_close_error_message();
+        let dirty = self.settings_dirty(cx);
         let (title, description) = if dirty {
             (
                 l10n::save_before_close(self.locale),
@@ -426,7 +346,6 @@ impl LauncherView {
         };
         let keep_editing = Button::new("keep-editing")
             .secondary()
-            .w_full()
             .bg(theme::field())
             .border(px(metrics::DIVIDER_WIDTH))
             .border_color(theme::control_border())
@@ -437,7 +356,6 @@ impl LauncherView {
             }));
         let discard = Button::new("discard-settings")
             .danger()
-            .w_full()
             .track_focus(&self.settings_editor.discard_focus)
             .label(l10n::close_without_saving(self.locale))
             .disabled(self.settings_editor.model.saving)
@@ -445,38 +363,71 @@ impl LauncherView {
         let actions = div()
             .p(px(metrics::SPACE_LG))
             .flex()
-            .flex_col()
+            .flex_wrap()
+            .justify_end()
             .gap(px(metrics::SPACE_SM))
+            .child(discard)
+            .child(div().flex_1())
+            .child(keep_editing)
             .when(dirty, |footer| {
                 footer.child(
                     Button::new("save-settings-confirm")
                         .primary()
-                        .w_full()
                         .track_focus(&self.settings_editor.save_focus)
                         .label(l10n::save_changes(self.locale))
                         .disabled(self.settings_editor.model.saving)
                         .on_click(cx.listener(|this, _, _, cx| this.save_settings_and_close(cx))),
                 )
-            })
-            .child(discard)
-            .child(keep_editing);
-        Self::render_settings_modal_shell(
+            });
+        components::modal_shell(
             "settings-close-prompt",
             IconName::TriangleAlert,
             badge_tint,
             title,
             description,
-            error.map(|message| ("settings-close-prompt-error", message)),
+            error.map(|message| {
+                div()
+                    .id("settings-close-prompt-error")
+                    .test_support()
+                    .w_full()
+                    .child(components::notice(message, components::NoticeKind::Error))
+                    .into_any_element()
+            }),
             actions,
         )
     }
 
-    fn render_settings_sidebar(&self, cx: &mut Context<Self>) -> Div {
+    fn render_settings_sidebar(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let draft = self.preferences_from_editors(cx);
         div()
-            .w(px(164.))
+            .id("settings-sidebar")
+            .track_focus(&self.settings_editor.sidebar_focus)
+            .tab_stop(true)
+            .border(px(metrics::DIVIDER_WIDTH))
+            .border_color(theme::transparent())
+            .focus_visible(|style| style.border_color(theme::selection_outline()))
+            .on_key_down(
+                cx.listener(|this, event: &gpui_kit::KeyDownEvent, window, cx| {
+                    if !this.settings_editor.sidebar_focus.is_focused(window)
+                        || this.shortcuts.recording.is_some()
+                    {
+                        return;
+                    }
+                    let index = this.settings_editor.model.selected as usize;
+                    let categories = SettingsCategory::ALL;
+                    let next = match event.keystroke.key.as_str() {
+                        "up" => (index + categories.len() - 1) % categories.len(),
+                        "down" => (index + 1) % categories.len(),
+                        _ => return,
+                    };
+                    cx.stop_propagation();
+                    this.select_settings_category(categories[next], window, cx);
+                }),
+            )
+            .w(px(metrics::SETTINGS_SIDEBAR_WIDTH))
             .h_full()
-            .px(px(10.))
-            .pt(px(42.))
+            .px(px(metrics::LIST_PADDING_X))
+            .pt(px(metrics::PAGE_HEADER_HEIGHT - metrics::SPACE_XL))
             .pb(px(metrics::SPACE_MD))
             .flex()
             .flex_col()
@@ -484,7 +435,7 @@ impl LauncherView {
             .child(
                 div()
                     .px(px(metrics::SPACE_SM))
-                    .pb(px(10.))
+                    .pb(px(metrics::LIST_PADDING_X))
                     .flex()
                     .items_center()
                     .child(
@@ -523,8 +474,8 @@ impl LauncherView {
                 .accessibility_label(category.label(self.locale))
                 .selected(selected)
                 .w_full()
-                .h(px(32.))
-                .mb(px(3.))
+                .h(px(metrics::ROW_ICON_SLOT))
+                .mb(px(metrics::ROW_INSET_Y_COMPACT))
                 .px(px(metrics::SPACE_SM))
                 .justify_start()
                 .rounded(px(metrics::CONTROL_RADIUS))
@@ -541,11 +492,34 @@ impl LauncherView {
                 })
                 .child(
                     div()
+                        .relative()
                         .w_full()
                         .flex()
                         .items_center()
                         .gap(px(metrics::SPACE_SM))
-                        .child(Icon::new(icon).size(px(18.)).text_color(icon_color))
+                        .child(
+                            div()
+                                .flex_none()
+                                .w(px(metrics::SELECTION_INDICATOR_WIDTH))
+                                .h(px(metrics::ICON_SIZE))
+                                .rounded(px(metrics::SELECTION_INDICATOR_WIDTH))
+                                .when(selected, |indicator| indicator.bg(theme::accent())),
+                        )
+                        .when(self.settings_category_dirty(category, &draft), |row| {
+                            row.child(
+                                div()
+                                    .absolute()
+                                    .right_0()
+                                    .size(px(metrics::DRAFT_INDICATOR_SIZE))
+                                    .rounded(px(metrics::DRAFT_INDICATOR_SIZE))
+                                    .bg(theme::warning()),
+                            )
+                        })
+                        .child(
+                            Icon::new(icon)
+                                .size(px(metrics::SPACE_LG))
+                                .text_color(icon_color),
+                        )
                         .child(
                             div()
                                 .flex_1()
@@ -556,36 +530,43 @@ impl LauncherView {
                         ),
                 )
                 .on_click(cx.listener(move |this, _, window, cx| {
-                    if this.settings_editor.model.selected != category {
-                        this.shortcuts.recording = None;
-                        this.settings_editor.action_picker_open = false;
-                        this.shortcuts.pending_action = None;
-                        this.shortcuts.pending_value = None;
-                        this.settings_editor.model.selected = category;
-                        this.settings_editor.clipboard_choice = None;
-                        if category != SettingsCategory::Clipboard {
-                            this.clipboard_confirmation = None;
-                        }
-                        this.settings_editor.scrolls[category as usize]
-                            .set_offset(gpui_kit::point(px(0.), px(0.)));
-                        if category == SettingsCategory::ApplicationHistory {
-                            this.request_app_history_settings_sources(cx);
-                        } else if category == SettingsCategory::Clipboard {
-                            this.request_clipboard_settings_status(cx);
-                        }
-                        let settings_scroll =
-                            this.settings_editor.scrolls[category as usize].clone();
-                        cx.defer_in(window, move |this, _, cx| {
-                            if this.settings_editor.model.selected == category {
-                                settings_scroll.set_offset(gpui_kit::point(px(0.), px(0.)));
-                                cx.notify();
-                            }
-                        });
-                        cx.notify();
-                    }
-                    this.settings_editor.focus_handle.focus(window, cx);
+                    this.select_settings_category(category, window, cx);
+                    this.settings_editor.sidebar_focus.focus(window, cx);
                 }))
             }))
+    }
+
+    fn select_settings_category(
+        &mut self,
+        category: SettingsCategory,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.settings_editor.model.selected != category {
+            self.shortcuts.recording = None;
+            self.settings_editor.action_picker_open = false;
+            self.shortcuts.pending_action = None;
+            self.shortcuts.pending_value = None;
+            self.settings_editor.model.selected = category;
+            if category != SettingsCategory::Clipboard {
+                self.clipboard_confirmation = None;
+            }
+            self.settings_editor.scrolls[category as usize]
+                .set_offset(gpui_kit::point(px(0.), px(0.)));
+            if category == SettingsCategory::ApplicationHistory {
+                self.request_app_history_settings_sources(cx);
+            } else if category == SettingsCategory::Clipboard {
+                self.request_clipboard_settings_status(cx);
+            }
+            let settings_scroll = self.settings_editor.scrolls[category as usize].clone();
+            cx.defer_in(window, move |this, _, cx| {
+                if this.settings_editor.model.selected == category {
+                    settings_scroll.set_offset(gpui_kit::point(px(0.), px(0.)));
+                    cx.notify();
+                }
+            });
+            cx.notify();
+        }
     }
 }
 

@@ -18,33 +18,65 @@ pub(crate) fn locale_for_language(language: UiLanguage) -> Locale {
     language.locale()
 }
 
+pub(crate) fn readable_file_path(path: &str) -> &str {
+    anywhere_platform::paths::display_path(std::path::Path::new(path))
+        .to_str()
+        .unwrap_or(path)
+}
+
+pub(crate) fn readable_extended_path(value: &str) -> Option<String> {
+    if let Some(unc) = value.strip_prefix(r"\\?\UNC\") {
+        return Some(format!(r"\\{unc}"));
+    }
+    value.strip_prefix(r"\\?\").map(|path| path.to_owned())
+}
+
+pub(crate) fn readable_search_roots(roots: &[String]) -> Vec<String> {
+    roots
+        .iter()
+        .map(|root| {
+            let readable = readable_file_path(root);
+            readable
+                .strip_prefix(r"\\?\UNC\")
+                .map(|unc| format!(r"\\{unc}"))
+                .unwrap_or_else(|| readable.to_owned())
+        })
+        .collect()
+}
+
 /// Replace the user's home directory with `~` and middle-truncate deep paths so
 /// the root anchor and immediate parent directories stay readable.
 pub(crate) fn format_path_middle_truncated(path: &str) -> String {
-    let trimmed = path.trim();
+    let trimmed = readable_file_path(path.trim());
     if trimmed.is_empty() {
         return String::new();
     }
-    let contracted = std::env::var("HOME")
-        .ok()
-        .filter(|home| !home.is_empty())
-        .and_then(|home| {
-            trimmed
-                .strip_prefix(&home)
-                .filter(|rest| rest.is_empty() || rest.starts_with('/'))
-                .map(|rest| format!("~{rest}"))
-        })
+    let home = anywhere_platform::paths::home_directory();
+    let contracted = home
+        .as_deref()
+        .and_then(|home| abbreviate_home(trimmed, home))
         .unwrap_or_else(|| trimmed.to_owned());
     let segments: Vec<&str> = contracted
-        .split('/')
+        .split(std::path::is_separator)
         .filter(|part| !part.is_empty())
         .collect();
-    if segments.len() <= 4 && contracted.chars().count() <= 48 {
+    if segments.len() <= 2 {
         return contracted;
+    }
+    if segments.len() <= 4 && contracted.chars().count() <= 48 {
+        return if cfg!(windows) && segments[0] == "~" {
+            segments.join(" › ")
+        } else {
+            contracted
+        };
     }
     let leading = if contracted.starts_with('~') {
         if segments.len() >= 2 {
-            format!("~/{}", segments[1])
+            if cfg!(windows) {
+                format!("~ › {}", segments[1])
+            } else {
+                format!("~/{}", segments[1])
+            }
         } else {
             "~".to_owned()
         }
@@ -56,6 +88,35 @@ pub(crate) fn format_path_middle_truncated(path: &str) -> String {
     let tail_count = segments.len().min(2);
     let tail = segments[segments.len() - tail_count..].join(" › ");
     format!("{leading} › … › {tail}")
+}
+
+fn abbreviate_home(path: &str, home: &std::path::Path) -> Option<String> {
+    let home = anywhere_platform::paths::display_path(home);
+    let rest = std::path::Path::new(path).strip_prefix(home).ok();
+    #[cfg(windows)]
+    let rest = rest.or_else(|| {
+        let path = path.as_bytes();
+        let home = home
+            .to_str()?
+            .trim_end_matches(std::path::is_separator)
+            .as_bytes();
+        let prefix = path.get(..home.len())?;
+        if !prefix.iter().zip(home).all(|(left, right)| {
+            left.eq_ignore_ascii_case(right)
+                || matches!((left, right), (b'/', b'\\') | (b'\\', b'/'))
+        }) {
+            return None;
+        }
+        let tail = std::str::from_utf8(&path[home.len()..]).ok()?;
+        (tail.is_empty() || tail.starts_with(std::path::is_separator))
+            .then(|| std::path::Path::new(tail.trim_start_matches(std::path::is_separator)))
+    });
+    let rest = rest?;
+    if rest.as_os_str().is_empty() {
+        Some("~".to_owned())
+    } else {
+        Some(format!("~{}{}", std::path::MAIN_SEPARATOR, rest.display()))
+    }
 }
 
 /// Human-friendly byte size formatting (e.g. `512 B`, `14.2 KB`, `2.4 MB`).
@@ -422,13 +483,18 @@ pub(crate) fn context_capture_status_detail(
     match status {
         ContextCaptureStatus::Captured => l10n::last_context_capture(locale),
         ContextCaptureStatus::PermissionDenied => match source {
-            ContextSource::FinderSelection => l10n::finder_permission_help(locale),
+            ContextSource::FinderSelection if cfg!(target_os = "macos") => {
+                l10n::finder_permission_help(locale)
+            }
             ContextSource::SelectedText => l10n::selected_text_permission_help(locale),
             ContextSource::BrowserCurrentPage => l10n::browser_permission_help(locale),
             ContextSource::Clipboard => l10n::clipboard_permission_help(locale),
             _ => l10n::permission_needed(locale),
         },
         ContextCaptureStatus::ApplicationChanged => l10n::app_changed_help(locale),
+        ContextCaptureStatus::TooManyItems if cfg!(windows) => {
+            l10n::windows_too_many_items_help(locale)
+        }
         ContextCaptureStatus::TooManyItems => l10n::too_many_items_help(locale),
         _ => String::new(),
     }
@@ -450,6 +516,9 @@ pub(crate) fn web_permission_label(permission: &str, locale: Locale) -> String {
     if let Some(types) = permission.strip_prefix("context.read:") {
         return l10n::permission_context_read(locale, types);
     }
+    if let Some(origins) = permission.strip_prefix("url.open:") {
+        return l10n::permission_open_url(locale, origins);
+    }
     match permission {
         "current-app" => l10n::permission_current_app(locale),
         "clipboard.read-text" => l10n::permission_read_clipboard(locale),
@@ -458,6 +527,8 @@ pub(crate) fn web_permission_label(permission: &str, locale: Locale) -> String {
         "input.read" => l10n::permission_input_read(locale),
         "input.write" => l10n::permission_input_write(locale),
         "frontmost-app" => l10n::permission_frontmost_app(locale),
+        "resources.read" => l10n::permission_read_selection(locale),
+        "preview.open" => l10n::permission_preview_selection(locale),
         _ => permission.to_owned(),
     }
 }
@@ -481,7 +552,13 @@ pub(crate) fn action_result_message(result: &ActionResult, locale: Locale) -> St
         .map(str::trim)
         .filter(|output| !output.is_empty())
     {
-        return output.chars().take(240).collect();
+        let mut chars = output.chars();
+        let preview: String = chars.by_ref().take(512).collect();
+        return if chars.next().is_some() {
+            format!("{preview}…")
+        } else {
+            preview
+        };
     }
     l10n::action_completed(locale)
 }
@@ -513,6 +590,20 @@ mod tests {
     use super::*;
 
     #[test]
+    fn extended_path_projection_leaves_ordinary_copy_untouched() {
+        assert_eq!(
+            readable_extended_path(r"\\?\C:\Users\me\project\package.json").as_deref(),
+            Some(r"C:\Users\me\project\package.json")
+        );
+        assert_eq!(
+            readable_extended_path(r"\\?\UNC\server\share\report.txt").as_deref(),
+            Some(r"\\server\share\report.txt")
+        );
+        assert_eq!(readable_extended_path("Run in this project"), None);
+        assert_eq!(readable_extended_path(r"C:\Users\me\project"), None);
+    }
+
+    #[test]
     fn middle_truncation_keeps_prefix_and_tail_segments() {
         let short = "/Users/me/notes.txt";
         assert_eq!(format_path_middle_truncated(short), short);
@@ -520,6 +611,47 @@ mod tests {
         let truncated = format_path_middle_truncated(deep);
         assert!(truncated.contains('…'));
         assert!(truncated.ends_with("src › lib.rs"));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_home_contraction_respects_separator_case_and_directory_boundary() {
+        let home = std::path::Path::new(r"C:\Users\Alice");
+        assert_eq!(
+            abbreviate_home("c:/users/alice/Documents/file.txt", home)
+                .map(|path| path.replace('/', "\\")),
+            Some(r"~\Documents\file.txt".into())
+        );
+        assert_eq!(abbreviate_home(r"C:\Users\AliceOther\file.txt", home), None);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_file_paths_hide_redundant_verbatim_prefixes_and_truncate_by_component() {
+        let short = r"\\?\C:\Test\报告";
+        assert_eq!(format_path_middle_truncated(short), r"C:\Test\报告");
+        let deep = r"\\?\C:\Test\Documents\Projects\Anywhere\crates\anywhere-core\src";
+        assert_eq!(
+            format_path_middle_truncated(deep),
+            "C: › … › anywhere-core › src"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_file_capture_label_and_limit_refer_to_explorer() {
+        assert_eq!(
+            crate::platform::capabilities::file_selection_label(Locale::En),
+            "File Explorer selection"
+        );
+        assert_eq!(
+            context_capture_status_detail(
+                ContextCaptureStatus::TooManyItems,
+                ContextSource::FinderSelection,
+                Locale::En,
+            ),
+            "Select up to 64 items in File Explorer, then reopen Anywhere.",
+        );
     }
 
     #[test]

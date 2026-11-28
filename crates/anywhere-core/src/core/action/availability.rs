@@ -25,14 +25,24 @@ pub enum AvailabilityRule {
     Enabled,
     /// A meaningful action excluded from search and scope membership.
     Hidden,
+    FileExtension(&'static str),
     /// Snapshot of a menu item (or similar) that is visible but not runnable.
-    Disabled { reason: String },
+    Disabled {
+        reason: String,
+    },
     /// Hide when the named text fact represents the same value as this context.
-    HideIfFactMatchesContext { fact: String },
+    HideIfFactMatchesContext {
+        fact: String,
+    },
     /// Disabled unless the named flag fact is true.
-    RequireFlag { fact: String, reason: String },
+    RequireFlag {
+        fact: String,
+        reason: String,
+    },
     /// Project-local capability metadata; evaluation performs no IO.
-    RequireContextProperty { key: String },
+    RequireContextProperty {
+        key: String,
+    },
     /// App-owned actions match the captured application, with an optional explicit
     /// launcher entry target for keyword search and configured shortcuts.
     ForApplications {
@@ -55,7 +65,7 @@ impl AvailabilityRule {
 
     pub fn validate(&self) -> Result<()> {
         match self {
-            Self::Enabled | Self::Hidden => Ok(()),
+            Self::Enabled | Self::Hidden | Self::FileExtension(_) => Ok(()),
             Self::ForApplications {
                 bundle_ids,
                 entry_context,
@@ -104,6 +114,17 @@ pub fn evaluate(
 ) -> Availability {
     match rule {
         AvailabilityRule::Enabled => Availability::enabled(),
+        AvailabilityRule::FileExtension(expected) => match &context.value {
+            ContextValue::File(path)
+                if path
+                    .extension()
+                    .and_then(|extension| extension.to_str())
+                    .is_some_and(|extension| extension.eq_ignore_ascii_case(expected)) =>
+            {
+                Availability::enabled()
+            }
+            _ => Availability::hidden(),
+        },
         AvailabilityRule::ForApplications {
             bundle_ids,
             entry_context,

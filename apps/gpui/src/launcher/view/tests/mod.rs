@@ -33,10 +33,24 @@ fn open_view(cx: &mut TestAppContext) -> (AnyWindowHandle, Entity<LauncherView>)
     (window, view)
 }
 
+fn primary_shortcut(key: &str) -> String {
+    let modifier = if cfg!(target_os = "macos") {
+        "cmd"
+    } else {
+        "ctrl"
+    };
+    format!("{modifier}-{key}")
+}
+
 fn dispatch_shortcut(cx: &mut TestAppContext, window: AnyWindowHandle, shortcut: &'static str) {
+    let platform_shortcut = shortcut
+        .strip_prefix("cmd-")
+        .map_or_else(|| shortcut.to_owned(), primary_shortcut);
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        let keystroke = gpui_kit::Keystroke::parse(shortcut).expect("valid shortcut");
+        let keystroke =
+            gpui_kit::Keystroke::parse_with_os(&platform_shortcut, cx.platform_info().os)
+                .expect("valid shortcut");
         window.dispatch_keystroke(keystroke, cx);
     })
     .unwrap();
@@ -979,11 +993,11 @@ fn held_command_k_does_not_toggle_shelf_actions_twice(cx: &mut TestAppContext) {
         .unwrap();
 
     cx.update_window(window, |_, window, cx| {
-        window.key_down("cmd-k", false, cx);
+        window.key_down(&primary_shortcut("k"), false, cx);
         assert!(view.read(cx).clipboard.actions_open);
 
         crate::platform::set_key_event_is_repeat_for_test(true);
-        window.key_down("cmd-k", true, cx);
+        window.key_down(&primary_shortcut("k"), true, cx);
         crate::platform::set_key_event_is_repeat_for_test(false);
         assert!(view.read(cx).clipboard.actions_open);
     })
@@ -1373,16 +1387,23 @@ fn settings_expose_privacy_recovery_actions(cx: &mut TestAppContext) {
     });
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        assert!(window
-            .try_find("context-open-settings-FinderSelection")
-            .is_some());
+        assert_eq!(
+            window
+                .try_find("context-open-settings-FinderSelection")
+                .is_some(),
+            !cfg!(windows)
+        );
 
         view.update(cx, |view, cx| {
             view.settings_editor.model.selected = SettingsCategory::Search;
             cx.notify();
         });
         window.render_frame(cx);
-        assert!(window.try_find("open-full-disk-access").is_some());
+        assert_eq!(
+            window.try_find("open-full-disk-access").is_some(),
+            !cfg!(windows)
+        );
+        assert!(window.try_find("authorize-search-directories").is_some());
     })
     .unwrap();
 }
@@ -1430,7 +1451,7 @@ fn standalone_tasks_and_settings_keep_fixed_headers_separate(cx: &mut TestAppCon
         .expect("tasks toolbar bounds");
     assert!(
         tasks_header.origin.y >= px(metrics::TITLE_BAR_INSET),
-        "the Tasks header must stay below native traffic lights"
+        "the Tasks header must stay below shared window controls"
     );
 
     visual.update(|window, cx| {
@@ -1452,17 +1473,12 @@ fn standalone_tasks_and_settings_keep_fixed_headers_separate(cx: &mut TestAppCon
         title.origin.x + title.size.width <= actions.origin.x,
         "the settings title must not overlap Save / Done"
     );
-    let dirty = visual
-        .debug_bounds("settings-dirty-label")
-        .expect("settings dirty label bounds");
-    assert!(
-        dirty.size.width > px(120.),
-        "the dirty status must render its full label instead of the old hard truncation"
-    );
-    assert!(
-        dirty.origin.x + dirty.size.width <= actions.right(),
-        "the dirty status must stay inside the toolbar actions"
-    );
+    visual.update(|window, _| {
+        let done = window.find("done-settings").bounds();
+        let discard = window.find("discard-settings-draft").bounds();
+        assert!(discard.right() <= done.left());
+        assert!(done.right() <= window.viewport_size().width);
+    });
 }
 
 #[gpui_kit::test]
@@ -2149,6 +2165,8 @@ fn list_rows_across_pages_keep_height_title_alignment_and_non_overlapping_action
                     rollback: false,
                     builtin: false,
                     permission_count: 1,
+                    open_action_id: None,
+                    diagnostics: vec![],
                 },
                 crate::host::WebPackage {
                     id: "pkg-b".into(),
@@ -2161,6 +2179,8 @@ fn list_rows_across_pages_keep_height_title_alignment_and_non_overlapping_action
                     rollback: false,
                     builtin: false,
                     permission_count: 1,
+                    open_action_id: None,
+                    diagnostics: vec![],
                 },
             ]);
             view.web.selected = 0;
@@ -2296,7 +2316,7 @@ fn settings_shortcut_closes_mode_chooser_and_ignores_queued_launcher_resize(
     cx.update_window(handle, |_, window, cx| {
         window.render_frame(cx);
         window.click("launcher-mode-toggle", cx);
-        window.press("cmd-,", cx);
+        window.press(&primary_shortcut(","), cx);
     })
     .unwrap();
     cx.run_until_parked();
@@ -2778,10 +2798,10 @@ fn application_history_scrolls_selected_object_actions_and_dismisses(cx: &mut Te
     let panel = visual
         .debug_bounds("history-object-actions")
         .expect("history object actions panel bounds");
-    assert_eq!(panel.size.width, viewport.width);
+    assert_eq!(panel.size.width, px(metrics::MENU_WIDTH));
     let menu_scroll = visual.update(|_, cx| view.read(cx).scrolls.history_actions.clone());
     assert!(menu_scroll.max_offset().y > px(0.));
-    visual.update(|window, _| assert!(window.try_find("history-item-item").is_none()));
+    visual.update(|window, _| assert!(window.try_find("history-item-item").is_some()));
     visual.update(|window, cx| {
         view.update(cx, |view, cx| {
             view.handle_key("up", KeyModifiers::default(), window, cx);
@@ -2794,7 +2814,7 @@ fn application_history_scrolls_selected_object_actions_and_dismisses(cx: &mut Te
         assert!(refreshed.bottom() <= menu_scroll.bounds().bottom());
     });
     assert!(
-        panel.left() >= px(0.) && panel.right() >= viewport.width - px(16.),
+        panel.left() >= px(0.) && panel.right() <= viewport.width,
         "panel={panel:?} viewport={viewport:?}"
     );
     assert!(
@@ -2987,12 +3007,18 @@ fn clipboard_actions_panel_stays_inside_the_page(cx: &mut TestAppContext) {
         })
         .unwrap();
     let mut visual = VisualTestContext::from_window(window, cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("clipboard-inspector-scroll").is_some());
+        assert!(window.try_find("clipboard-search").is_some());
+    })
+    .unwrap();
     let panel = visual
         .debug_bounds("clipboard-actions")
         .expect("clipboard actions panel bounds");
-    assert_eq!(panel.size.width, viewport.width);
+    assert_eq!(panel.size.width, px(metrics::MENU_WIDTH));
     assert!(
-        panel.left() >= px(0.) && panel.right() >= viewport.width - px(16.),
+        panel.left() >= px(0.) && panel.right() <= viewport.width,
         "panel={panel:?} viewport={viewport:?}"
     );
     assert!(
@@ -3071,15 +3097,15 @@ fn tasks_tool_options_stay_inside_the_page(cx: &mut TestAppContext) {
         .unwrap();
     let mut visual = VisualTestContext::from_window(window, cx);
     visual.update(|window, _| {
-        assert!(window.try_find("page-back").is_some());
+        assert!(window.try_find("tasks-tool-options").is_some());
         assert!(window.try_find("tasks-refresh").is_some());
     });
     let panel = visual
         .debug_bounds("tasks-tool-options-panel")
         .expect("tasks tool options panel bounds");
-    assert_eq!(panel.size.width, viewport.width);
+    assert_eq!(panel.size.width, px(metrics::MENU_WIDTH));
     assert!(
-        panel.left() >= px(0.) && panel.right() >= viewport.width - px(22.),
+        panel.left() >= px(0.) && panel.right() <= viewport.width,
         "panel={panel:?} viewport={viewport:?}"
     );
     assert!(
@@ -3120,7 +3146,7 @@ fn tasks_actions_stay_inside_the_page(cx: &mut TestAppContext) {
             });
             window.render_frame(cx);
             assert!(window.try_find("task-action-copy-command").is_some());
-            assert!(window.try_find("task-more-actions").is_none());
+            assert!(window.try_find("task-more-actions").is_some());
             window.viewport_size()
         })
         .unwrap();
@@ -3128,15 +3154,60 @@ fn tasks_actions_stay_inside_the_page(cx: &mut TestAppContext) {
     let panel = visual
         .debug_bounds("tasks-actions")
         .expect("tasks actions panel bounds");
-    assert_eq!(panel.size.width, viewport.width);
+    assert_eq!(panel.size.width, px(metrics::MENU_WIDTH));
     assert!(
-        panel.left() >= px(0.) && panel.right() >= viewport.width - px(22.),
+        panel.left() >= px(0.) && panel.right() <= viewport.width,
         "panel={panel:?} viewport={viewport:?}"
     );
     assert!(
         panel.top() >= px(metrics::TITLE_BAR_INSET) && panel.bottom() <= viewport.height,
         "panel={panel:?} viewport={viewport:?}"
     );
+}
+
+#[gpui_kit::test]
+fn tasks_details_hide_windows_verbatim_path_prefixes(cx: &mut TestAppContext) {
+    let (window, view) = open_view(cx);
+    let row = crate::host::ExecutionRow {
+        id: "task".to_owned(),
+        title: "npm Run · sample".to_owned(),
+        directory: r"\\?\C:\Users\fixture\project".to_owned(),
+        command: "npm run sample".to_owned(),
+        status: anywhere_protocol::ExecutionSessionStatus::Succeeded,
+        output_revision: 1,
+        exit_code: Some(0),
+        started_at_ms: 0,
+        finished_at_ms: Some(1),
+        output_truncated: false,
+        error: None,
+    };
+    cx.update(|cx| {
+        view.update(cx, |view, cx| {
+            view.screen = Screen::Tasks;
+            view.standalone_tasks = true;
+            view.tasks.apply_rows(vec![row.clone()]);
+            view.tasks.detail = Some(crate::host::ExecutionDetail {
+                row,
+                stdout: "ready".into(),
+                stderr: "".into(),
+            });
+            view.tasks.command_details_open = true;
+            cx.notify();
+        });
+    });
+    sync_test_viewport_to_desired(cx, window, &view);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(
+            window.find("task-detail-directory").label(),
+            Some(r"C:\Users\fixture\project")
+        );
+        assert_eq!(
+            window.find("task-command-directory").label(),
+            Some(r"C:\Users\fixture\project")
+        );
+    })
+    .unwrap();
 }
 
 #[gpui_kit::test]
@@ -3363,7 +3434,7 @@ fn leaving_settings_keeps_resumes_or_restarts_the_launcher_stream(cx: &mut TestA
 }
 
 #[gpui_kit::test]
-fn settings_edits_are_dirty_until_saved_or_discarded(cx: &mut TestAppContext) {
+fn immediate_settings_preserve_path_drafts_until_saved_or_discarded(cx: &mut TestAppContext) {
     let (window, view) = open_view(cx);
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
@@ -3374,6 +3445,14 @@ fn settings_edits_are_dirty_until_saved_or_discarded(cx: &mut TestAppContext) {
         window.render_frame(cx);
         let login = window.find("open-at-login");
         assert_eq!(login.checked(), Some(false));
+        view.update(cx, |view, cx| {
+            set_textarea_value(
+                &view.settings_editor.file_exclusions_input,
+                "cache",
+                window,
+                cx,
+            );
+        });
         window.click("open-at-login", cx);
     })
     .unwrap();
@@ -3381,7 +3460,16 @@ fn settings_edits_are_dirty_until_saved_or_discarded(cx: &mut TestAppContext) {
     cx.update(|cx| {
         view.update(cx, |view, cx| {
             assert!(view.settings_editor.draft.launch_at_login);
-            assert!(!view.preferences.launch_at_login);
+            assert!(view.preferences.launch_at_login);
+            assert!(view.preferences.file_search_excluded_names.is_empty());
+            assert_eq!(
+                view.settings_editor
+                    .file_exclusions_input
+                    .read(cx)
+                    .value()
+                    .as_ref(),
+                "cache"
+            );
             assert!(view.settings_dirty(cx));
         });
     });
@@ -3395,14 +3483,36 @@ fn settings_edits_are_dirty_until_saved_or_discarded(cx: &mut TestAppContext) {
     cx.update(|cx| {
         view.update(cx, |view, cx| {
             assert!(view.preferences.launch_at_login);
+            assert_eq!(view.preferences.file_search_excluded_names, ["cache"]);
             assert!(!view.settings_dirty(cx));
         });
     });
 
     cx.update_window(window, |_, window, cx| {
-        window.click("open-at-login", cx);
+        view.update(cx, |view, cx| {
+            set_textarea_value(
+                &view.settings_editor.file_exclusions_input,
+                "temp",
+                window,
+                cx,
+            );
+        });
         window.render_frame(cx);
-        window.click("done-settings", cx);
+        assert!(window.try_find("product-window-resize").is_none());
+        if crate::platform::WINDOW_CONTROLS
+            == crate::platform::WindowControlsStyle::TrailingCaptionButtons
+        {
+            let minimize = window.find("product-window-minimize").bounds();
+            let close = window.find("product-window-close").bounds();
+            assert!(minimize.right() <= close.left());
+            assert!(close.left() > window.viewport_size().width / 2.0);
+            window.click("product-window-close", cx);
+        } else {
+            assert!(window.try_find("product-window-close").is_none());
+            view.update(cx, |view, cx| {
+                assert!(!view.request_main_window_close(window, cx));
+            });
+        }
     })
     .unwrap();
     cx.run_until_parked();
@@ -3420,8 +3530,13 @@ fn settings_edits_are_dirty_until_saved_or_discarded(cx: &mut TestAppContext) {
     cx.update(|cx| {
         let view = view.read(cx);
         assert_eq!(view.screen, Screen::Launcher);
+        assert!(
+            !view.presence.presented,
+            "closing Settings with the window close button must hide to background instead of presenting Launcher"
+        );
         assert!(view.preferences.launch_at_login);
         assert!(view.settings_editor.draft.launch_at_login);
+        assert_eq!(view.settings_editor.file_exclusions_input.read(cx).value().as_ref(), "cache");
     });
 }
 
@@ -3433,7 +3548,7 @@ fn settings_save_validation_error_stays_pinned_and_shows_in_close_prompt(cx: &mu
         view.update(cx, |view, cx| {
             view.open_settings(window, cx);
             view.settings_editor.model.selected = SettingsCategory::Search;
-            set_input_value(
+            set_textarea_value(
                 &view.settings_editor.file_roots_input,
                 String::new(),
                 window,
@@ -3495,8 +3610,14 @@ fn settings_pointer_navigation_does_not_leave_general_keyboard_focused(cx: &mut 
         assert!(view
             .read(cx)
             .settings_editor
-            .focus_handle
+            .sidebar_focus
             .is_focused(window));
+        window.press("down", cx);
+        window.render_frame(cx);
+        assert_eq!(
+            view.read(cx).settings_editor.model.selected,
+            SettingsCategory::Context
+        );
         assert_ne!(
             window.find("settings-category-general").focused(),
             Some(true)
@@ -3549,7 +3670,7 @@ fn command_y_toggles_file_preview_once_and_ignores_repeat(cx: &mut TestAppContex
         });
     });
     cx.update_window(window, |_, window, cx| {
-        window.key_down("cmd-y", false, cx);
+        window.key_down(&primary_shortcut("y"), false, cx);
     })
     .unwrap();
     cx.update(|cx| {
@@ -3560,7 +3681,7 @@ fn command_y_toggles_file_preview_once_and_ignores_repeat(cx: &mut TestAppContex
         });
     });
     cx.update_window(window, |_, window, cx| {
-        window.key_down("cmd-y", true, cx);
+        window.key_down(&primary_shortcut("y"), true, cx);
     })
     .unwrap();
     cx.update(|cx| {
@@ -3605,7 +3726,7 @@ fn command_y_closes_a_clipboard_preview_and_command_l_restores_search(cx: &mut T
     })
     .unwrap();
     cx.update_window(window, |_, window, cx| {
-        window.key_down("cmd-y", false, cx);
+        window.key_down(&primary_shortcut("y"), false, cx);
     })
     .unwrap();
     cx.update(|cx| {
@@ -3619,7 +3740,7 @@ fn command_y_closes_a_clipboard_preview_and_command_l_restores_search(cx: &mut T
         });
     });
     cx.update_window(window, |_, window, cx| {
-        window.key_down("cmd-l", false, cx);
+        window.key_down(&primary_shortcut("l"), false, cx);
     })
     .unwrap();
     cx.update(|cx| {
@@ -3946,10 +4067,25 @@ fn settings_use_localized_engine_names_and_full_width_path_fields(cx: &mut TestA
     });
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        assert_eq!(
-            window.find("cycle-file-engine").label(),
-            Some(l10n::search_engine_system_index(Locale::Zh).as_str())
-        );
+        if cfg!(windows) {
+            assert_eq!(
+                window.find("cycle-file-engine").label(),
+                Some(l10n::search_engine_windows_index(Locale::Zh).as_str())
+            );
+            assert_eq!(
+                window.find("application-search-add-folders").label(),
+                Some(l10n::windows_add_application_folders(Locale::Zh).as_str())
+            );
+            assert_eq!(
+                window.find("application-search-add-shortcuts").label(),
+                Some(l10n::windows_add_application_shortcuts(Locale::Zh).as_str())
+            );
+        } else {
+            assert_eq!(
+                window.find("cycle-file-engine").label(),
+                Some(l10n::search_engine_system_index(Locale::Zh).as_str())
+            );
+        }
 
         view.update(cx, |view, cx| {
             view.settings_editor.model.selected = SettingsCategory::ApplicationHistory;
@@ -3961,7 +4097,7 @@ fn settings_use_localized_engine_names_and_full_width_path_fields(cx: &mut TestA
                 path: None,
                 mode: anywhere_core::features::application_history::model::SourceMode::Custom,
             }];
-            view.app_history.selected_source = Some("source".into());
+            view.settings_editor.history_path_editing = Some("source".into());
             cx.notify();
         });
         window.render_frame(cx);
@@ -4097,6 +4233,10 @@ fn capture_and_excluded_apps_belong_to_their_settings_pages(cx: &mut TestAppCont
             cx.notify();
         });
         window.render_frame(cx);
+        assert!(window.try_find("excluded-apps").is_none());
+        assert!(window.try_find("excluded-apps-quick-add").is_some());
+        window.click("excluded-apps-toggle-bulk", cx);
+        window.render_frame(cx);
         assert!(window.try_find("excluded-apps").is_some());
     })
     .unwrap();
@@ -4183,7 +4323,14 @@ fn settings_escape_runs_before_a_focused_text_control(cx: &mut TestAppContext) {
         view.update(cx, |view, cx| view.open_settings(window, cx));
         window.render_frame(cx);
         window.click("settings-category-general", cx);
-        window.click("open-at-login", cx);
+        view.update(cx, |view, cx| {
+            set_textarea_value(
+                &view.settings_editor.file_exclusions_input,
+                "cache",
+                window,
+                cx,
+            );
+        });
         window.render_frame(cx);
         window.press("escape", cx);
     })
@@ -4639,6 +4786,8 @@ fn web_package_review_actions_stay_inside_the_window(cx: &mut TestAppContext) {
                 digest: "0123456789abcdef".into(),
                 permissions: vec!["Read Launcher search text".into()],
                 updating: false,
+                same_version: None,
+                details: Default::default(),
             });
             cx.notify();
         });
@@ -4878,6 +5027,65 @@ fn preview_completion_restores_the_editor_for_the_current_screen(cx: &mut TestAp
             view.screen = Screen::Tasks;
             assert!(view.active_editor_input().is_none());
         });
+    });
+}
+
+#[gpui_kit::test]
+fn web_settings_subpage_uses_the_shared_dirty_close_prompt(cx: &mut TestAppContext) {
+    let (window, view) = open_view(cx);
+    cx.update(|cx| {
+        view.update(cx, |view, cx| {
+            view.screen = Screen::WebPackages;
+            view.settings_editor.draft.launch_at_login = !view.preferences.launch_at_login;
+            cx.notify();
+        });
+    });
+    sync_test_viewport_to_desired(cx, window, &view);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("product-window-resize").is_none());
+        if crate::platform::WINDOW_CONTROLS
+            == crate::platform::WindowControlsStyle::TrailingCaptionButtons
+        {
+            assert!(window.try_find("product-window-minimize").is_some());
+            window.click("product-window-close", cx);
+        } else {
+            assert!(window.try_find("product-window-minimize").is_none());
+            assert!(window.try_find("product-window-close").is_none());
+            view.update(cx, |view, cx| {
+                assert!(!view.request_main_window_close(window, cx));
+            });
+        }
+        window.render_frame(cx);
+        assert!(window.try_find("settings-close-prompt").is_some());
+    })
+    .unwrap();
+    dispatch_shortcut(cx, window, "escape");
+    cx.update(|cx| {
+        let view = view.read(cx);
+        assert_eq!(view.screen, Screen::WebPackages);
+        assert!(!view.settings_editor.close_pending);
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        if crate::platform::WINDOW_CONTROLS
+            == crate::platform::WindowControlsStyle::TrailingCaptionButtons
+        {
+            window.click("product-window-close", cx);
+        } else {
+            view.update(cx, |view, cx| {
+                assert!(!view.request_main_window_close(window, cx));
+            });
+        }
+        window.render_frame(cx);
+        window.click("save-settings-confirm", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update(|cx| {
+        let view = view.read(cx);
+        assert_eq!(view.screen, Screen::Launcher);
+        assert!(!view.presence.presented);
     });
 }
 
@@ -5238,7 +5446,7 @@ fn scope_bar_overflow_starts_at_the_leading_edge_and_reveals_a_late_selection(
 }
 
 #[gpui_kit::test]
-fn shelf_header_respects_traffic_lights_and_escape_shares_keyboard_route(cx: &mut TestAppContext) {
+fn shelf_header_respects_window_controls_and_escape_shares_keyboard_route(cx: &mut TestAppContext) {
     let (window, view) = open_view(cx);
     cx.update(|cx| {
         view.update(cx, |view, cx| {
@@ -5253,6 +5461,20 @@ fn shelf_header_respects_traffic_lights_and_escape_shares_keyboard_route(cx: &mu
     visual.update(|window, cx| {
         window.render_frame(cx);
         assert!(window.try_find("shelf-state-icon").is_some());
+        if crate::platform::WINDOW_CONTROLS
+            == crate::platform::WindowControlsStyle::TrailingCaptionButtons
+        {
+            let minimize = window.find("product-window-minimize").bounds();
+            let resize = window.find("product-window-resize").bounds();
+            let close = window.find("product-window-close").bounds();
+            assert!(minimize.right() <= resize.left());
+            assert!(resize.right() <= close.left());
+            assert!(close.left() > window.viewport_size().width / 2.0);
+        } else {
+            assert!(window.try_find("product-window-close").is_none());
+            assert!(window.try_find("product-window-minimize").is_none());
+            assert!(window.try_find("product-window-resize").is_none());
+        }
     });
     let icon = visual.update(|window, _| window.find("shelf-state-icon").bounds());
     assert!(icon.top() >= px(metrics::TITLE_BAR_INSET));
@@ -5292,7 +5514,8 @@ fn shelf_header_respects_traffic_lights_and_escape_shares_keyboard_route(cx: &mu
     });
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        window.click("shelf-escape", cx);
+        assert!(window.try_find("shelf-delete-dialog").is_some());
+        window.press("escape", cx);
     })
     .unwrap();
     cx.run_until_parked();
@@ -5448,7 +5671,6 @@ fn clipboard_settings_expose_real_choices_and_confirm_destructive_changes(cx: &m
     cx.run_until_parked();
     cx.update(|cx| {
         let view = view.read(cx);
-        assert!(view.settings_editor.clipboard_choice.is_none());
         assert!(view.clipboard_confirmation.is_none());
     });
 }
@@ -5594,7 +5816,12 @@ fn key_dispatch_precedence_preserves_recording_overlays_shortcuts_and_preview(
             view.preferences.action_shortcuts = vec![ActionShortcutBinding {
                 action_id: "user.custom".to_owned(),
                 title: "Custom".to_owned(),
-                shortcut: "meta+KeyF".to_owned(),
+                shortcut: if cfg!(target_os = "macos") {
+                    "meta+KeyF"
+                } else {
+                    "control+KeyF"
+                }
+                .to_owned(),
                 global: false,
                 routes: Vec::new(),
             }];

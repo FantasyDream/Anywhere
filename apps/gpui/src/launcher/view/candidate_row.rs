@@ -20,110 +20,71 @@ impl LauncherView {
         let row_subtitle = row.subtitle.clone().filter(|subtitle| {
             !subtitle.trim().is_empty() && subtitle.as_ref() != row.title.as_ref()
         });
-        let raw_subtitle_tooltip = row_subtitle.clone();
+        let readable_extended_subtitle = row_subtitle
+            .as_deref()
+            .and_then(crate::launcher::presentation::readable_extended_path);
+        let raw_subtitle_tooltip = if is_file {
+            row_subtitle.as_deref().map(|path| {
+                SharedString::from(crate::launcher::presentation::readable_file_path(path))
+            })
+        } else if let Some(path) = readable_extended_subtitle.as_deref() {
+            Some(SharedString::from(path))
+        } else {
+            row_subtitle.clone()
+        };
         let display_subtitle = if is_file {
             row_subtitle
                 .as_deref()
                 .map(|path| SharedString::from(format_path_middle_truncated(path)))
+        } else if let Some(path) = readable_extended_subtitle.as_deref() {
+            Some(SharedString::from(format_path_middle_truncated(path)))
         } else {
             row_subtitle
         };
-        let subtitle = match (display_subtitle, source_label) {
-            (Some(subtitle), Some(source)) if subtitle.as_ref() == source.as_ref() => {
-                Some(subtitle)
-            }
-            (Some(subtitle), Some(source)) => {
-                Some(SharedString::from(format!("{source} · {subtitle}")))
-            }
-            (Some(subtitle), None) => Some(subtitle),
-            (None, Some(source)) => Some(source),
-            (None, None) => None,
-        };
+        let source_label = source_label.filter(|source| Some(source) != display_subtitle.as_ref());
+        let shortcut = row.shortcut.clone();
+        let index_shortcut = (!selected && enabled && self.screen == Screen::Launcher && index < 9)
+            .then(|| index + 1)
+            .filter(|digit| {
+                let modifier = if cfg!(target_os = "macos") {
+                    "meta"
+                } else {
+                    "control"
+                };
+                let chord = format!("{modifier}+Digit{digit}");
+                !self
+                    .preferences
+                    .action_shortcuts
+                    .iter()
+                    .any(|binding| binding.shortcut == chord)
+            })
+            .map(|digit| crate::platform::primary_shortcut_label(&digit.to_string()));
         let title = row.title.clone();
         let accessibility = row.title.clone();
-        let shortcut = row.shortcut.clone();
-        let primary_label = || {
-            if is_menu {
-                l10n::open(self.locale)
-            } else if row.command_id.as_deref() == Some("core.files.search") {
-                l10n::search(self.locale)
-            } else {
-                match row.kind {
-                    CandidateKind::File | CandidateKind::Application => l10n::open(self.locale),
-                    _ => l10n::run(self.locale),
-                }
-            }
-        };
         let show_preview = selected && enabled && is_file && self.can_preview_selected_file();
-        let show_actions = selected
-            && enabled
+        let can_show_actions = enabled
             && !is_menu
             && !self.model.object_actions_active
             && self.live.is_some()
             && self
                 .model
                 .can_show_object_actions(&row, self.screen == Screen::FileSearch);
-        let has_row_actions = show_preview || show_actions;
-        let preview_space = self.file_search.browsing || self.model.query.trim().is_empty();
-        let mut row_actions = div().flex_none().flex().items_center();
-        if show_preview {
-            row_actions = row_actions.child(
-                components::row_action_button(
-                    format!("candidate-{index}-preview"),
-                    l10n::preview(self.locale),
-                )
-                .test_support()
-                .tooltip(components::text_tooltip(if preview_space {
-                    l10n::shortcut_hint(self.locale, &l10n::preview(self.locale), "␣")
-                } else {
-                    l10n::preview(self.locale)
-                }))
-                .gap(px(metrics::SPACE_XS))
-                .on_click(cx.listener(|this, _, _, cx| {
-                    cx.stop_propagation();
-                    this.request_preview(cx);
-                }))
-                .child(Icon::new(IconName::Eye).size(px(14.)))
-                .when(preview_space, |element| element.child("␣")),
-            );
-        }
-        if show_actions {
-            row_actions = row_actions.child(
-                components::row_action_button(
-                    format!("candidate-{index}-actions"),
-                    l10n::actions(self.locale),
-                )
-                .test_support()
-                .tooltip(components::text_tooltip(l10n::shortcut_hint(
-                    self.locale,
-                    &l10n::actions(self.locale),
-                    "⌘K",
-                )))
-                .gap(px(metrics::SPACE_XS))
-                .on_click(cx.listener(|this, _, _, cx| {
-                    cx.stop_propagation();
-                    this.show_object_actions(cx);
-                }))
-                .child(Icon::new(IconName::Ellipsis).size(px(14.)))
-                .child("⌘K"),
-            );
-        }
+        let show_actions = selected && can_show_actions;
+        let primary_label = || primary_row_label(&row, self.locale);
         let mut row = components::ListRow::new(format!("candidate-{index}"))
             .density(components::RowDensity::Regular)
             .selected(selected)
             .enabled(enabled)
             .aria_label(accessibility)
-            .leading(
-                div()
-                    .flex_none()
-                    .size(px(metrics::ROW_ICON_SLOT))
-                    .child(icon),
-            )
+            .leading(icon)
             .title(title.clone())
             .title_highlight_query(self.model.query.clone())
             .title_id(format!("candidate-{index}-title"))
             .title_tooltip(title);
-        if let Some(subtitle) = subtitle {
+        if let Some(source) = source_label {
+            row = row.source_label(source);
+        }
+        if let Some(subtitle) = display_subtitle {
             let tooltip = raw_subtitle_tooltip.unwrap_or_else(|| subtitle.clone());
             row = row
                 .subtitle(subtitle)
@@ -141,9 +102,15 @@ impl LauncherView {
                     )))
                     .child(self.keycap(shortcut)),
             );
+        } else if let Some(shortcut) = index_shortcut {
+            row = row.trailing(
+                div()
+                    .opacity(theme::muted().a)
+                    .child(components::keycap(shortcut)),
+            );
         }
-        if has_row_actions {
-            row = row.trailing(div().pl(px(metrics::SPACE_XS)).child(row_actions));
+        if show_preview || show_actions {
+            row = row.trailing(self.candidate_row_actions(index, show_preview, show_actions, cx));
         }
         if selected && enabled {
             let primary_label = primary_label();
@@ -177,16 +144,27 @@ impl LauncherView {
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(move |this, _, _, cx| {
-                    this.mark_scope_user_controlled();
-                    if this.screen == Screen::FileSearch {
-                        this.file_search.browsing = true;
-                        this.file_search.advance_from = None;
-                    }
-                    this.model.select_row(index);
-                    this.notice = None;
+                    this.select_candidate_with_pointer(index);
                     cx.notify();
                 }),
             )
+            .when(is_menu || can_show_actions, |surface| {
+                surface.on_mouse_down(
+                    MouseButton::Right,
+                    cx.listener(move |this, _, window, cx| {
+                        window.prevent_default();
+                        cx.stop_propagation();
+                        this.select_candidate_with_pointer(index);
+                        this.reveal_result_row(index);
+                        if is_menu {
+                            this.browse_selected_menu(cx);
+                        } else {
+                            this.show_object_actions(cx);
+                        }
+                        cx.notify();
+                    }),
+                )
+            })
             .on_click(cx.listener(move |this, _, _, cx| {
                 if is_menu {
                     this.model.open_selected_menu();
@@ -202,7 +180,86 @@ impl LauncherView {
             .test_support()
     }
 
-    // Kept as a free function so `render_row` borrows `icons.cache` independently of `model.rows`.
+    fn select_candidate_with_pointer(&mut self, index: usize) {
+        self.mark_scope_user_controlled();
+        if self.screen == Screen::FileSearch {
+            self.file_search.browsing = true;
+            self.file_search.advance_from = None;
+        }
+        self.model.select_row(index);
+        self.notice = None;
+    }
+
+    fn candidate_row_actions(
+        &self,
+        index: usize,
+        show_preview: bool,
+        show_actions: bool,
+        cx: &Context<Self>,
+    ) -> Div {
+        let preview_space = self.file_search.browsing || self.model.query.trim().is_empty();
+        let mut row_actions = div()
+            .flex_none()
+            .flex()
+            .items_center()
+            .gap(px(metrics::SPACE_XS));
+        if show_preview {
+            row_actions = row_actions.child(
+                components::row_action_button(
+                    format!("candidate-{index}-preview"),
+                    l10n::preview(self.locale),
+                )
+                .test_support()
+                .tooltip(components::text_tooltip(if preview_space {
+                    l10n::shortcut_hint(self.locale, &l10n::preview(self.locale), "␣")
+                } else {
+                    l10n::preview(self.locale)
+                }))
+                .on_click(cx.listener(|this, _, _, cx| {
+                    cx.stop_propagation();
+                    this.request_preview(cx);
+                }))
+                .child(Icon::new(IconName::Eye).size(px(metrics::ICON_SIZE)))
+                .when(preview_space, |element| {
+                    element.child(components::keycap("␣"))
+                }),
+            );
+        }
+        if show_actions {
+            let shortcut = crate::platform::primary_shortcut_label("K");
+            row_actions = row_actions.child(
+                components::row_action_button(
+                    format!("candidate-{index}-actions"),
+                    l10n::actions(self.locale),
+                )
+                .test_support()
+                .tooltip(components::text_tooltip(l10n::shortcut_hint(
+                    self.locale,
+                    &l10n::actions(self.locale),
+                    &shortcut,
+                )))
+                .on_click(cx.listener(|this, _, _, cx| {
+                    cx.stop_propagation();
+                    this.show_object_actions(cx);
+                }))
+                .child(Icon::new(IconName::Ellipsis).size(px(metrics::ICON_SIZE)))
+                .child(components::keycap(shortcut)),
+            );
+        }
+        row_actions.pl(px(metrics::SPACE_XS))
+    }
+}
+
+fn primary_row_label(row: &LauncherRow, locale: Locale) -> String {
+    if row.is_menu {
+        l10n::open(locale)
+    } else if row.command_id.as_deref() == Some("core.files.search") {
+        l10n::search(locale)
+    } else if matches!(row.kind, CandidateKind::File | CandidateKind::Application) {
+        l10n::open(locale)
+    } else {
+        l10n::run(locale)
+    }
 }
 
 fn row_icon(cache: &mut ApplicationIconCache, row: &LauncherRow) -> AnyElement {
@@ -210,7 +267,8 @@ fn row_icon(cache: &mut ApplicationIconCache, row: &LauncherRow) -> AnyElement {
         let cache_key = row.icon_identity.as_deref().unwrap_or(&row.id);
         if let Some(image) = cache.get(cache_key) {
             return img(image)
-                .size(px(32.))
+                .size(px(metrics::ROW_ICON_SLOT))
+                .rounded(px(metrics::TOOLTIP_RADIUS))
                 .object_fit(ObjectFit::Contain)
                 .into_any_element();
         }

@@ -119,6 +119,8 @@ pub struct WebPackage {
     pub rollback: bool,
     pub builtin: bool,
     pub permission_count: usize,
+    pub diagnostics: Vec<String>,
+    pub open_action_id: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -130,6 +132,22 @@ pub struct WebPackageReview {
     pub digest: String,
     pub permissions: Vec<String>,
     pub updating: bool,
+    pub same_version: Option<anywhere_core::application::web_plugins::SameWebPackageVersion>,
+    pub details: WebReviewDetails,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct WebReviewDetails {
+    pub command_count: usize,
+    pub commands: Vec<(String, std::collections::BTreeMap<String, String>)>,
+    pub resolver_count: usize,
+    pub background_actions: usize,
+    pub added: Vec<String>,
+    pub removed: Vec<String>,
+    pub scope_changes: Vec<(String, String)>,
+    pub data_to_url: bool,
+    pub any_origin: bool,
+    pub insecure_http: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

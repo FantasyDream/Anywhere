@@ -12,6 +12,8 @@ static CLEANUP: Once = Once::new();
 /// Normalize lexical traversal and public system path aliases without probing
 /// the user-selected target. Canonical target validation still follows this.
 pub fn lexical_scope_path(path: &Path) -> PathBuf {
+    #[cfg(windows)]
+    let path = dunce::simplified(path);
     let mut result = PathBuf::new();
     for part in path.components() {
         match part {
@@ -123,13 +125,15 @@ pub fn decode_path(bytes: Vec<u8>) -> Result<PathBuf> {
 #[cfg(windows)]
 pub fn decode_path(bytes: Vec<u8>) -> Result<PathBuf> {
     use std::os::windows::ffi::OsStringExt;
-    if bytes.len() % 2 != 0 {
+    let (units, remainder) = bytes.as_chunks::<2>();
+    if !remainder.is_empty() {
         bail!("invalid path record");
     }
     Ok(std::ffi::OsString::from_wide(
-        &bytes
-            .chunks_exact(2)
-            .map(|v| u16::from_le_bytes([v[0], v[1]]))
+        &units
+            .iter()
+            .copied()
+            .map(u16::from_le_bytes)
             .collect::<Vec<_>>(),
     )
     .into())

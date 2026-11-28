@@ -1,7 +1,7 @@
 # 使用指南
 
 macOS 现行使用指南；当前发布为 macOS 15+ Apple Silicon 的 V0.14.1 开发预览。
-实际版本与验收状态见[项目首页](../README.md)和
+Windows 操作见 [Windows 指南](windows.md)。实际版本与验收状态见[项目首页](../README.md)和
 [GPUI 技术方案与验收](mvp-gpui.md)。
 
 ## 1. 安装、启动与授权
@@ -102,14 +102,14 @@ Actions 和预览仍先退出所属局部层。更多规则见
 - 最多保存 1,000 条、128 MiB 数据，每条最多 16 MiB / 64 个格式；重复内容合并。历史期限与唤醒时的 **15 秒自动填入** 无关。
 - 在“设置 → 剪贴板”中可暂停记录 5 / 15 / 60 分钟，或提前恢复。暂停期间的内容不补录，关闭记录会取消自动恢复；已有历史仍可使用。
 - 展开“历史记录存储”可选择保留 1 / 7 / 30 / 90 天；默认沿用容量限制。缩短期限会确认并立即永久删除过期记录，之后延长期限也不会恢复。用量仅表示逻辑数据量，内容在本机明文保存；不影响系统剪贴板或原文件。
-- 本地明文存储，只记录应用运行期间观察到的复制。文件列表仅保存原路径，恢复时原文件必须仍然存在；HTML 不执行脚本，图片在明确预览时交给系统显示，不再在 Rust 生成缩略图。文件承诺、延迟对象及任意多 item 私有格式不能保证完整恢复。逐项验收见[剪贴板用例](test-acceptance-checklist.md#610-clip剪贴板采集历史与存储策略)。
+- 本地明文存储，只记录应用运行期间观察到的复制。文件列表仅保存原路径，恢复时原文件必须仍然存在；HTML 不执行脚本，图片在明确预览时交给系统显示，不再在 Rust 生成缩略图。文件承诺、延迟对象及任意多 item 私有格式不能保证完整恢复。逐项验收见[剪贴板用例](test-acceptance-macos.md#610-clip剪贴板采集历史与存储策略)。
 
 ## 4. Web 工具与 JSON Workspace（预览）
 
 开发第三方插件请先看 [开发指南](plugin-development.md)：SDK 导出包内含独立模板
 和打包工具，不需要修改主程序或安装 Rust。
 
-在 Settings → Features → Manage…（Web tools）→ Import… 选择可信的本地 `.awplugin` 包，核对版本、内容摘要和权限后批准；随即可以搜索工具名称，无须重启。该区域还支持禁用 / 撤销、卸载、更新和恢复上一批准版本。批准更新会立即撤销旧 Web 调用，不会等待旧页面编辑完成；先保存需要保留的内容。卸载会清理该安装的私有 KV，没有“保留数据”选项。当前仅供 macOS 本地开发验收，不开放插件市场或自动更新；同 ID 的本地包更新不验证发布者身份。
+在 Settings → Features → Manage…（Web tools）→ Import… 选择可信的本地 `.awplugin` 包，核对版本、内容摘要和权限后批准；随即可以搜索工具名称，无须重启。该区域还支持禁用 / 撤销、卸载、更新和恢复上一批准版本。批准更新会立即撤销旧 Web 调用，不会等待旧页面编辑完成；先保存需要保留的内容。卸载会清理该安装的私有 KV，没有“保留数据”选项。当前开放可信本地包预览；同 ID 的本地包更新不验证发布者身份。
 
 JSON Workspace（v0.7.3）现为内置工具，开箱自动登记并默认启用，无需手动导入 `.awplugin`（可在 Settings → Features → Web tools 中禁用或重新启用，但不支持卸载；运行 `python3 scripts/build-web-examples.py` 仍可打包 [JSON Workspace](../plugins/examples/json-workspace/README.md)、[Text Pad](../plugins/examples/web-text/README.md) 与 [JSON Summary](../plugins/examples/background-context/README.md) 示例包用于本地开发或校验）。搜索 `JSON Workspace` 即可打开：左侧输入停顿后自动格式化，上方默认使用 JavaScript，也可切到 JSONPath 并输入公式，`$` / `this` 自动补入，右侧展示和复制结果；输入和结果以主题色区分 JSON 键、字符串、数字和字面量。`⌘↵` 立即查询，`⌘⇧C` 复制当前结果。输入 / 输出各最多 1 MiB，不保存正文，只保存缩进偏好。JSON Workspace（v0.7.3）通过按需后台 QuickJS 解析器自动识别 JSON 对象 / 数组及转义 JSON 容器：直接输入 JSON 可匹配对应复制或打开 Action，选择后带入原文；选中文本和 15 秒内新复制内容沿用自动填入规则，不将普通标量误当成 JSON。
 
@@ -118,9 +118,7 @@ Web 工具复用 Launcher 页框，页头的工具选项提供 Reload Tool / Bac
 JSON 输入区的“JSON 操作”包含缩进、清空与复制变体。按 Esc 先退出当前菜单，
 再返回搜索。隐藏后的输入仍保留 15 秒。插件安装时批准剪贴板读写权限，运行时
 不再逐次确认；后台复制动作直接执行，不打开工作区。资源来自已批准包，网络、
-frame、弹窗和导航均受限制；这些策略不等于操作系统进程沙箱。原生 IME / 安全 /
-Windows 验收边界见 [V0.11 MVP](archive/mvp-v0.11.md) 与
-[实施记录](web-plugin-design.md)。原生 JSON 工作区已退役，新工具使用独立的
+frame、弹窗和导航均受限制；这些策略不等于操作系统进程沙箱。实际 IME、焦点和 Web 生命周期见 [macOS 桌面验收](test-acceptance-macos.md)与[插件架构](web-plugin-design.md)。原生 JSON 工作区已退役，新工具使用独立的
 Web Action ID。
 
 ## 5. 键盘操作
@@ -186,7 +184,7 @@ Launcher 的 `Tab` / `Shift+Tab` 用于切换可见分类，不遍历控件；�
 
 默认使用 **Spotlight 快批与完整文件名遍历**。可切换到 Ripgrep 快批或同时运行两种快批的 Combined；`rg` 不可用时仍由完整遍历交付结果。遍历包含未索引文件和被 `.gitignore` 忽略的文件；隐藏文件受设置控制。符号链接本身可列出，不沿链接继续遍历目标。可搜索范围受目录设置、排除项和系统权限限制。
 
-当前 macOS 使用系统 Quick Look 预览，格式支持由系统决定，查询时不自动读取正文。`⌘Y` 在文件与 Clipboard History / Shelf 中开关预览，按住只处理首次 key-down。Space / Esc 先关闭预览并保留查询、选择和滚动位置，`⌘L` 返回查询；页面按钮聚焦时 Space / Enter 激活按钮。系统面板获得焦点不隐藏 Launcher，切到其他应用会关闭预览。候选图标按文件类型分类，不生成逐文件缩略图。Windows 已预留接口但未实现原生窗口。完整规则见 [系统预览](native-preview.md)。
+当前 macOS 使用系统 Quick Look 预览，格式支持由系统决定，查询时不自动读取正文。`⌘Y` 在文件与 Clipboard History / Shelf 中开关预览，按住只处理首次 key-down。Space / Esc 先关闭预览并保留查询、选择和滚动位置，`⌘L` 返回查询；页面按钮聚焦时 Space / Enter 激活按钮。系统面板获得焦点不隐藏 Launcher，切到其他应用会关闭预览。候选图标按文件类型分类，不生成逐文件缩略图。完整规则见 [系统预览](native-preview.md)。
 
 可为 File Search 配置一个普通 Action 快捷键，并按需开启 Global，直接从其他应用进入文件页。
 
@@ -217,7 +215,7 @@ Maven、Gradle 优先使用项目 wrapper。识别阶段只读取项目标记及
 **扩展：** Settings → Features 管理第一方内置模块开关，并通过 **Manage…** 进入 Web 工具管理页面导入、启停、更新、回滚或卸载 `.awplugin` 包。
 
 - 内置模块包括 URL、Git、Maven、Gradle、Node、Rust、Spring Boot、收藏目录、剪贴板历史与应用历史；关闭模块后相关识别、候选与快捷键资格立即撤销，绑定配置保留以便重新启用。
-- 第三方插件统一采用 WebView + 按需后台 QuickJS 架构，本地包安装入口与 [SDK](../packages/plugin-sdk/README.md) 已进入 macOS 开发预览；按 [开发指南](plugin-development.md) 开始，平台与发行边界见 [方案与进度](web-plugin-design.md)。早期外部 TOML 声明式插件协议已退役。
+- 第三方插件统一采用 WebView + 按需后台 QuickJS 架构，本地包安装入口与 [SDK](../packages/plugin-sdk/README.md) 已进入桌面开发预览；按 [开发指南](plugin-development.md) 开始，平台与发行边界见 [方案与进度](web-plugin-design.md)。早期外部 TOML 声明式插件协议已退役。
 
 ## 10. 本地数据
 

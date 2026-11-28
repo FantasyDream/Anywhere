@@ -1,7 +1,9 @@
 use super::*;
 use crate::host::LiveEvent;
+#[cfg(target_os = "macos")]
 use anywhere_protocol::{HostView, InputMode};
 
+#[cfg(target_os = "macos")]
 fn crc32(bytes: &[u8]) -> u32 {
     let mut crc = 0xffff_ffffu32;
     for &byte in bytes {
@@ -14,13 +16,14 @@ fn crc32(bytes: &[u8]) -> u32 {
     !crc
 }
 
+#[cfg(target_os = "macos")]
 fn write_test_awplugin(path: &std::path::Path, id: &str, name: &str, command_title: &str) {
     let manifest = serde_json::json!({
         "schemaVersion": 1,
         "id": id,
         "name": name,
         "version": "1.0.0",
-        "apiVersion": "1",
+        "apiVersion": "2",
         "platforms": ["macos"],
         "entry": "index.html",
         "permissions": [],
@@ -93,6 +96,7 @@ fn write_test_awplugin(path: &std::path::Path, id: &str, name: &str, command_tit
     std::fs::write(path, archive).unwrap();
 }
 
+#[cfg(target_os = "macos")]
 fn open_live_web_tool(
     live: &LiveLauncher,
     query: &str,
@@ -147,6 +151,7 @@ fn open_live_web_tool(
     (id, invocation_id, document)
 }
 
+#[cfg(target_os = "macos")]
 #[gpui_kit::test]
 fn builtin_json_workspace_stages_automatically_and_hides_removal_actions(cx: &mut TestAppContext) {
     let directory = tempfile::tempdir().unwrap();
@@ -197,6 +202,7 @@ fn builtin_json_workspace_stages_automatically_and_hides_removal_actions(cx: &mu
     .unwrap();
 }
 
+#[cfg(target_os = "macos")]
 #[gpui_kit::test]
 fn standalone_tool_window_is_unavailable_for_non_web_screens_and_available_for_builtin_json_workspace(
     cx: &mut TestAppContext,
@@ -300,6 +306,7 @@ fn standalone_tool_window_is_unavailable_for_non_web_screens_and_available_for_b
     });
 }
 
+#[cfg(target_os = "macos")]
 #[gpui_kit::test]
 fn tool_window_and_reopened_launcher_keep_independent_query_and_lifetime(cx: &mut TestAppContext) {
     let directory = tempfile::tempdir().unwrap();
@@ -322,7 +329,10 @@ fn tool_window_and_reopened_launcher_keep_independent_query_and_lifetime(cx: &mu
         .unwrap(),
     );
     let LiveEvent::WebReview(review) = live
-        .inspect_web_package(package_path.display().to_string())
+        .inspect_web_package(
+            package_path.clone(),
+            Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        )
         .blocking_recv()
         .unwrap()
     else {
@@ -420,6 +430,47 @@ fn tool_window_and_reopened_launcher_keep_independent_query_and_lifetime(cx: &mu
             .application()
             .is_session_active(id));
     });
+}
+
+#[cfg(not(any(target_os = "macos", windows)))]
+#[test]
+fn live_web_packages_report_unsupported_host() {
+    let directory = tempfile::tempdir().unwrap();
+    let live = LiveLauncher::open_at(
+        anywhere_core::application::frontend_runtime::RuntimePaths::new(
+            directory.path().join("data"),
+            directory.path().join("plugins"),
+        ),
+    )
+    .unwrap();
+    assert!(matches!(
+        live.web_packages().blocking_recv().unwrap(),
+        LiveEvent::Error(message) if message.contains("Web tools are not enabled on this platform")
+    ));
+}
+
+#[cfg(windows)]
+#[test]
+fn live_web_packages_load_builtin_json_workspace_on_windows() {
+    let directory = tempfile::tempdir().unwrap();
+    let live = LiveLauncher::open_at(
+        anywhere_core::application::frontend_runtime::RuntimePaths::new(
+            directory.path().join("data"),
+            directory.path().join("plugins"),
+        ),
+    )
+    .unwrap();
+    match live.web_packages().blocking_recv().unwrap() {
+        LiveEvent::WebPackages(packages) => {
+            assert!(
+                packages
+                    .iter()
+                    .any(|pkg| pkg.id == "dev.anywhere.json-workspace" && pkg.enabled),
+                "expected built-in JSON Workspace to be enabled on Windows: {packages:?}"
+            );
+        }
+        other => panic!("expected LiveEvent::WebPackages on Windows, got {other:?}"),
+    }
 }
 
 #[gpui_kit::test]

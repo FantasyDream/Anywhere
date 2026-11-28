@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "apiVersion": "2",
+  "id": "dev.example.dedup",
+  "name": "Dedup",
+  "version": "1.0.0",
+  "platforms": ["macos"],
+  "entry": "dist/index.html",
+  "permissions": [],
+  "commands": [{
+    "id":"open",
+    "title":"Open",
+    "entrypoint":"workspace",
+    "localizedTitles": {"zh":"开", "\u007ah":"打开"}
+  }]
+}

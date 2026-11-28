@@ -30,17 +30,10 @@ impl RowDensity {
         }
     }
 
-    fn default_padding_x(self) -> f32 {
-        match self {
-            Self::Regular => metrics::ROW_PADDING_X,
-            Self::Comfortable | Self::Compact => metrics::SPACE_MD,
-        }
-    }
-
     fn default_leading_gap(self) -> f32 {
         match self {
-            Self::Regular => metrics::ROW_ICON_GAP,
-            Self::Comfortable | Self::Compact => metrics::SPACE_MD,
+            Self::Regular | Self::Comfortable => metrics::ROW_ICON_GAP,
+            Self::Compact => metrics::SPACE_MD,
         }
     }
 
@@ -94,6 +87,7 @@ pub struct ListRow {
     title_weight: Option<FontWeight>,
     title_tooltip: Option<SharedString>,
     subtitle: Option<SharedString>,
+    source_label: Option<SharedString>,
     subtitle_id: Option<SharedString>,
     subtitle_color: Option<Hsla>,
     subtitle_tooltip: Option<SharedString>,
@@ -115,6 +109,7 @@ impl ListRow {
             title_weight: None,
             title_tooltip: None,
             subtitle: None,
+            source_label: None,
             subtitle_id: None,
             subtitle_color: None,
             subtitle_tooltip: None,
@@ -175,6 +170,11 @@ impl ListRow {
         self
     }
 
+    pub fn source_label(mut self, label: SharedString) -> Self {
+        self.source_label = Some(label);
+        self
+    }
+
     pub fn subtitle(mut self, subtitle: impl Into<SharedString>) -> Self {
         self.subtitle = Some(subtitle.into());
         self
@@ -201,14 +201,17 @@ impl ListRow {
     }
 
     pub fn build(self) -> Stateful<Div> {
-        let padding_x = self.density.default_padding_x();
         let leading_gap = self.density.default_leading_gap();
         let text_gap = self.density.default_text_gap();
         let aria_label = self
             .aria_label
             .or_else(|| self.title.clone())
             .unwrap_or_default();
-        let description = self.subtitle.clone();
+        let description = match (&self.source_label, &self.subtitle) {
+            (Some(source), Some(subtitle)) => Some(format!("{source} · {subtitle}").into()),
+            (Some(source), None) => Some(source.clone()),
+            (None, subtitle) => subtitle.clone(),
+        };
         let title_color = if self.enabled {
             theme::primary()
         } else {
@@ -249,13 +252,33 @@ impl ListRow {
                 node.into_any_element()
             }
         });
-        let subtitle_element = self.subtitle.map(|subtitle| {
+        let subtitle_element = description.as_ref().map(|_| {
+            let has_subtitle = self.subtitle.is_some();
+            let has_source = self.source_label.is_some();
             let node = div()
-                .truncate()
+                .min_w_0()
+                .flex()
+                .items_center()
+                .gap(px(metrics::SPACE_XS))
                 .text_size(px(self.density.subtitle_size()))
                 .line_height(px(self.density.subtitle_line_height()))
                 .text_color(subtitle_color)
-                .child(subtitle);
+                .when_some(self.source_label, |row, label| {
+                    row.child(
+                        div()
+                            .max_w_1_3()
+                            .min_w_0()
+                            .truncate()
+                            .text_color(theme::muted())
+                            .child(label),
+                    )
+                })
+                .when(has_source && has_subtitle, |row| {
+                    row.child(div().flex_none().text_color(theme::muted()).child("·"))
+                })
+                .when_some(self.subtitle, |row, subtitle| {
+                    row.child(div().min_w_0().truncate().child(subtitle))
+                });
             let id = self
                 .subtitle_id
                 .unwrap_or_else(|| format!("{}-subtitle", self.id).into());
@@ -279,7 +302,7 @@ impl ListRow {
         let mut surface = div()
             .h_full()
             .relative()
-            .px(px(padding_x - metrics::DIVIDER_WIDTH))
+            .px(px(metrics::ROW_PADDING_X - metrics::DIVIDER_WIDTH))
             .flex()
             .items_center()
             .result_surface(self.selected);
@@ -295,7 +318,19 @@ impl ListRow {
             );
         }
         if let Some(leading) = self.leading {
-            surface = surface.child(leading).child(div().w(px(leading_gap)));
+            surface = surface
+                .child(
+                    div()
+                        .flex_none()
+                        .when(self.density != RowDensity::Compact, |slot| {
+                            slot.w(px(metrics::ROW_ICON_SLOT))
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                        })
+                        .child(leading),
+                )
+                .child(div().w(px(leading_gap)));
         }
         surface = surface.child(center);
         for trailing in self.trailing {
@@ -331,6 +366,7 @@ pub fn row_action_button(
         .px(px(metrics::CONTROL_PADDING_X))
         .flex()
         .items_center()
+        .gap(px(metrics::SPACE_XS))
         .rounded(px(metrics::TOOLTIP_RADIUS))
         .text_size(px(metrics::CONTROL_FONT_SIZE))
         .line_height(px(metrics::CONTROL_FONT_SIZE * metrics::BODY_LINE_HEIGHT))

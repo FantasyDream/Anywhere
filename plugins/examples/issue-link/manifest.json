@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "apiVersion": "2",
+  "id": "dev.example.issue-link",
+  "name": "Issue Link",
+  "version": "1.0.0",
+  "platforms": ["macos", "windows"],
+  "background": {
+    "entry": "dist/background.js",
+    "resolvers": [{
+      "id": "issue",
+      "accepts": ["core.text"],
+      "produces": ["plugin.dev.example.issue-link.issue"],
+      "entrypoint": "resolve"
+    }]
+  },
+  "permissions": [
+    {"name": "context.read", "types": ["core.text", "plugin.dev.example.issue-link.issue"]},
+    {"name": "url.open", "origins": ["https://issues.example.com"]}
+  ],
+  "commands": [{
+    "id": "open",
+    "title": "Open Issue",
+    "localizedTitles": {"zh": "打开工单"},
+    "accepts": ["plugin.dev.example.issue-link.issue"],
+    "runtime": "background",
+    "entrypoint": "open"
+  }]
+}

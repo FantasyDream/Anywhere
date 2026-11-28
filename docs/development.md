@@ -13,8 +13,8 @@
 - 可复用的代码签名身份。
 
 构建使用 Cargo release 产物、原生资源复制和 codesign，不需要 Xcode GUI、
-CocoaPods 或其他 UI SDK。GPUI、Quick Look、WebKit 与 AppKit 依赖只在 macOS
-构建；共享 Rust crates 另有 Linux / Windows 编译检查。
+CocoaPods 或其他 UI SDK。Quick Look、WebKit 与 AppKit 依赖只在 macOS 构建。
+Windows 的 GPUI 构建、ZIP 打包和本地门禁见 [Windows 指南](windows.md)。
 
 当前产品 UI 只有 GPUI 一套实现；构建使用原生 GPUI。界面外观由 GPUI theme、设计 tokens 和 `apps/gpui/src/platform/material/`
 的 macOS 原生材质适配组成。
@@ -79,9 +79,9 @@ cargo clippy --workspace --all-targets --locked -- -D warnings
 git diff --check
 ```
 
-POSIX CI 只编译和测试 `anywhere-core`、`anywhere-platform`、`anywhere-plugin`
-与 `anywhere-protocol`。macOS CI 负责 `anywhere-gpui`、完整工程检查和打包；
-不能把共享 crate 通过描述成跨平台桌面 App 已交付。
+Linux CI 编译和测试 `anywhere-core`、`anywhere-platform`、`anywhere-plugin`
+与 `anywhere-protocol`。macOS CI 负责完整工程检查和 macOS 打包。
+Windows CI 对 GPUI 和平台 crate 运行严格 Clippy，串行运行 Core、GPUI 和平台库测试及 MVP 集成测试，并构建 Windows x64 ZIP。
 
 ## 生成物
 
@@ -127,7 +127,7 @@ scripts/check-web-examples.sh
   Accessibility 和 VoiceOver。
 
 自动化通过不证明物理桌面行为。物理矩阵与当前状态见
-[完整验收清单](test-acceptance-checklist.md#3-环境执行矩阵)。
+[macOS 桌面验收](test-acceptance-macos.md#3-环境执行矩阵)和 [Windows 桌面验收](test-acceptance-windows.md)。
 
 ## 独立验收数据
 

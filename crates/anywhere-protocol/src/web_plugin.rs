@@ -1,8 +1,11 @@
 //! Web package metadata only. This module grants no host access and describes no UI.
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 pub const SCHEMA_VERSION: u32 = 1;
-pub const API_VERSION: &str = "1";
+pub const API_VERSION: &str = "2";
+pub const MAX_PERMISSIONS: usize = 16;
+pub const COMMAND_ICONS: &[&str] = &["code", "copy", "file", "globe", "search", "clipboard"];
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "web-schema", derive(schemars::JsonSchema))]
@@ -53,6 +56,12 @@ pub enum WebPermission {
     ClipboardWriteText {},
     #[serde(rename = "storage.local")]
     LocalStorage {},
+    #[serde(rename = "url.open")]
+    UrlOpen { origins: Vec<String> },
+    #[serde(rename = "resources.read")]
+    ResourcesRead {},
+    #[serde(rename = "preview.open")]
+    PreviewOpen {},
 }
 
 impl WebPermission {
@@ -66,6 +75,9 @@ impl WebPermission {
             Self::ClipboardReadText {} => "clipboard.readText",
             Self::ClipboardWriteText {} => "clipboard.writeText",
             Self::LocalStorage {} => "storage.local",
+            Self::UrlOpen { .. } => "url.open",
+            Self::ResourcesRead {} => "resources.read",
+            Self::PreviewOpen {} => "preview.open",
         }
     }
 }
@@ -76,6 +88,16 @@ impl WebPermission {
 pub struct WebCommand {
     pub id: String,
     pub title: String,
+    #[serde(
+        default,
+        skip_serializing_if = "BTreeMap::is_empty",
+        deserialize_with = "unique_map"
+    )]
+    pub localized_titles: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subtitle: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
     #[serde(default)]
     pub keywords: Vec<String>,
     #[serde(default)]
@@ -107,7 +129,11 @@ pub enum WebInputMatcher {
 /// Minimal input for one explicit invocation; no graph, filesystem paths or AX data.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "web-schema", derive(schemars::JsonSchema))]
-#[serde(tag = "kind", rename_all = "snake_case")]
+#[serde(
+    tag = "kind",
+    rename_all_fields = "camelCase",
+    rename_all = "snake_case"
+)]
 pub enum WebInput {
     Empty {
         reason: WebInputReason,
@@ -149,6 +175,8 @@ pub struct WebResource {
     pub handle: String,
     pub name: String,
     pub kind: WebResourceKind,
+    pub readable: bool,
+    pub previewable: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -162,11 +190,49 @@ pub enum WebResourceKind {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "web-schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase")]
 pub struct WebInvocation {
     pub plugin_id: String,
     pub command_id: String,
     pub entrypoint: String,
     pub input: WebInput,
+    pub capabilities: WebCapabilities,
+}
+
+/// Presentation hints. Each broker operation checks the live grant independently.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "web-schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct WebCapabilities {
+    pub url_open: bool,
+    pub resource_read: bool,
+    pub preview_open: bool,
+    pub window_control: bool,
+}
+
+fn unique_map<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<BTreeMap<String, String>, D::Error> {
+    use serde::de::{Error, MapAccess, Visitor};
+    struct UniqueMap;
+    impl<'de> Visitor<'de> for UniqueMap {
+        type Value = BTreeMap<String, String>;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            formatter.write_str("a map with unique keys")
+        }
+
+        fn visit_map<M: MapAccess<'de>>(self, mut map: M) -> Result<Self::Value, M::Error> {
+            let mut entries = BTreeMap::new();
+            while let Some((key, value)) = map.next_entry()? {
+                if entries.insert(key, value).is_some() {
+                    return Err(M::Error::custom("duplicate localizedTitles key"));
+                }
+            }
+            Ok(entries)
+        }
+    }
+    deserializer.deserialize_map(UniqueMap)
 }
 
 /// Frozen before activation; process ids, window titles and AX data are excluded.

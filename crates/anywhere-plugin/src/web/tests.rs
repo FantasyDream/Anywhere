@@ -7,7 +7,7 @@ use zip::{write::SimpleFileOptions, CompressionMethod, ZipWriter};
 fn manifest() -> Value {
     json!({
         "schemaVersion": 1, "id": "dev.example.text-pad", "name": "Text Pad",
-        "version": "1.0.0", "apiVersion": "1", "platforms": ["macos", "windows"],
+        "version": "1.0.0", "apiVersion": "2", "platforms": ["macos", "windows"],
         "entry": "dist/index.html", "permissions": [],
         "commands": [{"id": "open", "title": "Text Pad", "entrypoint": "workspace"}]
     })
@@ -170,7 +170,7 @@ fn web_manifest_rejects_unknown_duplicate_and_malformed_fields_at_every_level() 
 fn web_manifest_versions_ids_and_platforms_fail_closed() {
     for (field, invalid) in [
         ("schemaVersion", json!(2)),
-        ("apiVersion", json!("2")),
+        ("apiVersion", json!("3")),
         ("version", json!("1.0")),
         ("version", json!("01.0.0")),
         ("id", json!("core.example")),
@@ -602,4 +602,15 @@ fn background_manifests_validate_export_names_owned_types_and_input_grants() {
     assert!(parse_manifest(&serde_json::to_vec(&bad).unwrap()).is_err());
     value["commands"] = json!([]);
     assert!(parse_manifest(&serde_json::to_vec(&value).unwrap()).is_ok());
+}
+
+#[test]
+fn api_two_rejects_legacy_manifests_and_duplicate_localized_titles() {
+    let duplicate = include_bytes!("../../tests/fixtures/duplicate-localized-title.json");
+    let error = super::parse_manifest(duplicate).unwrap_err();
+    assert!(format!("{error:#}").contains("duplicate localizedTitles key"));
+    let mut legacy = manifest();
+    legacy["apiVersion"] = serde_json::json!("1");
+    let error = super::parse_manifest(&serde_json::to_vec(&legacy).unwrap()).unwrap_err();
+    assert!(format!("{error:#}").contains("rebuild the package with the Anywhere API 2 SDK"));
 }

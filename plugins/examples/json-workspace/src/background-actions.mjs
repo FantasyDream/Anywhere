@@ -4,7 +4,7 @@ import {JSON_CONTEXT, jsonInputText} from './input.mjs';
 /** Explicit command only. The resolver never reads storage or touches the clipboard. */
 export async function copyJson(anywhere, action) {
   const input = await anywhere.context.get();
-  if (input.kind !== 'data' || input.type_id !== JSON_CONTEXT)
+  if (input.kind !== 'data' || input.typeId !== JSON_CONTEXT)
     throw new Error('This action requires a recognized JSON document');
   const source = jsonInputText(input);
   if (source === null) throw new Error('The JSON context has no source text');

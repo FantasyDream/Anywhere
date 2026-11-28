@@ -109,6 +109,7 @@ mod tests {
         let fixture = tempfile::tempdir().unwrap();
         let home = fixture.path().canonicalize().unwrap();
         let temp = home.join("system-temp");
+        std::fs::create_dir(&temp).unwrap();
         let caches = home.join("Library/Caches");
         let policy = SearchExclusions::with_locations(
             std::slice::from_ref(&home),
@@ -150,6 +151,7 @@ mod tests {
             assert!(policy.excludes(&bin.join("settings.xml"), false));
             assert!(!policy.excludes(&bin, false));
             let selected = bin.join("project");
+            std::fs::create_dir_all(&selected).unwrap();
             let explicit = SearchExclusions::with_locations(
                 std::slice::from_ref(&selected),
                 vec![],
@@ -174,6 +176,7 @@ mod tests {
         let home = fixture.path().canonicalize().unwrap();
         let temp = home.join("system-temp");
         let selected = temp.join("project");
+        std::fs::create_dir_all(&selected).unwrap();
         let policy = SearchExclusions::with_locations(
             &[home.clone(), selected.clone()],
             vec![temp.clone()],
@@ -183,6 +186,7 @@ mod tests {
         assert!(policy.excludes(&temp.join("other/report.txt"), false));
         let caches = home.join("Library/Caches");
         let selected = caches.join("example.ShipIt/update.123");
+        std::fs::create_dir_all(&selected).unwrap();
         let policy =
             SearchExclusions::with_locations(std::slice::from_ref(&selected), vec![], Some(home));
         assert!(!policy.excludes(&selected.join("report.txt"), false));

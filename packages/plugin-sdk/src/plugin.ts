@@ -1,5 +1,6 @@
 import {createHost, HostError} from './client.js';
 import {lifecycle} from './lifecycle.js';
+import type {Anywhere} from './api.js';
 import type {Invocation, JsonValue, CallOptions} from './client.js';
 
 export interface PluginOptions {
@@ -84,7 +85,22 @@ export function definePlugin(options: PluginOptions = {}) {
     };
   }
   // Stable facade: handlers created on first render also use the resumed binding.
-  const host = {
+  const host: Anywhere = {
+    url: {
+      open: async (url, opts) => current().url.open(url, opts),
+    },
+    resources: {
+      stat: async (handle, opts) => current().resources.stat(handle, opts),
+      readText: async (handle, opts) =>
+        current().resources.readText(handle, opts),
+    },
+    window: {
+      back: async opts => current().window.back(opts),
+      close: async opts => current().window.close(opts),
+    },
+    preview: {
+      open: async (handle, opts) => current().preview.open(handle, opts),
+    },
     context: {
       get: async () => current().context.get(),
       onChange: (
@@ -92,8 +108,6 @@ export function definePlugin(options: PluginOptions = {}) {
           ReturnType<typeof createHost>['context']['onChange']
         >[0],
       ) => subscribe('context', callback),
-      getCurrentApp: async (opts?: CallOptions) =>
-        current().context.getCurrentApp(opts),
     },
     input: {
       get: async () => current().input.get(),
@@ -185,5 +199,5 @@ export function definePlugin(options: PluginOptions = {}) {
   queueMicrotask(() => {
     if (!disposed) void connect();
   });
-  return {host, anywhere: host, ready, dispose};
+  return {anywhere: host, ready, dispose};
 }

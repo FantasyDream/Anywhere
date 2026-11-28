@@ -47,6 +47,10 @@ pub(super) enum Plan {
     Remove(Arc<dyn ExtensionStorage>, String),
     ReadClipboard,
     WriteClipboard(String),
+    OpenUrl(url::Url),
+    Stat(super::resources::SelectedResource),
+    ReadText(super::resources::SelectedResource, usize),
+    Preview(super::resources::SelectedResource),
 }
 pub(super) fn error(code: WebErrorCode) -> WebError {
     WebError::new(code)
@@ -98,6 +102,55 @@ impl WebPluginService {
         }
         Ok(())
     }
+    pub(super) fn authorize_url(
+        &mut self,
+        binding: &WebDocumentBinding,
+        source: WebMessageSource<'_>,
+        value: &str,
+    ) -> WebResult<url::Url> {
+        let plugin = self
+            .authorize(binding, source)
+            .map_err(|_| error(WebErrorCode::UntrustedDocument))?
+            .command
+            .plugin_id
+            .clone();
+        let origins = self.catalog.entries[&plugin]
+            .manifest
+            .permissions
+            .iter()
+            .find_map(|permission| {
+                if let WebPermission::UrlOpen { origins } = permission {
+                    Some(origins)
+                } else {
+                    None
+                }
+            })
+            .ok_or_else(|| error(WebErrorCode::PermissionDenied))?;
+        let (url, allowed) = anywhere_plugin::web::granted_url(value, origins)
+            .map_err(|_| error(WebErrorCode::InvalidRequest))?;
+        if !allowed {
+            return Err(error(WebErrorCode::PermissionDenied));
+        }
+        Ok(url)
+    }
+    fn selected_resource(
+        &mut self,
+        binding: &WebDocumentBinding,
+        source: &Source,
+        handle: &str,
+    ) -> WebResult<super::resources::SelectedResource> {
+        if !anywhere_plugin::web::wire::valid_id(handle) {
+            return Err(error(WebErrorCode::InvalidRequest));
+        }
+        self.authorize(binding, source.get())
+            .map_err(|_| error(WebErrorCode::UntrustedDocument))?
+            .resource
+            .as_ref()
+            .filter(|resource| resource.handle == handle)
+            .cloned()
+            .ok_or_else(|| error(WebErrorCode::Expired))
+    }
+
     fn storage_for(
         &mut self,
         binding: &WebDocumentBinding,
@@ -135,14 +188,56 @@ impl WebPluginService {
         call: WebCall,
     ) -> WebResult<Plan> {
         request.control.check()?;
-        self.rpc(binding, source.get())?;
+        let invocation = self
+            .authorize(binding, source.get())
+            .map_err(|_| error(WebErrorCode::UntrustedDocument))?;
+        let spec = call.spec();
+        if !spec.roles.contains(&invocation.lifecycle.role()) {
+            return Err(error(WebErrorCode::PermissionDenied));
+        }
+        if let Some(name) = spec.permission {
+            let plugin = invocation.command.plugin_id.clone();
+            if !self.catalog.entries[&plugin]
+                .manifest
+                .permissions
+                .iter()
+                .any(|permission| permission.name() == name)
+            {
+                return Err(error(WebErrorCode::PermissionDenied));
+            }
+        }
         let value = match call {
+            WebCall::WindowBack {} | WebCall::WindowClose {} => Value::Null,
+            WebCall::ResourceStat { handle } => {
+                return self
+                    .selected_resource(binding, source, &handle)
+                    .map(Plan::Stat)
+            }
+            WebCall::ResourceReadText { handle, max_bytes } => {
+                let limit = max_bytes.unwrap_or(MAX_TEXT_BYTES);
+                if !(1..=MAX_TEXT_BYTES).contains(&limit) {
+                    return Err(error(WebErrorCode::InvalidRequest));
+                }
+                return self
+                    .selected_resource(binding, source, &handle)
+                    .map(|file| Plan::ReadText(file, limit));
+            }
+            WebCall::PreviewOpen { handle } => {
+                return self
+                    .selected_resource(binding, source, &handle)
+                    .map(Plan::Preview)
+            }
+            WebCall::UrlOpen { url } => {
+                return self
+                    .authorize_url(binding, source.get(), &url)
+                    .map(Plan::OpenUrl)
+            }
             WebCall::InvocationGet {} => serde_json::to_value(
                 self.invocation(binding, source.get())
                     .map_err(|_| error(WebErrorCode::Inactive))?,
             )
             .map_err(|_| error(WebErrorCode::HostFailure))?,
-            WebCall::CurrentApp {} | WebCall::SourceApp {} => {
+            WebCall::SourceApp {} => {
                 self.require(binding, source.get(), WebPermission::CurrentApp {})?;
                 serde_json::to_value(
                     self.current_app(binding, source.get())
@@ -230,14 +325,43 @@ impl WebPluginService {
         source: &Source,
         request: &RequestTicket,
         value: WebResult<Value>,
-    ) -> String {
-        let result = request.control.check().and_then(|_| {
+    ) -> (String, bool) {
+        self.finish_call_inner(binding, source, request, value, false)
+    }
+
+    pub(super) fn finish_call_after_commit(
+        &mut self,
+        binding: &WebDocumentBinding,
+        source: &Source,
+        request: &RequestTicket,
+        value: WebResult<Value>,
+    ) -> (String, bool) {
+        self.finish_call_inner(binding, source, request, value, true)
+    }
+
+    fn finish_call_inner(
+        &mut self,
+        binding: &WebDocumentBinding,
+        source: &Source,
+        request: &RequestTicket,
+        value: WebResult<Value>,
+        allow_past_deadline: bool,
+    ) -> (String, bool) {
+        let gate = if allow_past_deadline {
+            Ok(())
+        } else {
+            request.control.check()
+        };
+        let result = gate.and_then(|_| {
             let rpc = self.rpc(binding, source.get())?;
             value.and_then(|value| rpc.pack(&request.id, &value))
         });
         if let Some(invocation) = self.invocations.get_mut(&binding.invocation_id) {
             invocation.rpc.finish(request);
         }
-        result.unwrap_or_else(|e| failure(Some(&request.id), e))
+        match result {
+            Ok(frame) => (frame, true),
+            Err(error) => (failure(Some(&request.id), error), false),
+        }
     }
 }

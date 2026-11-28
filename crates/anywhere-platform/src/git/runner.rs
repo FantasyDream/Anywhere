@@ -73,6 +73,10 @@ fn run_command(
         .stderr(Stdio::piped())
         .spawn()
         .context("start confined read-only git command")?;
+    #[cfg(windows)]
+    let _confinement = confine_child(&child)?;
+    #[cfg(not(windows))]
+    confine_child(&child)?;
     let stdout = child.stdout.take().context("git stdout missing")?;
     let stderr = child.stderr.take().context("git stderr missing")?;
     // Drain both pipes concurrently: waiting for exit first can deadlock on a large diff.
@@ -173,7 +177,30 @@ fn confined_command(command: &Command) -> Result<Command> {
     Ok(confined)
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(windows)]
+fn confined_command(command: &Command) -> Result<Command> {
+    use std::os::windows::process::CommandExt;
+    use windows_sys::Win32::System::Threading::CREATE_NO_WINDOW;
+
+    let mut confined = Command::new(command.get_program());
+    confined.creation_flags(CREATE_NO_WINDOW);
+    confined.args(["-c", "core.hooksPath="]);
+    confined.args(command.get_args());
+    for (key, value) in command.get_envs() {
+        if let Some(value) = value {
+            confined.env(key, value);
+        } else {
+            confined.env_remove(key);
+        }
+    }
+    confined
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env("GIT_ASKPASS", "")
+        .env("GIT_SSH_COMMAND", "");
+    Ok(confined)
+}
+
+#[cfg(not(any(target_os = "macos", windows)))]
 fn confined_command(_: &Command) -> Result<Command> {
     bail!("read-only git process confinement is unavailable on this platform")
 }
@@ -205,7 +232,98 @@ fn git_program() -> Option<PathBuf> {
     (binary != Path::new("/usr/bin/git") && binary.is_file()).then_some(binary)
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(windows)]
+fn git_program() -> Option<PathBuf> {
+    let binary = crate::process::find_executable("git")?
+        .canonicalize()
+        .ok()?;
+    let binary = dunce::simplified(&binary).to_path_buf();
+    if let Some(root) = binary
+        .parent()
+        .filter(|dir| {
+            dir.file_name().is_some_and(|name| {
+                name.eq_ignore_ascii_case("cmd") || name.eq_ignore_ascii_case("bin")
+            })
+        })
+        .and_then(Path::parent)
+    {
+        for arch in ["mingw64", "mingw32"] {
+            let real = root.join(arch).join("bin").join("git.exe");
+            if real.is_file() {
+                return Some(real);
+            }
+        }
+    }
+    binary.is_file().then_some(binary)
+}
+
+#[cfg(windows)]
+struct WindowsGitConfinement(windows_sys::Win32::Foundation::HANDLE);
+
+#[cfg(windows)]
+impl Drop for WindowsGitConfinement {
+    fn drop(&mut self) {
+        if !self.0.is_null() {
+            unsafe { windows_sys::Win32::Foundation::CloseHandle(self.0) };
+        }
+    }
+}
+
+#[cfg(windows)]
+fn confine_child(child: &std::process::Child) -> Result<Option<WindowsGitConfinement>> {
+    use std::os::windows::io::AsRawHandle;
+    use std::ptr::null;
+    use windows_sys::Win32::{
+        Foundation::{CloseHandle, WAIT_OBJECT_0},
+        System::{
+            JobObjects::{
+                AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
+                SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+                JOB_OBJECT_LIMIT_ACTIVE_PROCESS, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+            },
+            Threading::WaitForSingleObject,
+        },
+    };
+
+    let job = unsafe { CreateJobObjectW(null(), null()) };
+    if job.is_null() {
+        return Err(std::io::Error::last_os_error()).context("create git confinement job");
+    }
+    let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = unsafe { std::mem::zeroed() };
+    info.BasicLimitInformation.LimitFlags =
+        JOB_OBJECT_LIMIT_ACTIVE_PROCESS | JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+    info.BasicLimitInformation.ActiveProcessLimit = 1;
+    let configured = unsafe {
+        SetInformationJobObject(
+            job,
+            JobObjectExtendedLimitInformation,
+            std::ptr::from_ref(&info).cast(),
+            size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+        )
+    };
+    if configured == 0 {
+        let error = std::io::Error::last_os_error();
+        unsafe { CloseHandle(job) };
+        return Err(error).context("configure git confinement job");
+    }
+    if unsafe { AssignProcessToJobObject(job, child.as_raw_handle()) } == 0 {
+        let exited = unsafe { WaitForSingleObject(child.as_raw_handle(), 0) } == WAIT_OBJECT_0;
+        unsafe { CloseHandle(job) };
+        if exited {
+            return Ok(None);
+        }
+        return Err(std::io::Error::last_os_error())
+            .context("assign git process to confinement job");
+    }
+    Ok(Some(WindowsGitConfinement(job)))
+}
+
+#[cfg(not(windows))]
+fn confine_child(_: &std::process::Child) -> Result<()> {
+    Ok(())
+}
+
+#[cfg(not(any(target_os = "macos", windows)))]
 fn git_program() -> Option<PathBuf> {
     None
 }
@@ -292,6 +410,8 @@ mod tests {
             let program = git_program()?;
             let directory = tempfile::tempdir().unwrap();
             let root = directory.path().canonicalize().unwrap();
+            #[cfg(windows)]
+            let root = dunce::simplified(&root).to_path_buf();
             let repo = Self {
                 _directory: directory,
                 root,
@@ -349,11 +469,18 @@ mod tests {
         .unwrap();
         let file = repo.root.join("file.txt");
         std::fs::write(&file, "changed\n").unwrap();
-        std::fs::File::open(file)
+        std::fs::OpenOptions::new()
+            .write(true)
+            .open(file)
             .unwrap()
             .set_modified(std::time::UNIX_EPOCH + Duration::from_secs(60))
             .unwrap();
-        repo.git(&["config", "filter.fixture.clean", "/bin/cat"]);
+        let clean_command = if cfg!(windows) {
+            "cmd /c more"
+        } else {
+            "/bin/cat"
+        };
+        repo.git(&["config", "filter.fixture.clean", clean_command]);
         repo.git(&["config", "filter.fixture.required", "true"]);
         for operation in [GitOperation::Status, GitOperation::Diff] {
             let error = run(&repo.root, operation).unwrap_err().to_string();

@@ -7,22 +7,33 @@ pub mod paths;
 pub mod private_storage;
 pub mod search_exclusions;
 pub mod search_storage;
+pub mod selected_file;
 mod traits;
 use anyhow::Result;
+pub use file_search::{FileSearchBackend, FileSearchQuery};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 pub use traits::{
-    ApplicationCatalog, ApplicationHost, ClipboardHost, ContextReader, FileSearchHost, GitHost,
-    MenuHost, Platform, ResourceOpener,
+    ApplicationCatalog, ApplicationHost, ClipboardHost, ContextReader, FileSearchHost,
+    FileSearchIndex, GitHost, MenuHost, Platform, ResourceOpener,
 };
 #[cfg(any(target_os = "macos", test))]
 pub(crate) mod editor_context;
+#[cfg(any(windows, test))]
+mod everything_wire;
 pub mod file_search;
 pub mod process;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FileSearchHit {
     pub path: PathBuf,
     pub is_directory: bool,
+}
+
+/// One bounded, authoritative index response. Truncated results remain pageable locally.
+#[derive(Debug, Default)]
+pub struct FileIndexResults {
+    pub hits: Vec<FileSearchHit>,
+    pub truncated: bool,
 }
 
 /// Premultiplied top-down BGRA8 bitmap returned directly by OS icon APIs
@@ -40,7 +51,7 @@ pub struct ApplicationInfo {
     pub name: String,
     #[serde(default)]
     pub pid: i32,
-    /// Process launch identity; prevents accepting a reused PID.
+    /// Launch identity and any native window identity required by the adapter.
     #[serde(default)]
     pub instance_id: Option<String>,
 }
@@ -243,8 +254,44 @@ pub enum FileSearchEngine {
     #[default]
     #[serde(alias = "systemIndex")]
     SystemIndex,
+    Everything,
     Ripgrep,
+    #[serde(alias = "auto")]
     Combined,
+    #[serde(alias = "direct")]
+    DirectScan,
+}
+
+/// Supported file search engines for the current host OS in recommended display order.
+pub fn supported_file_search_engines() -> &'static [FileSearchEngine] {
+    #[cfg(target_os = "macos")]
+    {
+        macos::SUPPORTED_FILE_SEARCH_ENGINES
+    }
+    #[cfg(windows)]
+    {
+        windows::SUPPORTED_FILE_SEARCH_ENGINES
+    }
+    #[cfg(not(any(target_os = "macos", windows)))]
+    {
+        &[FileSearchEngine::Ripgrep, FileSearchEngine::DirectScan]
+    }
+}
+
+/// Default file search engine for the current host OS.
+pub fn default_file_search_engine() -> FileSearchEngine {
+    #[cfg(target_os = "macos")]
+    {
+        macos::DEFAULT_FILE_SEARCH_ENGINE
+    }
+    #[cfg(windows)]
+    {
+        windows::DEFAULT_FILE_SEARCH_ENGINE
+    }
+    #[cfg(not(any(target_os = "macos", windows)))]
+    {
+        FileSearchEngine::DirectScan
+    }
 }
 
 #[cfg(target_os = "macos")]
@@ -253,6 +300,8 @@ mod macos;
 pub use macos::MacOsPlatform;
 #[cfg(target_os = "macos")]
 pub use macos::MacOsPlatform as NativePlatform;
+#[cfg(windows)]
+mod windows;
 
 /// Composition root selects the OS adapter; shared bridge code does not name an OS.
 pub fn native_platform() -> Result<std::sync::Arc<dyn Platform>> {
@@ -260,7 +309,11 @@ pub fn native_platform() -> Result<std::sync::Arc<dyn Platform>> {
     {
         Ok(std::sync::Arc::new(MacOsPlatform))
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(windows)]
+    {
+        Ok(std::sync::Arc::new(windows::WindowsPlatform::default()))
+    }
+    #[cfg(not(any(target_os = "macos", windows)))]
     {
         anyhow::bail!("This build has no native system adapter. Shared Core remains available with an injected Platform.")
     }

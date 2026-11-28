@@ -1,7 +1,7 @@
 # Anywhere 产品路线图
 
-最后更新：2026-11-24。当前为 **V0.14.1 macOS 15+ GPUI 开发预览**。已发布版本为 [`v0.14.1` pre-release](https://github.com/FantasyDream/Anywhere/releases/tag/v0.14.1)；
-完整物理桌面矩阵、正式签名、公证和 Windows / Linux 桌面产物尚未完成。当前
+最后更新：2026-11-26。当前发布为 **V0.14.1 macOS 15+ GPUI 开发预览**，源码另有 Windows 11 x64 预览。已发布版本为 [`v0.14.1` pre-release](https://github.com/FantasyDream/Anywhere/releases/tag/v0.14.1)；
+完整物理桌面矩阵、正式签名、公证和 Linux 桌面产物尚未完成。当前
 范围与证据见 [GPUI 技术方案与验收](mvp-gpui.md)，版本以
 [Cargo workspace](../Cargo.toml)和
 [Info.plist](../apps/gpui/macos/Info.plist)为准。
@@ -24,7 +24,8 @@
 | 应用历史 | 18 个配置化来源、页面查询与对象动作已接入 |
 | Running Tasks / Native Tools | 已有 typed 路由、详情和明确未知类型错误 |
 | Web plugins | 安装审查、启停、WebView、IPC、ack、主题与 teardown 已接入 |
-| 共享跨平台 crates | Linux / Windows 编译和 Linux 回归存在；尚无桌面 App |
+| 共享跨平台 crates | Linux / Windows 编译和 Linux 回归 |
+| Windows GPUI | x64 开发预览已接入，待补菜单适配、桌面矩阵和正式分发。见 [Windows 功能进度](windows-progress.md) |
 
 “已接入”表示源码和自动化存在，不等于物理 IME、Accessibility、VoiceOver、
 登录项、Quick Look、WebKit helper 或视觉材质已通过。
@@ -38,13 +39,16 @@
    资源、动态库和 checksum 复验。
 3. 执行[物理桌验矩阵](mvp-gpui.md#物理桌验矩阵)，逐项记录结果。
 4. 修复桌验发现的 IME、焦点、状态栏、Shelf、Quick Look、WebView 和权限问题。
-5. 在不修改历史数字的前提下建立当前 GPUI 性能样本。
+5. 建立对应构建的 GPUI 性能样本。
+6. 按 [Windows 桌面验收](test-acceptance-windows.md) 复验已接入的 Windows 能力并跟踪已知缺陷。
 
 ### V0.15 插件开发体验
 
-- 增加隔离的浏览器 Host Mock 和可诊断包校验；
+Phase 1 的范围、任务依赖和验收步骤见[插件实施手册](web-plugin-phase-1.md)。设计依据和后续能力评估见[架构审查](web-plugin-evolution.md)。
+
+- 增加隔离的浏览器/后台双 Mock、零依赖 Node 22 CLI 与可诊断包校验；
 - 明确同名包更新对快捷键、Usage 与 KV 的影响；
-- 补齐 Host / SDK 兼容表与安装回滚矩阵；
+- 收口单一 API 2 / protocol 2 契约、三通道宿主交互与安装回滚矩阵；
 - 保留当前安装摘要批准和旧文档撤销规则。
 
 后台插件继续使用按需 QuickJS。进程隔离、资源级沙箱和完整 HMR 需要单独设计，
@@ -72,7 +76,7 @@ V1.0 进入条件：
 | 浏览器历史 / 书签 / Tab | 单独验证浏览器接入、Profile、窗口和 Tab 身份；当前未实现 |
 | 第三方 Context | 保持包命名空间、有界输入和 broker；完善进程隔离与兼容矩阵 |
 | Terminal / PTY | 已验证 Web 工具需求后设计输入、尺寸、流控和高输出 |
-| Windows / Linux GPUI | 各自产品 host、平台能力、IME、热键、预览和安装包矩阵 |
+| Windows 完整版 / Linux GPUI | 系统能力、IME、热键、预览和安装包矩阵 |
 | Marketplace | 可信发布、签名、更新回滚、撤销与审核边界完成后 |
 | OCR / Translate | 独立来源、权限和资源验证，不扩张当前 V1.0 |
 

@@ -1,3 +1,6 @@
+pub(super) mod login_item;
+pub(super) mod preview;
+
 use super::{PlatformEvent, StatusItemAction, StatusItemHost, StatusMenuLabels};
 use block2::RcBlock;
 use objc2::{
@@ -136,3 +139,21 @@ mod window;
 pub(super) use window::*;
 mod activation;
 pub(super) use activation::*;
+pub(super) fn default_product_paths(
+    executable: &std::path::Path,
+) -> anyhow::Result<(std::path::PathBuf, std::path::PathBuf)> {
+    use anyhow::Context as _;
+    let home = std::env::var_os("HOME")
+        .map(std::path::PathBuf::from)
+        .context("HOME is unavailable")?;
+    let data_directory = home
+        .join("Library")
+        .join("Application Support")
+        .join("Anywhere");
+    let bundled_plugin_directory = executable
+        .parent()
+        .and_then(|contents| contents.parent())
+        .map(|bundle| bundle.join("Resources").join("plugins"))
+        .unwrap_or_else(|| std::path::PathBuf::from("plugins"));
+    Ok((data_directory, bundled_plugin_directory))
+}

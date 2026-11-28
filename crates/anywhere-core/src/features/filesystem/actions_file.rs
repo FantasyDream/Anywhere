@@ -5,11 +5,12 @@ use crate::core::action::handler::{ActionHandler, ExecutionOutput};
 use crate::core::context::{ContextValue, ResolvedContext};
 use crate::core::session::facts::CLIPBOARD;
 use anyhow::{Context, Result};
-use anywhere_platform::Platform;
+use anywhere_platform::{paths::display_path, Platform};
 use anywhere_protocol::*;
 
 struct OpenFile;
 struct RevealFile;
+struct InspectPlugin;
 struct CopySelectionPaths;
 
 impl ActionHandler for OpenFile {
@@ -20,6 +21,28 @@ impl ActionHandler for OpenFile {
     ) -> Result<ExecutionOutput> {
         platform.open_file(context.value.path().context("file context required")?)?;
         Ok(ExecutionOutput::dismiss())
+    }
+}
+
+impl ActionHandler for InspectPlugin {
+    fn execute(&self, context: &ResolvedContext, _: &dyn Platform) -> Result<ExecutionOutput> {
+        let ContextValue::File(path) = &context.value else {
+            anyhow::bail!("plugin review requires a file context");
+        };
+        anyhow::ensure!(
+            context.type_id == FILE
+                && path.is_absolute()
+                && path
+                    .extension()
+                    .and_then(|extension| extension.to_str())
+                    .is_some_and(|extension| extension.eq_ignore_ascii_case("awplugin")),
+            "plugin review requires a local .awplugin file"
+        );
+        let path = path
+            .to_str()
+            .context("plugin path is not representable")?
+            .to_owned();
+        Ok(ExecutionOutput::view(HostView::WebPackageReview { path }))
     }
 }
 
@@ -46,7 +69,7 @@ impl ActionHandler for CopySelectionPaths {
         let json = serde_json::to_string(
             &paths
                 .iter()
-                .map(|path| path.to_string_lossy())
+                .map(|path| display_path(path).to_string_lossy())
                 .collect::<Vec<_>>(),
         )?;
         platform.copy_text(&json)?;
@@ -83,6 +106,19 @@ pub fn bundle() -> ActionBundle {
                 aliases: &["open", "edit"],
                 keywords: &["document"],
                 primary_action: true,
+            },
+            ActionSpec {
+                localized_titles: &[("zh", "审查 Anywhere 插件")],
+                id: "core.file.inspect_web_package",
+                title: "Review Anywhere Plugin",
+                accepts: FILE,
+                handler: &InspectPlugin,
+                availability: AvailabilityRule::FileExtension("awplugin"),
+                base_priority: 25,
+                icon: "code",
+                aliases: &["install plugin", "import plugin"],
+                keywords: &["awplugin"],
+                primary_action: false,
             },
             ActionSpec {
                 localized_titles: &[("zh", "在文件管理器中显示")],

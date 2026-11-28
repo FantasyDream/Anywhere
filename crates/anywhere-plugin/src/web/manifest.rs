@@ -1,7 +1,7 @@
 use super::{path, MAX_MANIFEST_BYTES};
 use anyhow::{ensure, Context, Result};
 use anywhere_protocol::web_plugin::{
-    PluginRuntime, WebPermission, WebPluginManifest, API_VERSION, SCHEMA_VERSION,
+    PluginRuntime, WebPermission, WebPluginManifest, API_VERSION, MAX_PERMISSIONS, SCHEMA_VERSION,
 };
 use std::collections::BTreeSet;
 
@@ -24,7 +24,7 @@ pub fn validate_manifest(manifest: &WebPluginManifest) -> Result<()> {
     );
     ensure!(
         manifest.api_version == API_VERSION,
-        "unsupported Web API version"
+        "unsupported Web API version; rebuild the package with the Anywhere API {API_VERSION} SDK"
     );
     ensure!(
         namespace(&manifest.id) && manifest.id.len() <= 160,
@@ -102,33 +102,7 @@ pub fn validate_manifest(manifest: &WebPluginManifest) -> Result<()> {
         path::validate(icon)?;
         ensure!(icon.ends_with(".png"), "Web icon must be PNG");
     }
-    ensure!(manifest.permissions.len() <= 8, "too many Web permissions");
-    let mut permissions = BTreeSet::new();
-    for permission in &manifest.permissions {
-        ensure!(
-            permissions.insert(permission.name()),
-            "duplicate Web permission"
-        );
-        if let WebPermission::ContextRead { types } = permission {
-            ensure!(
-                !types.is_empty() && types.len() <= 16,
-                "invalid Context projection types"
-            );
-            unique_types(types)?;
-            ensure!(
-                types.iter().all(|kind| kind.starts_with(&prefix)
-                    || matches!(
-                        kind.as_str(),
-                        anywhere_protocol::TEXT
-                            | anywhere_protocol::URL
-                            | anywhere_protocol::FILE
-                            | anywhere_protocol::DIRECTORY
-                            | anywhere_protocol::FILE_SELECTION
-                    )),
-                "unsupported Context projection type"
-            );
-        }
-    }
+    validate_permissions(manifest, &prefix)?;
     ensure!(
         manifest.commands.len() <= 32
             && (!manifest.commands.is_empty()
@@ -159,6 +133,30 @@ pub fn validate_manifest(manifest: &WebPluginManifest) -> Result<()> {
             "command runtime has no entry resource"
         );
         ensure!(label(&command.title, 200), "invalid Web command title");
+        ensure!(
+            command.localized_titles.len() <= 32,
+            "too many localized Web titles"
+        );
+        let mut languages = BTreeSet::new();
+        for (language, title) in &command.localized_titles {
+            ensure!(
+                language_tag(language)
+                    && languages.insert(language.to_ascii_lowercase())
+                    && label(title, 200),
+                "invalid or duplicate localized Web title"
+            );
+        }
+        ensure!(
+            command
+                .subtitle
+                .as_deref()
+                .is_none_or(|text| label(text, 200)),
+            "invalid Web command subtitle"
+        );
+        ensure!(
+            command.icon.as_deref().is_none_or(|icon| label(icon, 64)),
+            "invalid Web command icon"
+        );
         ensure!(command.keywords.len() <= 16, "too many Web keywords");
         let mut keywords = BTreeSet::new();
         for keyword in &command.keywords {
@@ -198,6 +196,52 @@ pub fn validate_manifest(manifest: &WebPluginManifest) -> Result<()> {
     Ok(())
 }
 
+fn validate_permissions(manifest: &WebPluginManifest, prefix: &str) -> Result<()> {
+    ensure!(
+        manifest.permissions.len() <= MAX_PERMISSIONS,
+        "too many Web permissions"
+    );
+    let mut permissions = BTreeSet::new();
+    for permission in &manifest.permissions {
+        ensure!(
+            permissions.insert(permission.name()),
+            "duplicate Web permission"
+        );
+        if let WebPermission::ContextRead { types } = permission {
+            ensure!(
+                !types.is_empty() && types.len() <= 16,
+                "invalid Context projection types"
+            );
+            unique_types(types)?;
+            ensure!(
+                types.iter().all(|kind| kind.starts_with(prefix)
+                    || matches!(
+                        kind.as_str(),
+                        anywhere_protocol::TEXT
+                            | anywhere_protocol::URL
+                            | anywhere_protocol::FILE
+                            | anywhere_protocol::DIRECTORY
+                            | anywhere_protocol::FILE_SELECTION
+                    )),
+                "unsupported Context projection type"
+            );
+        }
+        if let WebPermission::UrlOpen { origins } = permission {
+            super::urls::validate_origins(origins)?;
+        }
+    }
+    if permissions.contains("resources.read") || permissions.contains("preview.open") {
+        ensure!(
+            manifest.permissions.iter().any(|permission| matches!(
+                permission,
+                WebPermission::ContextRead { types } if types.iter().any(|kind| kind == anywhere_protocol::FILE)
+            )) && manifest.commands.iter().any(|command| command.accepts.iter().any(|kind| kind == anywhere_protocol::FILE)),
+            "file grants require context.read for core.file and a command that accepts it"
+        );
+    }
+    Ok(())
+}
+
 fn unique_types(types: &[String]) -> Result<()> {
     let mut seen = BTreeSet::new();
     for kind in types {
@@ -211,6 +255,18 @@ fn unique_types(types: &[String]) -> Result<()> {
 
 fn label(value: &str, max: usize) -> bool {
     !value.trim().is_empty() && value.len() <= max && !value.chars().any(char::is_control)
+}
+
+fn language_tag(value: &str) -> bool {
+    let mut parts = value.split('-');
+    value.len() <= 35
+        && parts.next().is_some_and(|language| {
+            (2..=8).contains(&language.len())
+                && language.bytes().all(|byte| byte.is_ascii_alphabetic())
+        })
+        && parts.all(|part| {
+            (1..=8).contains(&part.len()) && part.bytes().all(|byte| byte.is_ascii_alphanumeric())
+        })
 }
 
 fn namespace(value: &str) -> bool {

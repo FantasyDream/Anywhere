@@ -1,4 +1,5 @@
 //! Project one selected object. Never export a graph, provider properties or raw paths.
+use super::resources::SelectedResource;
 use crate::core::context::{ContextValue, ResolvedContext};
 use crate::features::tools::ENTRY_CONTEXT;
 use anyhow::Result;
@@ -6,17 +7,17 @@ use anywhere_protocol::{
     web_plugin::{WebInput, WebInputReason, WebPermission, WebResource, WebResourceKind},
     *,
 };
-use std::{collections::BTreeMap, path::PathBuf};
+use std::path::PathBuf;
 
 use anywhere_protocol::web_bridge::MAX_TEXT_BYTES;
 const MAX_RESOURCES: usize = 128;
-pub(super) type Resources = BTreeMap<String, PathBuf>;
+pub(super) type Resources = Option<SelectedResource>;
 
 pub(super) fn build_with_resources(
     context: &ResolvedContext,
     permissions: &[WebPermission],
 ) -> Result<(WebInput, Resources)> {
-    let empty = |reason| (WebInput::Empty { reason }, BTreeMap::new());
+    let empty = |reason| (WebInput::Empty { reason }, None);
     if context.type_id == ENTRY_CONTEXT {
         return Ok(empty(WebInputReason::NoObject));
     }
@@ -43,7 +44,34 @@ pub(super) fn build_with_resources(
             } else {
                 WebResourceKind::Directory
             };
-            return resources(source, [(path, kind)]);
+            let identity = (kind == WebResourceKind::File
+                && source == ContextSource::FinderSelection
+                && context.depth == 0
+                && context.source_context_id.is_none())
+            .then_some(context.selected_file)
+            .flatten();
+            let read = identity.is_some() && permissions.contains(&WebPermission::ResourcesRead {});
+            let preview =
+                identity.is_some() && permissions.contains(&WebPermission::PreviewOpen {});
+            let (mut input, _) = resources(source, [(path, kind)])?;
+            let WebInput::Resources { items, .. } = &mut input else {
+                return Ok((input, None));
+            };
+            let Some(item) = items.first_mut() else {
+                return Ok((input, None));
+            };
+            item.readable = read;
+            item.previewable = preview;
+            let lease = identity
+                .filter(|_| read || preview)
+                .map(|identity| SelectedResource {
+                    handle: item.handle.clone(),
+                    name: item.name.clone(),
+                    path: path.clone(),
+                    identity,
+                    access: Default::default(),
+                });
+            return Ok((input, lease));
         }
         (FILE_SELECTION, ContextValue::FileSelection(paths)) => {
             if paths.len() > MAX_RESOURCES {
@@ -63,14 +91,13 @@ pub(super) fn build_with_resources(
         }
         _ => return Ok(empty(WebInputReason::UnsupportedType)),
     };
-    Ok((input, BTreeMap::new()))
+    Ok((input, None))
 }
 
 fn resources<'a>(
     source: ContextSource,
     paths: impl IntoIterator<Item = (&'a PathBuf, WebResourceKind)>,
 ) -> Result<(WebInput, Resources)> {
-    let mut resources = BTreeMap::new();
     let mut items = vec![];
     for (path, kind) in paths {
         let handle = super::token()?;
@@ -83,15 +110,16 @@ fn resources<'a>(
                 WebInput::Empty {
                     reason: WebInputReason::TooLarge,
                 },
-                BTreeMap::new(),
+                None,
             ));
         }
         items.push(WebResource {
-            handle: handle.clone(),
+            handle,
             name,
             kind,
+            readable: false,
+            previewable: false,
         });
-        resources.insert(handle, path.clone());
     }
-    Ok((WebInput::Resources { source, items }, resources))
+    Ok((WebInput::Resources { source, items }, None))
 }

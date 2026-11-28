@@ -358,6 +358,20 @@ impl Application {
         self.resolver.application_index.excluded()
     }
 
+    pub fn configure_application_search_paths(&self, paths: Vec<std::path::PathBuf>) {
+        let index = &self.resolver.application_index;
+        if index.set_paths(paths) {
+            let generation = index.spawn_scan(self.platform.clone());
+            let session_id = self.session().map(|session| session.state.session_id);
+            if let Ok(session_id) = session_id {
+                if session_id != 0 {
+                    self.resolver.recompute_current(session_id);
+                    self.spawn_index_recompute(session_id, generation);
+                }
+            }
+        }
+    }
+
     pub fn set_capture_sources(
         &self,
         finder: bool,

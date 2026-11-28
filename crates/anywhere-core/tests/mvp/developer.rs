@@ -25,6 +25,14 @@ async fn execute_action(app: &Application, state: &LauncherState, command: &str)
         .unwrap()
 }
 
+fn write_echo_wrapper(root: &Path, name: &str) {
+    #[cfg(windows)]
+    let (name, script) = (format!("{name}.cmd"), "@echo off\r\necho(%*\r\ncd\r\n");
+    #[cfg(not(windows))]
+    let (name, script) = (name, "#!/bin/sh\nprintf '%s\\n' \"$@\"; pwd\n");
+    std::fs::write(root.join(name), script).unwrap();
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn cargo_action_uses_the_graph_scope_history_and_independent_execution_lifetime() {
     let directory = tempfile::tempdir().unwrap();
@@ -152,16 +160,8 @@ async fn project_types_are_additive_and_wrappers_use_the_module_working_director
         r#"{"scripts":{"build":"echo not-run-during-recognition"}}"#,
     )
     .unwrap();
-    std::fs::write(
-        root.join("mvnw"),
-        "#!/bin/sh\nprintf 'MAVEN\\n'; printf '%s\\n' \"$@\"; pwd\n",
-    )
-    .unwrap();
-    std::fs::write(
-        root.join("gradlew"),
-        "#!/bin/sh\nprintf 'GRADLE\\n'; printf '%s\\n' \"$@\"; pwd\n",
-    )
-    .unwrap();
+    write_echo_wrapper(&root, "mvnw");
+    write_echo_wrapper(&root, "gradlew");
     let app = app(Arc::new(TestPlatform::new(module, true)));
     let initial = app.activate().await.unwrap().unwrap();
     let state = settled(&app, initial.session_id, 0).await;
@@ -181,19 +181,19 @@ async fn project_types_are_additive_and_wrappers_use_the_module_working_director
     for (command, arguments) in [
         (
             "developer.maven.test",
-            "--batch-mode\n--no-transfer-progress\ntest",
+            ["--batch-mode", "--no-transfer-progress", "test"],
         ),
         (
             "developer.maven.package",
-            "--batch-mode\n--no-transfer-progress\npackage",
+            ["--batch-mode", "--no-transfer-progress", "package"],
         ),
         (
             "developer.gradle.build",
-            "--no-daemon\n--console=plain\nbuild",
+            ["--no-daemon", "--console=plain", "build"],
         ),
         (
             "developer.gradle.test",
-            "--no-daemon\n--console=plain\ntest",
+            ["--no-daemon", "--console=plain", "test"],
         ),
     ] {
         let result = execute_action(&app, &state, command).await;
@@ -205,9 +205,21 @@ async fn project_types_are_additive_and_wrappers_use_the_module_working_director
             "{}",
             detail.stderr
         );
-        assert!(detail.stdout.contains(arguments));
+        #[cfg(windows)]
+        let received_args = detail.stdout.lines().next() == Some(arguments.join(" ").as_str());
+        #[cfg(not(windows))]
+        let received_args = detail.stdout.lines().take(arguments.len()).eq(arguments);
+        assert!(
+            received_args,
+            "arguments for {command}: stdout={:?} stderr={:?}",
+            detail.stdout, detail.stderr,
+        );
         assert_eq!(detail.summary.directory, root.to_string_lossy());
-        assert!(detail.stdout.contains(root.to_str().unwrap()));
+        assert!(detail.stdout.contains(
+            anywhere_platform::paths::display_path(&root)
+                .to_str()
+                .unwrap()
+        ));
     }
 }
 
@@ -575,7 +587,7 @@ async fn spring_boot_context_and_run_actions_require_active_local_plugins() {
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path().canonicalize().unwrap();
     std::fs::write(root.join("pom.xml"), "<project><build><plugins><plugin><groupId>org.springframework.boot</groupId><artifactId>spring-boot-maven-plugin</artifactId></plugin></plugins></build></project>").unwrap();
-    std::fs::write(root.join("mvnw"), "#!/bin/sh\nprintf '%s\\n' \"$@\"\n").unwrap();
+    write_echo_wrapper(&root, "mvnw");
     let app = app(Arc::new(TestPlatform::new(root.clone(), true)));
     let activation = app.activate().await.unwrap().unwrap();
     let state = settled(&app, activation.session_id, 0).await;
@@ -589,8 +601,14 @@ async fn spring_boot_context_and_run_actions_require_active_local_plugins() {
         .iter()
         .any(|c| c.command_id.as_deref() == Some("developer.spring.gradle.run")));
     let result = execute_action(&app, &state, "developer.spring.maven.run").await;
+    assert!(result.succeeded(), "{:?}", result.error);
     let task = completed_task(&app, result.execution_session_id.as_deref().unwrap()).await;
-    assert!(task.stdout.contains("spring-boot:run"));
+    assert!(
+        task.stdout.contains("spring-boot:run"),
+        "{}\n{}",
+        task.stdout,
+        task.stderr
+    );
     std::fs::write(root.join("pom.xml"), "<project/>").unwrap();
     let result = execute_action(&app, &state, "developer.spring.maven.run").await;
     assert_eq!(result.status, ActionStatus::Failed);

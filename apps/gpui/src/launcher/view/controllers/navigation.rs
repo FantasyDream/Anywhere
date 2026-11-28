@@ -21,6 +21,9 @@ impl LauncherView {
         if self.screen == screen {
             return;
         }
+        if self.screen == Screen::WebPackages {
+            self.retire_package_review();
+        }
         if self.screen == Screen::ApplicationHistory {
             self.app_history.close_object_actions();
             self.app_history.page_actions_open = false;
@@ -215,6 +218,7 @@ impl LauncherView {
         }
         if self.input_mode == InputMode::Environment {
             self.select_root_mode(InputMode::Search, cx);
+            self.focus_launcher_input(window, cx);
             return;
         }
         self.prepare_hide(cx);
@@ -350,6 +354,14 @@ impl LauncherView {
                     .size(px(metrics::ICON_SIZE))
                     .text_color(theme::secondary()),
             );
+        let hotkey = if mode == InputMode::Search {
+            &self.preferences.universal_shortcut
+        } else {
+            &self.preferences.current_app_shortcut
+        };
+        if let Some(label) = crate::platform::shortcut_label(hotkey) {
+            row = row.trailing(components::keycap(label));
+        }
         if active {
             row = row.trailing(
                 Icon::new(IconName::Check)

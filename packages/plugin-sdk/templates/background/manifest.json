@@ -3,7 +3,7 @@
   "id": "dev.example.json-summary",
   "name": "JSON Summary",
   "version": "0.1.0",
-  "apiVersion": "1",
+  "apiVersion": "2",
   "platforms": ["macos"],
   "permissions": [
     {"name": "context.read", "types": ["core.text", "plugin.dev.example.json-summary.summary"]},

@@ -18,6 +18,14 @@ import {JsonEditor} from './editor.jsx';
 import './style.css';
 
 const encoder = new TextEncoder();
+const shortcuts = {
+  switchMode: 'Ctrl+Tab',
+  switchModeReverse: 'Ctrl+Shift+Tab',
+  focus: 'Mod+L',
+  calculate: 'Mod+Enter',
+  paste: 'Mod+V',
+  copy: 'Mod+Shift+C',
+};
 const stamp = (input, path, spaces, mode) => ({
   input,
   path: path.trim(),
@@ -39,6 +47,9 @@ function App() {
       }),
     [],
   );
+  const [, setPlatform] = useState(environment.platform);
+  useEffect(() => environment.onPlatformChange(setPlatform), []);
+  const hint = key => environment.formatShortcut(shortcuts[key]);
   const [input, setInput] = useState('');
   const [mode, setMode] = useState('javascript');
   const [paths, setPaths] = useState({jsonpath: '', javascript: ''});
@@ -263,28 +274,23 @@ function App() {
     );
     plugin.current = instance;
     const shortcut = event => {
-      if (event.isComposing || current.current.composing) return;
+      if (current.current.composing) return;
       if (
-        event.ctrlKey &&
-        !event.metaKey &&
-        !event.altKey &&
-        event.key === 'Tab'
+        environment.matchesShortcut(event, shortcuts.switchMode) ||
+        environment.matchesShortcut(event, shortcuts.switchModeReverse)
       ) {
         event.preventDefault();
         current.current.setMode(value =>
           value === 'jsonpath' ? 'javascript' : 'jsonpath',
         );
         document.getElementById('json-path')?.focus();
-        return;
-      }
-      if (!event.metaKey || event.altKey || event.ctrlKey) return;
-      if (!event.shiftKey && event.key.toLowerCase() === 'l') {
+      } else if (environment.matchesShortcut(event, shortcuts.focus)) {
         event.preventDefault();
         document.getElementById('json-path')?.focus();
-      } else if (event.key === 'Enter') {
+      } else if (environment.matchesShortcut(event, shortcuts.calculate)) {
         event.preventDefault();
         current.current.run();
-      } else if (event.shiftKey && event.key.toLowerCase() === 'c') {
+      } else if (environment.matchesShortcut(event, shortcuts.copy)) {
         event.preventDefault();
         current.current.copyResult();
       }
@@ -326,7 +332,10 @@ function App() {
       <nav class="json-query-toolbar" aria-label={t('tools')}>
         <select
           aria-label={t('mode')}
-          title={t('switchMode')}
+          title={t('switchMode', {
+            shortcut: hint('switchMode'),
+            reverse: hint('switchModeReverse'),
+          })}
           value={mode}
           onChange={event => {
             setMode(event.currentTarget.value);
@@ -352,7 +361,7 @@ function App() {
             id="json-path"
             class="aw-code"
             aria-label={isJavaScript ? t('jsFormula') : t('pathFormula')}
-            title={t('focusFormula')}
+            title={t('focusFormula', {shortcut: hint('focus')})}
             type="text"
             value={path}
             maxLength={MAX_QUERY_LENGTH}
@@ -389,10 +398,8 @@ function App() {
             onCompositionEnd={() => setComposing(false)}
             onKeyDown={event => {
               if (
-                event.key === 'Enter' &&
-                !event.isComposing &&
-                !event.metaKey &&
-                !event.ctrlKey
+                !current.current.composing &&
+                environment.matchesShortcut(event, 'Enter')
               ) {
                 event.preventDefault();
                 current.current.run();
@@ -404,10 +411,11 @@ function App() {
           class="aw-button--action"
           disabled={busy || composing || !input.trim()}
           onClick={run}
-          title={t('calculateHint')}
+          title={t('calculateHint', {shortcut: hint('calculate')})}
         >
           <span class="aw-icon aw-icon--run" aria-hidden="true" />
-          {isJavaScript ? t('calculate') : t('query')} <kbd>⌘↵</kbd>
+          {isJavaScript ? t('calculate') : t('query')}{' '}
+          <kbd>{hint('calculate')}</kbd>
         </button>
       </nav>
       {(error || notice?.failed) && (
@@ -568,7 +576,7 @@ function App() {
               aria-describedby={inputInvalid ? 'json-error' : undefined}
               autocomplete="off"
               autocapitalize="off"
-              placeholder={t('pasteHint')}
+              placeholder={t('pasteHint', {shortcut: hint('paste')})}
               value={input}
               onInput={edit}
               onPaste={event => {
@@ -616,14 +624,14 @@ function App() {
               class="aw-button--action"
               disabled={!output || busy || composing}
               onClick={copyResult}
-              title={t('copyHint')}
+              title={t('copyHint', {shortcut: hint('copy')})}
             >
               <span
                 class={`aw-icon aw-icon--${notice?.key === 'copiedResult' ? 'check' : 'copy'}`}
                 aria-hidden="true"
               />
               {notice?.key === 'copiedResult' ? t('copied') : t('copyResult')}
-              <kbd>⌘⇧C</kbd>
+              <kbd>{hint('copy')}</kbd>
             </button>
           </header>
           <div class="aw-pane-body">

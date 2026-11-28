@@ -139,7 +139,7 @@ impl LauncherView {
             return true;
         }
 
-        if self.can_resume_workspace() {
+        if input_mode != InputMode::Environment && self.can_resume_workspace() {
             self.begin_resume(cx);
             if self.screen == Screen::Tasks {
                 self.start_tasks_refresh(cx);
@@ -285,6 +285,19 @@ impl LauncherView {
     }
 
     pub fn open_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        self.open_settings_with_exit_mode(false, window, cx)
+    }
+
+    pub fn open_settings_from_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        self.open_settings_with_exit_mode(true, window, cx)
+    }
+
+    fn open_settings_with_exit_mode(
+        &mut self,
+        dismiss_on_done: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
         if matches!(
             self.runtime_state,
             RuntimeState::Starting | RuntimeState::Failed
@@ -315,6 +328,7 @@ impl LauncherView {
         self.close_preview(cx);
         self.close_web_surface(cx);
         self.screen = Screen::Settings;
+        self.settings_editor.dismiss_on_done = dismiss_on_done;
         self.root_navigation_open = false;
         self.shortcuts.recording = None;
         self.settings_editor.action_picker_open = false;
@@ -416,7 +430,7 @@ impl LauncherView {
         cx: &mut Context<Self>,
     ) -> bool {
         if self.is_settings_surface() {
-            self.request_close_settings(window, cx);
+            self.request_dismiss_settings(window, cx);
             false
         } else {
             self.prepare_hide(cx);
@@ -492,11 +506,14 @@ impl LauncherView {
     }
 
     pub fn prepare_hide(&mut self, cx: &mut Context<Self>) {
+        self.presence.presented = false;
+        self.drop_web_host_interaction(cx);
+        self.retire_package_review();
         self.cancel_activation_prefill();
         if self.standalone_shelf {
             crate::platform::remember_clipboard_shelf_position();
         }
-        self.presence.presented = false;
+        self.clipboard_inspector = None;
         self.pending_shortcut_execution = None;
         self.shortcuts.resolving = None;
         self.cancel_stream();
@@ -522,7 +539,12 @@ impl LauncherView {
             }
             return;
         }
-        self.presence.retained_workspace = self.should_retain_workspace();
+        self.presence.retained_workspace = self.should_retain_workspace()
+            || self.live.as_ref().is_some_and(|live| {
+                live.web_runtime()
+                    .application()
+                    .has_background_web_handoff()
+            });
         self.presence.hidden_at = self.presence.retained_workspace.then(Instant::now);
         if self.presence.retained_workspace {
             if let Some(live) = &self.live {

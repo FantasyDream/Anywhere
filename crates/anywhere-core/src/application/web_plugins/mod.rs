@@ -8,17 +8,23 @@ mod background_runtime;
 mod broker;
 mod builtin;
 mod catalog;
+mod diagnostics;
+mod interaction;
 mod invocation;
 mod packages;
 mod projection;
+mod resources;
 pub use builtin::BUILTIN_WEB_PACKAGES;
-pub use packages::{WebPackageReview, WebPackageStatus, WebPackageStore};
+pub use packages::{SameWebPackageVersion, WebPackageReview, WebPackageStatus, WebPackageStore};
 mod host_state;
 mod rpc_dispatch;
 mod rpc_state;
 mod transfer;
 
 pub use catalog::{WebPackageApproval, WebPluginCatalog};
+pub use interaction::{
+    HostInteraction, HostInteractionKind, WebDispatchOutcome, WebHostAction, WebHostActionKind,
+};
 pub use invocation::{WebDocumentBinding, WebMessageSource, WebPluginService};
 
 use anyhow::Result;

@@ -11,8 +11,12 @@ on:
       - 'rust-toolchain.toml'
       - 'crates/**'
       - 'apps/gpui/**'
+      - 'packages/plugin-sdk/**'
+      - 'plugins/**'
       - 'resources/**'
       - 'scripts/**'
+      - 'docs/windows.md'
+      - 'LICENSE'
       - '.github/workflows/portable.yml'
 
 permissions:
@@ -55,3 +59,40 @@ jobs:
           -p anywhere-plugin
           -p anywhere-protocol
           --locked
+
+  windows-desktop:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.100.0-beta.7
+          components: clippy
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Check SDK Mock and deterministic ZIP on Windows
+        run: |
+          npm --prefix packages/plugin-sdk ci --ignore-scripts --registry=https://registry.npmjs.org
+          npm --prefix packages/plugin-sdk run build
+          npm --prefix packages/plugin-sdk test
+      - name: Check Windows GPUI and platform targets
+        run: cargo clippy -p anywhere-gpui -p anywhere-platform --all-targets --locked -- -D warnings
+      - name: Run shared Core, GPUI and Windows platform regressions
+        run: cargo test -p anywhere-core -p anywhere-gpui -p anywhere-platform --lib --locked -- --test-threads=1
+      - name: Run Windows MVP integration regressions
+        run: cargo test -p anywhere-core --test mvp --locked -- --test-threads=1
+      - name: Build Windows executable
+        run: cargo build -p anywhere-gpui --release --target x86_64-pc-windows-msvc --locked
+      - name: Package and checksum Windows executable
+        run: python scripts/package-windows.py target/x86_64-pc-windows-msvc/release/anywhere-gpui.exe
+      - uses: actions/upload-artifact@v7
+        with:
+          name: Anywhere-Windows-x64-${{ github.sha }}
+          path: build/windows/Anywhere-windows-x64.zip*
+          if-no-files-found: error

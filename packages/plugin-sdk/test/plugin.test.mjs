@@ -63,7 +63,7 @@ test('failed hidden subscriptions are not registered when the page resumes', asy
     env.visibility(false);
     for (const kind of ['context', 'input'])
       for (let i = 0; i < 20; i++)
-        assert.throws(() => plugin.host[kind].onChange(() => received++), {
+        assert.throws(() => plugin.anywhere[kind].onChange(() => received++), {
           code: 'INACTIVE',
         });
     env.visibility(true);
@@ -73,7 +73,7 @@ test('failed hidden subscriptions are not registered when the page resumes', asy
       env.calls.filter(call => call.method === 'state.subscribe').length,
       0,
     );
-    const stop = plugin.host.input.onChange(() => received++);
+    const stop = plugin.anywhere.input.onChange(() => received++);
     await tick();
     assert.equal(received, 1);
     stop();
@@ -103,7 +103,7 @@ test('early subscriptions bind only after lifecycle ready succeeds', async () =>
   const plugin = definePlugin();
   const received = [];
   try {
-    const stop = plugin.host.input.onChange(input => received.push(input));
+    const stop = plugin.anywhere.input.onChange(input => received.push(input));
     await tick();
     assert.deepEqual(methods, ['lifecycle.ready']);
     completeReady();
@@ -140,7 +140,7 @@ test('automatic launch once, resume preserves drafts and stable host cancels pen
   });
   try {
     await plugin.ready;
-    const {host} = plugin;
+    const {anywhere: host} = plugin;
     block = true;
     const pending = host.storage.get('draft');
     env.visibility(false);

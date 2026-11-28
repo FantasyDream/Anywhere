@@ -156,6 +156,9 @@ impl LauncherView {
     }
 
     pub(super) fn open_tool_options(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.page_actions_visible() {
+            self.tasks_actions_return_focus = window.focused(cx);
+        }
         self.tasks.tool_options_open = true;
         self.tasks.tool_option_selected = 0;
         self.tasks.task_actions_open = false;
@@ -198,6 +201,9 @@ impl LauncherView {
                 .tasks
                 .task_action_selected
                 .min(Self::task_action_count(detail.row.status) - 1);
+        }
+        if !self.page_actions_visible() {
+            self.tasks_actions_return_focus = window.focused(cx);
         }
         self.tasks.task_actions_open = true;
         self.tasks.tool_options_open = false;
@@ -393,7 +399,7 @@ impl LauncherView {
             return KeyFlow::Continue;
         }
         if self.tasks.tool_options_open {
-            if input.modifiers.command && input.key.eq_ignore_ascii_case("k") {
+            if input.modifiers.primary_only() && input.key.eq_ignore_ascii_case("k") {
                 self.close_tool_options(cx);
                 return KeyFlow::Handled;
             }
@@ -410,7 +416,7 @@ impl LauncherView {
             return KeyFlow::Handled;
         }
         if self.tasks.task_actions_open {
-            if input.modifiers.command && input.key.eq_ignore_ascii_case("k") {
+            if input.modifiers.primary_only() && input.key.eq_ignore_ascii_case("k") {
                 self.close_task_actions(cx);
                 return KeyFlow::Handled;
             }

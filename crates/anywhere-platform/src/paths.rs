@@ -21,6 +21,13 @@ pub fn open_regular_read(path: &Path) -> std::io::Result<std::fs::File> {
     Ok(file)
 }
 
+/// Return a user-facing spelling without changing the path used for access checks.
+pub fn display_path(path: &Path) -> &Path {
+    #[cfg(windows)]
+    let path = dunce::simplified(path);
+    path
+}
+
 pub fn home_directory() -> Option<PathBuf> {
     #[cfg(windows)]
     let keys = ["USERPROFILE", "HOME"];

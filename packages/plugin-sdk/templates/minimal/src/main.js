@@ -24,7 +24,7 @@ document.querySelector('#uppercase').addEventListener('click', () => {
 copy.addEventListener('click', async () => {
   copy.disabled = true;
   try {
-    await plugin.host.clipboard.writeText(input.value);
+    await plugin.anywhere.clipboard.writeText(input.value);
     status.textContent = 'Copied';
   } catch {
     status.textContent = 'Copy was not completed. You can try again.';
